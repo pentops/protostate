@@ -9,6 +9,7 @@ import (
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	sq "github.com/elgris/sqrl"
 	"github.com/lib/pq"
+	"github.com/pentops/log.go/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -19,16 +20,23 @@ import (
 )
 
 type Transactor interface {
-	Transact(ctx context.Context, opts *sqrlx.TxOptions, fn func(ctx context.Context, tx sqrlx.Transaction) error) error
+	Transact(ctx context.Context, opts *sqrlx.TxOptions, callback sqrlx.Callback) error
 }
 
 type AuthProvider interface {
 	AuthFilter(ctx context.Context) (map[string]interface{}, error)
 }
 
+type AuthProviderFunc func(ctx context.Context) (map[string]interface{}, error)
+
+func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]interface{}, error) {
+	return f(ctx)
+}
+
 type GenericQuery struct {
-	StateTableName   string
-	StateColumn      string
+	StateTableName string
+	StateColumn    string
+
 	PrimaryKeyColumn string
 	PrimaryKeyField  protoreflect.Name
 
@@ -37,11 +45,50 @@ type GenericQuery struct {
 	EventSequenceColumn   string
 	EventDataColumn       string
 
-	DB           Transactor
-	AuthProvider AuthProvider
+	DB Transactor
 }
 
-func (gc *GenericQuery) Get(ctx context.Context, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc GenericQuery) validate() error {
+	if gc.StateTableName == "" {
+		return fmt.Errorf("missing StateTableName")
+	}
+	if gc.StateColumn == "" {
+		return fmt.Errorf("missing StateColumn")
+	}
+	if gc.PrimaryKeyColumn == "" {
+		return fmt.Errorf("missing PrimaryKeyColumn")
+	}
+	if gc.PrimaryKeyField == "" {
+		return fmt.Errorf("missing PrimaryKeyField")
+	}
+	if gc.EventTableName == "" {
+		return fmt.Errorf("missing EventTableName")
+	}
+	if gc.EventForeignKeyColumn == "" {
+		return fmt.Errorf("missing EventForeignKeyColumn")
+	}
+	if gc.EventSequenceColumn == "" {
+		return fmt.Errorf("missing EventSequenceColumn")
+	}
+	if gc.EventDataColumn == "" {
+		return fmt.Errorf("missing EventDataColumn")
+	}
+	if gc.DB == nil {
+		return fmt.Errorf("missing DB")
+	}
+
+	return nil
+}
+
+const (
+	StateAlias = "_gc_state"
+	EventAlias = "_gc_event"
+)
+
+func (gc *GenericQuery) Get(ctx context.Context, reqMsg proto.Message, resMsg proto.Message, constraintFields map[string]interface{}) error {
+	if err := gc.validate(); err != nil {
+		return err
+	}
 
 	resReflect := resMsg.ProtoReflect()
 	reqReflect := reqMsg.ProtoReflect()
@@ -100,30 +147,24 @@ func (gc *GenericQuery) Get(ctx context.Context, reqMsg proto.Message, resMsg pr
 
 	selectQuery := sq.
 		Select().
-		Column(fmt.Sprintf("%s AS state", gc.StateColumn)).
-		From(fmt.Sprintf("%s AS state", gc.StateTableName)).
+		Column(fmt.Sprintf("%s.%s AS stateCol", StateAlias, gc.StateColumn)).
+		From(fmt.Sprintf("%s AS %s", gc.StateTableName, StateAlias)).
 		Where(sq.Eq{
-			fmt.Sprintf("state.%s", gc.PrimaryKeyColumn): idVal,
-		}).GroupBy(fmt.Sprintf("state.%s", gc.PrimaryKeyColumn))
+			fmt.Sprintf("%s.%s", StateAlias, gc.PrimaryKeyColumn): idVal,
+		}).GroupBy(fmt.Sprintf("%s.%s", StateAlias, gc.PrimaryKeyColumn))
 
 	if eventField != nil {
 		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(event.%s) AS events", gc.EventDataColumn)).
+			Column(fmt.Sprintf("ARRAY_AGG(%s.%s) AS eventsCol", EventAlias, gc.EventDataColumn)).
 			LeftJoin(fmt.Sprintf(
-				"%s AS event ON event.%s = state.%s",
+				"%s AS %s ON %s.%s = %s.%s",
 				gc.EventTableName,
+				EventAlias,
+				EventAlias,
 				gc.EventForeignKeyColumn,
+				StateAlias,
 				gc.PrimaryKeyColumn,
 			))
-	}
-
-	actorFilter, err := gc.AuthProvider.AuthFilter(ctx)
-	if err != nil {
-		return err
-	}
-
-	for k, v := range actorFilter {
-		selectQuery = selectQuery.Where(sq.Eq{k: v})
 	}
 
 	var foundJSON []byte
@@ -182,7 +223,7 @@ func (gc *GenericQuery) Get(ctx context.Context, reqMsg proto.Message, resMsg pr
 
 }
 
-func (gc *GenericQuery) List(ctx context.Context, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc *GenericQuery) List(ctx context.Context, reqMsg proto.Message, resMsg proto.Message, constrain func(*sq.SelectBuilder)) error {
 
 	var pageSize = uint64(20)
 	var nextTokenField protoreflect.FieldDescriptor
@@ -232,17 +273,11 @@ func (gc *GenericQuery) List(ctx context.Context, reqMsg proto.Message, resMsg p
 	var jsonRows = make([][]byte, 0, pageSize)
 
 	selectQuery := sq.
-		Select(gc.StateColumn).
-		From(gc.StateTableName).Limit(pageSize + 1)
+		Select(fmt.Sprintf("%s.%s", StateAlias, gc.StateColumn)).
+		From(fmt.Sprintf("%s AS %s", gc.StateTableName, StateAlias)).
+		Limit(pageSize + 1)
 
-	actorFilter, err := gc.AuthProvider.AuthFilter(ctx)
-	if err != nil {
-		return fmt.Errorf("actor filter: %w", err)
-	}
-
-	for k, v := range actorFilter {
-		selectQuery = selectQuery.Where(sq.Eq{k: v})
-	}
+	constrain(selectQuery)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 	// TODO: Request Sorts
@@ -269,7 +304,9 @@ func (gc *GenericQuery) List(ctx context.Context, reqMsg proto.Message, resMsg p
 		}
 		return rows.Err()
 	}); err != nil {
-		return fmt.Errorf("query TX: %w", err)
+		stmt, _, _ := selectQuery.ToSql()
+		log.WithField(ctx, "query", stmt).Error("list query")
+		return fmt.Errorf("list query: %w", err)
 	}
 
 	list := res.Mutable(arrayField).List()
@@ -305,7 +342,7 @@ func (gc *GenericQuery) List(ctx context.Context, reqMsg proto.Message, resMsg p
 
 }
 
-func (gc *GenericQuery) ListEvents(ctx context.Context, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc *GenericQuery) ListEvents(ctx context.Context, reqMsg proto.Message, resMsg proto.Message, constrain func(*sq.SelectBuilder)) error {
 
 	var pageSize = uint64(20)
 	var nextTokenField protoreflect.FieldDescriptor
@@ -365,14 +402,7 @@ func (gc *GenericQuery) ListEvents(ctx context.Context, reqMsg proto.Message, re
 		)).
 		Limit(pageSize + 1)
 
-	actorFilter, err := gc.AuthProvider.AuthFilter(ctx)
-	if err != nil {
-		return fmt.Errorf("actor filter: %w", err)
-	}
-
-	for k, v := range actorFilter {
-		selectQuery = selectQuery.Where(sq.Eq{k: v})
-	}
+	constrain(selectQuery)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 	// TODO: Request Sorts
