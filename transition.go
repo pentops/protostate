@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.daemonl.com/sqrlx"
 
 	sq "github.com/elgris/sqrl"
-	"github.com/interxfi/go-api/event/v1/event_pb"
 )
 
 type StateSpec[E proto.Message, S proto.Message] struct {
@@ -19,6 +19,7 @@ type StateSpec[E proto.Message, S proto.Message] struct {
 
 	EmptyState        func(E) S
 	EventData         func(E) proto.Message
+	EventMetadata     func(E) *Metadata
 	PrimaryKey        func(E) map[string]interface{}
 	AdditionalColumns func(E) map[string]interface{}
 	EventForeignKey   func(E) map[string]interface{}
@@ -44,6 +45,10 @@ func NewStateMachine[E proto.Message, S proto.Message](db *sqrlx.Wrapper, spec S
 
 	if spec.EventData == nil {
 		return nil, fmt.Errorf("missing EventData func")
+	}
+
+	if spec.EventMetadata == nil {
+		return nil, fmt.Errorf("missing EventMetadata func")
 	}
 
 	if spec.PrimaryKey == nil {
@@ -128,18 +133,14 @@ type preparedTransition[E proto.Message, S proto.Message] struct {
 	state S
 }
 
-func (sm *StateMachine[E, S]) prepare(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
-	msg := eventData.ProtoReflect()
-	metadataField := msg.Descriptor().Fields().ByName("metadata")
-	if metadataField == nil {
-		return nil, fmt.Errorf("event %s has no metadata field", msg.Descriptor().FullName())
-	}
+type Metadata struct {
+	Actor     proto.Message
+	Timestamp time.Time
+	EventID   string
+}
 
-	metadataReflect := msg.Get(metadataField)
-	metadata := metadataReflect.Message().Interface().(*event_pb.Metadata)
-	if metadata == nil {
-		return nil, fmt.Errorf("event %s has no metadata", msg.Descriptor().FullName())
-	}
+func (sm *StateMachine[E, S]) prepare(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
+	metadata := sm.spec.EventMetadata(eventData)
 
 	stateSpec := sm.spec
 
@@ -154,8 +155,8 @@ func (sm *StateMachine[E, S]) prepare(ctx context.Context, eventData E) (*prepar
 	}
 
 	eventMap := map[string]interface{}{
-		"id":        metadata.EventId,
-		"timestamp": metadata.Timestamp.AsTime(),
+		"id":        metadata.EventID,
+		"timestamp": metadata.Timestamp,
 		"event":     eventJSON,
 		"actor":     actorJSON,
 	}
