@@ -1,4 +1,4 @@
-module github.com/interxfi/genericstate
+module github.com/pentops/genericstate
 
 go 1.21.4
 
