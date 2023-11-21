@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+option go_package = "github.com/pentops/genericstate/testproto/gen/testpb";
+
+import "google/api/annotations.proto";
+import "listify/query/v1/page.proto";
+
+import "buf/validate/validate.proto";
+
+package test.v1;
+
+service FooService {
+  rpc GetFoo (GetFooRequest) returns (GetFooResponse) {
+    option (google.api.http) = {
+      get: "/test/v1/foo/{foo_id}"
+    };
+  }
+
+  rpc ListFoos(ListFoosRequest) returns (ListFoosResponse) {
+    option (google.api.http) = {
+      get: "/test/v1/foos"
+    };
+  }
+
+  rpc ListFooEvents(ListFooEventsRequest) returns (ListFooEventsResponse) {
+    option (google.api.http) = {
+      get: "/test/v1/foo/{foo_id}/events"
+    };
+  }
+
+}
+
+message GetFooRequest {
+  string foo_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetFooResponse {
+  FooState state = 1;
+  repeated FooEvent events = 2;
+}
+
+message FooState {
+  string foo_id = 1 [(buf.validate.field).string.uuid = true];
+  string tenant_id = 2 [(buf.validate.field).string.uuid = true];
+
+  string name = 3;
+  string field = 4;
+}
+
+message FooEvent {
+  string event_id = 1;
+  string text = 2;
+}
+
+
+
+message ListFoosRequest {
+  optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
+  listify.query.v1.PageRequest page = 2;
+}
+
+message ListFoosResponse {
+  repeated FooState foos = 1;
+  listify.query.v1.PageResponse page = 2;
+}
+
+message ListFooEventsRequest {
+  string foo_id = 1 [(buf.validate.field).string.uuid = true];
+  listify.query.v1.PageRequest page = 2;
+}
+
+message ListFooEventsResponse {
+  repeated FooEvent events = 1;
+  listify.query.v1.PageResponse page = 2;
+}
+
