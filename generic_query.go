@@ -52,7 +52,7 @@ type StateQuerySpec struct {
 
 	Auth AuthProvider
 
-	Events *JoinSpec
+	Events *GetJoinSpec
 }
 
 func (gc StateQuerySpec) validate() error {
@@ -78,31 +78,11 @@ func (gc StateQuerySpec) validate() error {
 	return nil
 }
 
-type JoinSpec struct {
-	TableName        string
-	DataColumn       string
-	ForeignKeyColumn string
-
-	FieldInParent protoreflect.Name
-}
-
-func (gc JoinSpec) validate() error {
-	if gc.TableName == "" {
-		return fmt.Errorf("missing TableName")
-	}
-	if gc.DataColumn == "" {
-		return fmt.Errorf("missing DataColumn")
-	}
-	if gc.ForeignKeyColumn == "" {
-		return fmt.Errorf("missing ForeignKeyColumn")
-	}
-	if gc.FieldInParent == "" {
-		return fmt.Errorf("missing FieldInParent")
-	}
-
-	return nil
-}
-
+// StateQuerySet is a shortcut for manually specifying three different query
+// types following the 'standard model':
+// 1. A getter for a single state
+// 2. A lister for the main state
+// 3. A lister for the events of the main state
 type StateQuerySet struct {
 	getter      *Getter
 	mainLister  *Lister
@@ -119,15 +99,6 @@ func (gc *StateQuerySet) List(ctx context.Context, db Transactor, reqMsg proto.M
 
 func (gc *StateQuerySet) ListEvents(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 	return gc.eventLister.List(ctx, db, reqMsg, resMsg)
-}
-
-type join struct {
-	Table            string
-	DataColunn       string
-	ForeignKeyColumn string
-
-	fieldInParent  protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
-	eventListField protoreflect.FieldDescriptor // the events array inside the response
 }
 
 func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
@@ -183,41 +154,3 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 	}
 	return ss, nil
 }
-
-/*
-func (gc *StateQuery) ListEvents(ctx context.Context, reqMsg proto.Message, resMsg proto.Message) error {
-
-	ll := lister{
-		db: gc.DB,
-		selecQuery: func(ctx context.Context) (*sq.SelectBuilder, error) {
-
-			selectQuery := sq.
-				Select(fmt.Sprintf("%s.%s", EventAlias, gc.EventDataColumn)).
-				From(fmt.Sprintf("%s AS %s", gc.StateTableName, StateAlias)).
-				LeftJoin(fmt.Sprintf(
-					"%s AS %s ON %s.%s = %s.%s",
-					gc.EventTableName,
-					EventAlias,
-					EventAlias,
-					gc.EventForeignKeyColumn,
-					StateAlias,
-					gc.PrimaryKeyColumn,
-				))
-
-			if gc.Auth != nil {
-
-				authFilter, err := gc.Auth.AuthFilter(ctx)
-				if err != nil {
-					return nil, err
-				}
-				for k, v := range authFilter {
-					selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", StateAlias, k): v})
-				}
-			}
-			return selectQuery, nil
-		},
-	}
-	return ll.list(ctx, reqMsg, resMsg)
-}
-
-*/

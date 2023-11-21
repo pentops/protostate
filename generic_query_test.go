@@ -88,7 +88,7 @@ func TestStateQuery(t *testing.T) {
 		PrimaryKeyColumn:       "id",
 		PrimaryKeyRequestField: protoreflect.Name("foo_id"),
 
-		Events: &JoinSpec{
+		Events: &GetJoinSpec{
 			TableName:        "foo_event",
 			DataColumn:       "data",
 			FieldInParent:    "events",

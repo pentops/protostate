@@ -25,9 +25,34 @@ type GetSpec struct {
 
 	PrimaryKeyRequestField protoreflect.Name
 
-	Join *JoinSpec
+	Join *GetJoinSpec
 
 	Method *MethodDescriptor
+}
+
+type GetJoinSpec struct {
+	TableName        string
+	DataColumn       string
+	ForeignKeyColumn string
+
+	FieldInParent protoreflect.Name
+}
+
+func (gc GetJoinSpec) validate() error {
+	if gc.TableName == "" {
+		return fmt.Errorf("missing TableName")
+	}
+	if gc.DataColumn == "" {
+		return fmt.Errorf("missing DataColumn")
+	}
+	if gc.ForeignKeyColumn == "" {
+		return fmt.Errorf("missing ForeignKeyColumn")
+	}
+	if gc.FieldInParent == "" {
+		return fmt.Errorf("missing FieldInParent")
+	}
+
+	return nil
 }
 
 type Getter struct {
@@ -41,7 +66,16 @@ type Getter struct {
 
 	validator *protovalidate.Validator
 
-	join *join
+	join *getJoin
+}
+
+type getJoin struct {
+	Table            string
+	DataColunn       string
+	ForeignKeyColumn string
+
+	fieldInParent  protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+	eventListField protoreflect.FieldDescriptor // the events array inside the response
 }
 
 func NewGetter(spec GetSpec) (*Getter, error) {
@@ -73,7 +107,7 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
 		}
 
-		sc.join = &join{
+		sc.join = &getJoin{
 			Table:            spec.Join.TableName,
 			DataColunn:       spec.Join.DataColumn,
 			fieldInParent:    joinField,
