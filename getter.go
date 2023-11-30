@@ -107,6 +107,10 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
 		}
 
+		if !joinField.IsList() {
+			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.Join.FieldInParent)
+		}
+
 		sc.join = &getJoin{
 			Table:            spec.Join.TableName,
 			DataColunn:       spec.Join.DataColumn,
