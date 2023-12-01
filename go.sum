@@ -32,6 +32,8 @@ github.com/pentops/listify-go v0.0.0-20231114210340-3454f5bb0a53 h1:Hbu66tModJqM
 github.com/pentops/listify-go v0.0.0-20231114210340-3454f5bb0a53/go.mod h1:Cd2eLUf4XY62DBSNyqZ347BGF5MOXyVoWmUGBZPoVxw=
 github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576 h1:A/vY7Qiv1S/1mUtacZQVoXicaYiiaSR7PInSUcaMOpA=
 github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
+github.com/pentops/outbox.pg.go v0.0.0-20230801052616-dc5e96f581f8 h1:u+7WnBJrBSVJOinXlRw7/io8gLSG7Xa4anS97B9o3EI=
+github.com/pentops/outbox.pg.go v0.0.0-20230801052616-dc5e96f581f8/go.mod h1:ePQpGllAGCMQ0bu6poSnNjqWeTFu9bZzy0Y8NdPqL2k=
 github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb h1:1OIQFqb6RU4OmKXdonwvYHNex0JPQy5gOs0eZTeIwfI=
 github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

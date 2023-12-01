@@ -10,6 +10,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pentops/listify-go v0.0.0-20231114210340-3454f5bb0a53
 	github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576
+	github.com/pentops/outbox.pg.go v0.0.0-20230801052616-dc5e96f581f8
 	github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb
 	google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb
 	google.golang.org/grpc v1.59.0
