@@ -37,7 +37,6 @@ func (td *TransitionData[Event]) SideEffect(msg outbox.OutboxMessage) {
 type Eventer[WrappedEvent proto.Message, Event any, State proto.Message] struct {
 	WrapEvent   func(State, Event) WrappedEvent
 	UnwrapEvent func(WrappedEvent) Event
-	StoreEvent  func(context.Context, sqrlx.Transaction, State, WrappedEvent) error
 	StateLabel  func(State) string
 	EventLabel  func(Event) string
 
@@ -57,7 +56,41 @@ func (ee Eventer[WrappedEvent, Event, State]) findTransition(state State, event 
 	)
 }
 
-func (ee Eventer[WrappedEvent, Event, State]) Run(ctx context.Context, tx sqrlx.Transaction, state State, outerEvent WrappedEvent) error {
+type Transaction[State proto.Message, WrappedEvent proto.Message] interface {
+	StoreEvent(context.Context, State, WrappedEvent) error
+	Outbox(context.Context, outbox.OutboxMessage) error
+}
+
+type SqrlxTransaction[State proto.Message, WrappedEvent proto.Message] struct {
+	sqrlx.Transaction
+	callback func(context.Context, sqrlx.Transaction, State, WrappedEvent) error
+}
+
+func (st *SqrlxTransaction[State, WrappedEvent]) StoreEvent(ctx context.Context, state State, event WrappedEvent) error {
+
+	return st.callback(ctx, st.Transaction, state, event)
+}
+
+func (st *SqrlxTransaction[State, WrappedEvent]) Outbox(ctx context.Context, msg outbox.OutboxMessage) error {
+
+	return outbox.Send(ctx, st.Transaction, msg)
+}
+
+func NewSqrlxTransaction[State proto.Message, WrappedEvent proto.Message](
+	tx sqrlx.Transaction,
+	callback func(context.Context, sqrlx.Transaction, State, WrappedEvent) error,
+) *SqrlxTransaction[State, WrappedEvent] {
+	return &SqrlxTransaction[State, WrappedEvent]{
+		Transaction: tx,
+		callback:    callback,
+	}
+}
+
+func (ee *Eventer[WrappedEvent, Event, State]) Run(
+	ctx context.Context,
+	tx Transaction[State, WrappedEvent],
+	state State,
+	outerEvent WrappedEvent) error {
 
 	eventQueue := []WrappedEvent{outerEvent}
 
@@ -95,12 +128,12 @@ func (ee Eventer[WrappedEvent, Event, State]) Run(ctx context.Context, tx sqrlx.
 
 		log.Info(ctx, "Event Handled")
 
-		if err := ee.StoreEvent(ctx, tx, state, innerEvent); err != nil {
+		if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
 			return err
 		}
 
 		for _, se := range baton.SideEffects {
-			if err := outbox.Send(ctx, tx, se); err != nil {
+			if err := tx.Outbox(ctx, se); err != nil {
 				return fmt.Errorf("side effect outbox: %w", err)
 			}
 		}
