@@ -12,9 +12,15 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/pentops/genericstate/sm"
 )
 
-type StateSpec[E proto.Message, S proto.Message] struct {
+type StateSpec[
+	S sm.IState[ST], // Outer State Entity
+	ST sm.IStatusEnum, // Status Enum in State Entity
+	E sm.IEvent[IE], // Event Wrapper, with IDs and Metadata
+	IE any, // Inner Event, the typed event
+] struct {
 	Transition func(ctx context.Context, state S, event E) error
 
 	EmptyState        func(E) S
@@ -28,12 +34,23 @@ type StateSpec[E proto.Message, S proto.Message] struct {
 	EventTable string
 }
 
-type StateMachine[E proto.Message, S proto.Message] struct {
+type StateMachine[
+	S sm.IState[Status], // Outer State Entity
+	Status sm.IStatusEnum, // Status Enum in State Entity
+	E sm.IEvent[InnerEvent], // Event Wrapper, with IDs and Metadata
+	InnerEvent any, // Inner Event, the typed event
+] struct {
 	db   *sqrlx.Wrapper
-	spec StateSpec[E, S]
+	spec StateSpec[S, Status, E, InnerEvent]
+	*sm.Eventer[S, Status, E, InnerEvent]
 }
 
-func NewStateMachine[E proto.Message, S proto.Message](db *sqrlx.Wrapper, spec StateSpec[E, S]) (*StateMachine[E, S], error) {
+func NewStateMachine[
+	S sm.IState[ST], // Outer State Entity
+	ST sm.IStatusEnum, // Status Enum in State Entity
+	E sm.IEvent[IE], // Event Wrapper, with IDs and Metadata
+	IE any, // Inner Event, the typed event
+](db *sqrlx.Wrapper, spec StateSpec[S, ST, E, IE]) (*StateMachine[S, ST, E, IE], error) {
 
 	if spec.Transition == nil {
 		return nil, fmt.Errorf("missing Transition func")
@@ -69,13 +86,25 @@ func NewStateMachine[E proto.Message, S proto.Message](db *sqrlx.Wrapper, spec S
 		return nil, fmt.Errorf("missing EventTable func")
 	}
 
-	return &StateMachine[E, S]{
-		db:   db,
-		spec: spec,
+	ee := &sm.Eventer[S, ST, E, IE]{
+		WrapEvent:   func(state S, event IE) E {},
+		UnwrapEvent: func(event E) IE {},
+		StateLabel: func(state S) string {
+			return state.GetStatus().ShortString()
+		},
+		EventLabel: func(event IE) string {
+			pr := proto.MessageReflect(event)
+		},
+	}
+
+	return &StateMachine[S, ST, E, IE]{
+		db:      db,
+		spec:    spec,
+		Eventer: ee,
 	}, nil
 }
 
-func (sm *StateMachine[E, S]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) (S, error) {
+func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) (S, error) {
 
 	selectQuery := sq.Select("state").From(sm.spec.StateTable)
 	for k, v := range prepared.primaryKey {
@@ -98,7 +127,7 @@ func (sm *StateMachine[E, S]) getCurrentState(ctx context.Context, tx sqrlx.Tran
 	return state, nil
 }
 
-func (sm *StateMachine[E, S]) storeEvent(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
+func (sm *StateMachine[S, ST, E, IE]) storeEvent(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
 
 	stateJSON, err := protojson.Marshal(prepared.state)
 	if err != nil {
@@ -139,7 +168,7 @@ type Metadata struct {
 	EventID   string
 }
 
-func (sm *StateMachine[E, S]) prepare(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
+func (sm *StateMachine[S, ST, E, IE]) prepare(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
 	metadata := sm.spec.EventMetadata(eventData)
 
 	stateSpec := sm.spec
@@ -195,7 +224,7 @@ func (pt *preparedTransition[E, S]) FinalState() S {
 	return pt.state
 }
 
-func (sm *StateMachine[E, S]) runTx(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
+func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
 
 	var err error
 	prepared.state, err = sm.getCurrentState(ctx, tx, prepared)
@@ -214,16 +243,16 @@ func (sm *StateMachine[E, S]) runTx(ctx context.Context, tx sqrlx.Transaction, p
 	return nil
 }
 
-func (sm *StateMachine[E, S]) PrepareTransition(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
+func (sm *StateMachine[S, ST, E, IE]) PrepareTransition(ctx context.Context, eventData E) (*preparedTransition[E, S], error) {
 	return sm.prepare(ctx, eventData)
 }
 
-func (sm *StateMachine[E, S]) TransitionPrepared(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
+func (sm *StateMachine[S, ST, E, IE]) TransitionPrepared(ctx context.Context, tx sqrlx.Transaction, prepared *preparedTransition[E, S]) error {
 	return sm.runTx(ctx, tx, prepared)
 }
 
 // TransitionInTx uses an existing transaction to transition the state machine.
-func (sm *StateMachine[E, S]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, eventData E) error {
+func (sm *StateMachine[S, ST, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, eventData E) error {
 	prepared, err := sm.prepare(ctx, eventData)
 	if err != nil {
 		return err
@@ -233,7 +262,7 @@ func (sm *StateMachine[E, S]) TransitionInTx(ctx context.Context, tx sqrlx.Trans
 
 // Transition transitions the state machine in a new transaction from the state
 // machine's database pool
-func (sm *StateMachine[E, S]) Transition(ctx context.Context, eventData E) error {
+func (sm *StateMachine[S, ST, E, IE]) Transition(ctx context.Context, eventData E) error {
 
 	prepared, err := sm.prepare(ctx, eventData)
 	if err != nil {
