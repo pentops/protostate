@@ -1,4 +1,4 @@
-package sm
+package psm
 
 import (
 	"context"
@@ -59,15 +59,18 @@ func (ts Transition[State, Status, InnerEventType, InnerEvent]) Matches(state St
 		return false
 	}
 	didMatch := false
-	currentStatus := state.GetStatus()
-	for _, fromStatus := range ts.fromStatus {
-		if fromStatus == currentStatus {
-			didMatch = true
-			break
+
+	if ts.fromStatus != nil {
+		currentStatus := state.GetStatus()
+		for _, fromStatus := range ts.fromStatus {
+			if fromStatus == currentStatus {
+				didMatch = true
+				break
+			}
 		}
-	}
-	if !didMatch {
-		return false
+		if !didMatch {
+			return false
+		}
 	}
 
 	if ts.eventFilter != nil && !ts.eventFilter(asType) {

@@ -45,14 +45,17 @@ type StateQuerySpec struct {
 	PrimaryKeyColumn string
 
 	PrimaryKeyRequestField protoreflect.Name
+	StateResponseField     protoreflect.Name
 
 	Get        *MethodDescriptor
 	List       *MethodDescriptor
 	ListEvents *MethodDescriptor
 
-	Auth AuthProvider
+	Auth     AuthProvider
+	AuthJoin *LeftJoin
 
-	Events *GetJoinSpec
+	Events      *GetJoinSpec
+	EventsInGet bool
 }
 
 func (gc StateQuerySpec) validate() error {
@@ -106,25 +109,34 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 		return nil, err
 	}
 
-	getter, err := NewGetter(GetSpec{
+	getSpec := GetSpec{
 		TableName:              spec.TableName,
 		DataColumn:             spec.DataColumn,
 		Auth:                   spec.Auth,
 		Method:                 spec.Get,
-		Join:                   spec.Events,
 		PrimaryKeyColumn:       spec.PrimaryKeyColumn,
 		PrimaryKeyRequestField: spec.PrimaryKeyRequestField,
-	})
+		StateResponseField:     spec.StateResponseField,
+		AuthJoin:               spec.AuthJoin,
+	}
+	if spec.EventsInGet {
+		getSpec.Join = spec.Events
+	}
+	getter, err := NewGetter(getSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build getter: %w", err)
 	}
 
-	lister, err := NewLister(ListSpec{
+	listSpec := ListSpec{
 		TableName:  spec.TableName,
 		DataColumn: spec.DataColumn,
 		Auth:       spec.Auth,
 		Method:     spec.List,
-	})
+	}
+	if spec.AuthJoin != nil {
+		listSpec.AuthJoin = []*LeftJoin{spec.AuthJoin}
+	}
+	lister, err := NewLister(listSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build lister: %w", err)
 	}
@@ -135,17 +147,23 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 	}
 
 	if spec.Events != nil {
+		eventsAuthJoin := []*LeftJoin{{
+			// Main is the events table, joining to the state table
+			TableName:     spec.TableName,
+			MainKeyColumn: spec.Events.ForeignKeyColumn,
+			JoinKeyColumn: spec.PrimaryKeyColumn,
+		}}
+
+		if spec.AuthJoin != nil {
+			eventsAuthJoin = append(eventsAuthJoin, spec.AuthJoin)
+		}
+
 		ss.eventLister, err = NewLister(ListSpec{
 			TableName:  spec.Events.TableName,
 			DataColumn: spec.Events.DataColumn,
 			Auth:       spec.Auth,
 			Method:     spec.ListEvents,
-			AuthJoin: &LeftJoin{
-				// Main is the events table, joining to the state table
-				TableName:     spec.TableName,
-				MainKeyColumn: spec.Events.ForeignKeyColumn,
-				JoinKeyColumn: spec.PrimaryKeyColumn,
-			},
+			AuthJoin:   eventsAuthJoin,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to build lister: %w", err)

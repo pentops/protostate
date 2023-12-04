@@ -1,4 +1,4 @@
-package sm
+package psm
 
 import (
 	"context"
@@ -48,13 +48,17 @@ type IEvent[Inner any] interface {
 	proto.Message
 }
 
+type IInnerEvent interface {
+	proto.Message
+}
+
 type Eventer[
 	State IState[Status], // Outer State Entity
 	Status IStatusEnum, // Status Enum in State Entity
 	Event IEvent[InnerEvent], // Event Wrapper, with IDs and Metadata
 	InnerEvent any, // Inner Event, the typed event
 ] struct {
-	WrapEvent   func(State, InnerEvent) Event
+	WrapEvent   func(context.Context, State, InnerEvent) Event
 	UnwrapEvent func(Event) InnerEvent
 	StateLabel  func(State) string
 	EventLabel  func(InnerEvent) string
@@ -133,7 +137,7 @@ func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
 		}
 
 		for _, event := range baton.ChainEvents {
-			wrappedEvent := ee.WrapEvent(state, event)
+			wrappedEvent := ee.WrapEvent(ctx, state, event)
 			eventQueue = append(eventQueue, wrappedEvent)
 		}
 	}

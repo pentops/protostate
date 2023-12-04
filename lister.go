@@ -23,7 +23,7 @@ type ListSpec struct {
 	Method *MethodDescriptor
 
 	Auth     AuthProvider
-	AuthJoin *LeftJoin
+	AuthJoin []*LeftJoin
 }
 
 type Lister struct {
@@ -64,19 +64,20 @@ func NewLister(spec ListSpec) (*Lister, error) {
 				}
 				authAlias := tableAlias
 
-				if spec.AuthJoin != nil {
+				for _, join := range spec.AuthJoin {
+					priorAlias := authAlias
 					authAlias = as.Next()
 					// LEFT JOIN
 					//   <t> AS authAlias
 					//   ON authAlias.<authJoin.foreignKeyColumn> = tableAlias.<authJoin.primaryKeyColumn>
 					selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
 						"%s AS %s ON %s.%s = %s.%s",
-						spec.AuthJoin.TableName,
+						join.TableName,
 						authAlias,
 						authAlias,
-						spec.AuthJoin.JoinKeyColumn,
-						tableAlias,
-						spec.AuthJoin.MainKeyColumn,
+						join.JoinKeyColumn,
+						priorAlias,
+						join.MainKeyColumn,
 					))
 				}
 
@@ -180,7 +181,7 @@ func (ll *Lister) List(ctx context.Context, db Transactor, reqMsg proto.Message,
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
 		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-			return fmt.Errorf("unmarshal row: %w", err)
+			return fmt.Errorf("unmarshal row %s: %w", string(rowBytes), err)
 		}
 		if idx >= int(ll.pageSize) {
 			// This is just pretend. The eventual solution will need to look at
