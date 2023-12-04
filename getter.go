@@ -77,8 +77,7 @@ type getJoin struct {
 	DataColunn       string
 	ForeignKeyColumn string
 
-	fieldInParent  protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
-	eventListField protoreflect.FieldDescriptor // the events array inside the response
+	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
 }
 
 func NewGetter(spec GetSpec) (*Getter, error) {
