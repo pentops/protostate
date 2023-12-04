@@ -52,10 +52,8 @@ func (ts Transition[State, Status, InnerEventType, InnerEvent]) RunTransition(
 }
 
 func (ts Transition[State, Status, InnerEventType, InnerEvent]) Matches(state State, event InnerEventType) bool {
-	fmt.Printf("CHECK %T\n", event)
 	asType, ok := any(event).(InnerEvent)
 	if !ok {
-		fmt.Printf("VAR %T not matching %T\n", event, asType)
 		return false
 	}
 	didMatch := false

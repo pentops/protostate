@@ -2,10 +2,10 @@ version: v1
 plugins:
   - plugin: buf.build/protocolbuffers/go:v1.31.0
     out: .
-    opt: paths=import,module=github.com/pentops/genericstate/testproto
+    opt: paths=import,module=github.com/pentops/protostate/testproto
 
   - plugin: buf.build/grpc/go:v1.3.0
     out: .
     opt:
-      - module=github.com/pentops/genericstate/testproto
+      - module=github.com/pentops/protostate/testproto
 

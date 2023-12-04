@@ -1,4 +1,4 @@
-module github.com/pentops/genericstate
+module github.com/pentops/protostate
 
 go 1.21.4
 

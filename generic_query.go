@@ -1,4 +1,4 @@
-package genericstate
+package protostate
 
 import (
 	"context"
