@@ -1,4 +1,4 @@
-package protostate
+package pquery
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 func TestStateQuery(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("./testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())

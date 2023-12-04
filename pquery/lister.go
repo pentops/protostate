@@ -1,4 +1,4 @@
-package protostate
+package pquery
 
 import (
 	"context"
