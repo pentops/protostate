@@ -1,4 +1,4 @@
-package genericstate
+package protostate
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
-	"github.com/pentops/genericstate/testproto/gen/testpb"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/testproto/gen/testpb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -99,8 +99,9 @@ func TestStateQuery(t *testing.T) {
 			return map[string]interface{}{
 				"tenant_id": testFoo.TenantId,
 			}, nil
-
 		}),
+
+		EventsInGet: true,
 
 		Get: &MethodDescriptor{
 			Request:  (&testpb.GetFooRequest{}).ProtoReflect().Descriptor(),

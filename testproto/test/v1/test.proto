@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/pentops/genericstate/testproto/gen/testpb";
+option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 
 import "google/api/annotations.proto";
 import "listify/query/v1/page.proto";

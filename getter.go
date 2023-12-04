@@ -1,4 +1,4 @@
-package genericstate
+package protostate
 
 import (
 	"context"
@@ -22,8 +22,10 @@ type GetSpec struct {
 	DataColumn       string
 	PrimaryKeyColumn string
 	Auth             AuthProvider
+	AuthJoin         *LeftJoin
 
 	PrimaryKeyRequestField protoreflect.Name
+	StateResponseField     protoreflect.Name
 
 	Join *GetJoinSpec
 
@@ -63,6 +65,7 @@ type Getter struct {
 	tableName        string
 	primaryKeyColumn string
 	auth             AuthProvider
+	authJoin         *LeftJoin
 
 	validator *protovalidate.Validator
 
@@ -79,6 +82,17 @@ type getJoin struct {
 }
 
 func NewGetter(spec GetSpec) (*Getter, error) {
+
+	if spec.Method == nil {
+		return nil, fmt.Errorf("missing Method")
+	}
+	if spec.Method.Request == nil {
+		return nil, fmt.Errorf("missing Method.Request")
+	}
+	if spec.Method.Response == nil {
+		return nil, fmt.Errorf("missing Method.Response")
+	}
+
 	reqDesc := spec.Method.Request
 	resDesc := spec.Method.Response
 
@@ -87,6 +101,7 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 		tableName:        spec.TableName,
 		primaryKeyColumn: spec.PrimaryKeyColumn,
 		auth:             spec.Auth,
+		authJoin:         spec.AuthJoin,
 	}
 
 	// TODO: Use an annotation not a passed in name
@@ -96,9 +111,12 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 	}
 
 	// TODO: Use an annotation not a passed in name
-	sc.stateField = resDesc.Fields().ByName(protoreflect.Name("state"))
+	if spec.StateResponseField == "" {
+		spec.StateResponseField = protoreflect.Name("state")
+	}
+	sc.stateField = resDesc.Fields().ByName(spec.StateResponseField)
 	if sc.stateField == nil {
-		return nil, fmt.Errorf("no state field")
+		return nil, fmt.Errorf("no 'state' field in proto message")
 	}
 
 	if spec.Join != nil {
@@ -155,8 +173,26 @@ func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg proto.Message, 
 		if err != nil {
 			return err
 		}
+
+		authAlias := rootAlias
+		if gc.authJoin != nil {
+			authAlias = as.Next()
+			// LEFT JOIN
+			//   <t> AS authAlias
+			//   ON authAlias.<authJoin.foreignKeyColumn> = rootAlias.<authJoin.primaryKeyColumn>
+			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+				"%s AS %s ON %s.%s = %s.%s",
+				gc.authJoin.TableName,
+				authAlias,
+				authAlias,
+				gc.authJoin.JoinKeyColumn,
+				rootAlias,
+				gc.authJoin.MainKeyColumn,
+			))
+		}
+
 		for k, v := range authFilter {
-			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", rootAlias, k): v})
+			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
 		}
 	}
 

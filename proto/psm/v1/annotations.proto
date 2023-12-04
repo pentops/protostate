@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package psm.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/pentops/protostate/gen/v1/psm_pb";
+
+extend google.protobuf.MessageOptions {
+  StateObjectOptions state = 90443400;
+  EventObjectOptions event = 90443401;
+  EventTypeObjectOptions event_type = 90443402;
+}
+
+message StateObjectOptions {
+  string name = 1;
+}
+
+message EventObjectOptions {
+  string name = 1;
+}
+
+message EventTypeObjectOptions {
+}
+
+extend google.protobuf.FieldOptions {
+  EventField event_field = 90443403;
+  EventTypeField event_type_field = 90443404;
+}
+
+
+message EventField {
+  bool event_type = 1;
+  bool metadata = 2;
+  bool state_key = 3;
+}
+
+message EventTypeField {
+  bool sub_key = 1;
+}

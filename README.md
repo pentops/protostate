@@ -1,5 +1,5 @@
-Generic State
-=============
+Proto State
+===========
 
 
 ## Introduction to Event-Driven State Machines in Microservices Architecture
