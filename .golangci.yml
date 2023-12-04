@@ -17,8 +17,8 @@ linters:
     - staticcheck
     - typecheck
     - unused
-    - unparam
   disable:
+    - unparam
     - wsl
     - maligned
     - prealloc
