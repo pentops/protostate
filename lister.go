@@ -27,7 +27,6 @@ type ListSpec struct {
 }
 
 type Lister struct {
-	auth       AuthProvider
 	pageSize   uint64
 	selecQuery func(ctx context.Context) (*sq.SelectBuilder, error)
 

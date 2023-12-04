@@ -14,8 +14,6 @@ import (
 
 const version = "1.0"
 
-var includeDriverValue *bool
-
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -25,7 +23,6 @@ func main() {
 	}
 
 	var flags flag.FlagSet
-	includeDriverValue = flags.Bool("sql_driver", true, "enum types will implement sql.Valuer for the short string")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
@@ -133,10 +130,6 @@ type stateSet struct {
 
 	// field in the root of the outer event for the event metadata
 	metadataField *protogen.Field
-
-	metadataActorField *protogen.Field
-	metadataIDField    *protogen.Field
-	metadataTimeField  *protogen.Field
 }
 
 type eventStateFieldMap struct {
@@ -330,28 +323,6 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P()
 
-	/*
-
-			type Converter[
-			S sm.IState[ST], // Outer State Entity
-			ST sm.IStatusEnum, // Status Enum in State Entity
-			E IEvent[IE], // Event Wrapper, with IDs and Metadata
-			IE IInnerEvent, // Inner Event, the typed event
-		] interface {
-			Wrap(S, IE) E
-			Unwrap(E) IE
-			StateLabel(S) string
-			EventLabel(IE) string
-		}
-	*/
-
 	return nil
 
-}
-
-func genMessage(g *protogen.GeneratedFile, message *protogen.Message) {
-
-	for _, subMessage := range message.Messages {
-		genMessage(g, subMessage)
-	}
 }
