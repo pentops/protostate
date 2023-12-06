@@ -4,3 +4,4 @@ deps:
   - buf.build/googleapis/googleapis
   - buf.build/bufbuild/protovalidate
   - buf.build/pentops/listify
+  - buf.build/pentops/psm

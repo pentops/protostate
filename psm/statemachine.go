@@ -25,12 +25,9 @@ type StateSpec[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	EmptyState        func(E) S
 	PrimaryKey        func(E) map[string]interface{}
 	AdditionalColumns func(E) map[string]interface{}
 	EventForeignKey   func(E) map[string]interface{}
-
-	Conversions Converter[S, ST, E, IE]
 
 	StateTable string
 	EventTable string
@@ -47,13 +44,10 @@ type Converter[
 	StateLabel(S) string
 	EventLabel(IE) string
 	EventMetadata(E) *Metadata
+	EmptyState(E) S
 }
 
 func (spec StateSpec[S, ST, E, IE]) Validate() error {
-
-	if spec.EmptyState == nil {
-		return fmt.Errorf("missing EmptyState func")
-	}
 
 	if spec.PrimaryKey == nil {
 		return fmt.Errorf("missing PrimaryKey func")
@@ -82,8 +76,9 @@ type StateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	db   *sqrlx.Wrapper
-	spec StateSpec[S, ST, E, IE]
+	db          *sqrlx.Wrapper
+	spec        StateSpec[S, ST, E, IE]
+	conversions Converter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
 }
 
@@ -92,23 +87,28 @@ func NewStateMachine[
 	ST IStatusEnum, // Status Enum in State Entity
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
-](db *sqrlx.Wrapper, spec StateSpec[S, ST, E, IE]) (*StateMachine[S, ST, E, IE], error) {
+](
+	db *sqrlx.Wrapper,
+	conversions Converter[S, ST, E, IE],
+	spec StateSpec[S, ST, E, IE],
+) (*StateMachine[S, ST, E, IE], error) {
 
 	if err := spec.Validate(); err != nil {
 		return nil, err
 	}
 
 	ee := &Eventer[S, ST, E, IE]{
-		WrapEvent:   spec.Conversions.Wrap,
-		UnwrapEvent: spec.Conversions.Unwrap,
-		StateLabel:  spec.Conversions.StateLabel,
-		EventLabel:  spec.Conversions.EventLabel,
+		WrapEvent:   conversions.Wrap,
+		UnwrapEvent: conversions.Unwrap,
+		StateLabel:  conversions.StateLabel,
+		EventLabel:  conversions.EventLabel,
 	}
 
 	return &StateMachine[S, ST, E, IE]{
-		db:      db,
-		spec:    spec,
-		Eventer: ee,
+		db:          db,
+		spec:        spec,
+		conversions: conversions,
+		Eventer:     ee,
 	}, nil
 }
 
@@ -121,7 +121,7 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 		selectQuery = selectQuery.Where(sq.Eq{k: v})
 	}
 
-	state := sm.spec.EmptyState(event)
+	state := sm.conversions.EmptyState(event)
 
 	var stateJSON []byte
 	err := tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
@@ -143,7 +143,7 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	state S,
 	event E,
 ) error {
-	metadata := sm.spec.Conversions.EventMetadata(event)
+	metadata := sm.conversions.EventMetadata(event)
 
 	stateSpec := sm.spec
 
@@ -160,7 +160,7 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	eventMap := map[string]interface{}{
 		"id":        metadata.EventID,
 		"timestamp": metadata.Timestamp,
-		"event":     eventJSON,
+		"data":      eventJSON,
 		"actor":     actorJSON,
 	}
 

@@ -7,18 +7,12 @@ import (
 
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/outbox.pg.go/outbox"
-	"google.golang.org/protobuf/proto"
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type ITransition[State proto.Message, Event any] interface {
-	Matches(State, Event) bool
-	RunTransition(context.Context, TransitionBaton[Event], State, Event) error
-}
-
-type TransitionBaton[Event any] interface {
+type TransitionBaton[OuterEvent IEvent[NextInnerEvent], NextInnerEvent any] interface {
 	SideEffect(outbox.OutboxMessage)
-	ChainEvent(Event)
+	ChainEvent(NextInnerEvent)
 }
 
 type TransitionData[Event any] struct {
@@ -34,39 +28,21 @@ func (td *TransitionData[Event]) SideEffect(msg outbox.OutboxMessage) {
 	td.SideEffects = append(td.SideEffects, msg)
 }
 
-type IStatusEnum interface {
-	~int32
-	ShortString() string
-}
-
-type IState[Status IStatusEnum] interface {
-	proto.Message
-	GetStatus() Status
-}
-
-type IEvent[Inner any] interface {
-	proto.Message
-}
-
-type IInnerEvent interface {
-	proto.Message
-}
-
 type Eventer[
-	State IState[Status], // Outer State Entity
-	Status IStatusEnum, // Status Enum in State Entity
-	Event IEvent[InnerEvent], // Event Wrapper, with IDs and Metadata
-	InnerEvent any, // Inner Event, the typed event
+	S IState[ST], // Outer State Entity
+	ST IStatusEnum, // Status Enum in State Entity
+	E IEvent[E], // Event Wrapper, with IDs and Metadata
+	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
-	WrapEvent   func(context.Context, State, InnerEvent) Event
-	UnwrapEvent func(Event) InnerEvent
-	StateLabel  func(State) string
-	EventLabel  func(InnerEvent) string
+	WrapEvent   func(context.Context, S, IE) E
+	UnwrapEvent func(E) IE
+	StateLabel  func(S) string
+	EventLabel  func(IE) string
 
-	Transitions []ITransition[State, InnerEvent]
+	Transitions []ITransition[S, ST, E, IE]
 }
 
-func (ee Eventer[State, Status, Event, Inner]) FindTransition(state State, event Inner) (ITransition[State, Inner], error) {
+func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event IE) (ITransition[S, ST, E, IE], error) {
 	for _, search := range ee.Transitions {
 		if search.Matches(state, event) {
 			return search, nil
@@ -79,7 +55,7 @@ func (ee Eventer[State, Status, Event, Inner]) FindTransition(state State, event
 	)
 }
 
-func (ee *Eventer[State, Status, Event, Inner]) Register(transition ITransition[State, Inner]) {
+func (ee *Eventer[S, ST, E, IE]) Register(transition ITransition[S, ST, E, IE]) {
 	ee.Transitions = append(ee.Transitions, transition)
 }
 

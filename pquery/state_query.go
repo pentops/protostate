@@ -34,24 +34,45 @@ func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]interface{
 	return f(ctx)
 }
 
+// MethodDescriptor is the RequestResponse pair in the gRPC Method
 type MethodDescriptor struct {
 	Request  protoreflect.MessageDescriptor
 	Response protoreflect.MessageDescriptor
 }
 
 type StateQuerySpec struct {
-	TableName        string
-	DataColumn       string
+	// The table of the main entity
+	TableName string
+
+	// The JSONB column containing the state
+	DataColumn string
+
+	// The column containing the primary key, UUID, of the main entity
 	PrimaryKeyColumn string
 
+	// The field in the request message containing the primary key for Get
+	// requests
 	PrimaryKeyRequestField protoreflect.Name
-	StateResponseField     protoreflect.Name
 
-	Get        *MethodDescriptor
-	List       *MethodDescriptor
+	// The field in the response message containing the state, defaults to
+	// 'state' but usually should be the name of the entity
+	StateResponseField protoreflect.Name
+
+	// The gRPC Method pair for the Get request. Required
+	Get *MethodDescriptor
+
+	// The gRPC Method pair for the List request. Required
+	List *MethodDescriptor
+
+	// The gRPC Method pair for the ListEvents request. Optional
 	ListEvents *MethodDescriptor
 
-	Auth     AuthProvider
+	// A function to filter the entities to the current user
+	Auth AuthProvider
+
+	// If the map which AuthProvider returns does not directly map to the main
+	// table, this is a join to the main table. All filters will then be applied
+	// to the joined table instead.
 	AuthJoin *LeftJoin
 
 	Events      *GetJoinSpec
@@ -72,9 +93,25 @@ func (gc StateQuerySpec) validate() error {
 		return fmt.Errorf("missing PrimaryKeyRequestField")
 	}
 
+	if gc.Get == nil {
+		return fmt.Errorf("missing Get")
+	}
+	if gc.List == nil {
+		return fmt.Errorf("missing List")
+	}
+
+	if gc.ListEvents != nil {
+		if gc.Events == nil {
+			return fmt.Errorf("missing Events, but ListEvents is specified")
+		}
+	}
+
 	if gc.Events != nil {
+		if gc.Events.FieldInParent == "" {
+			gc.Events.FieldInParent = protoreflect.Name("events")
+		}
 		if err := gc.Events.validate(); err != nil {
-			return err
+			return fmt.Errorf("Events: %w", err)
 		}
 	}
 
@@ -106,7 +143,7 @@ func (gc *StateQuerySet) ListEvents(ctx context.Context, db Transactor, reqMsg p
 
 func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 	if err := spec.validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("state query for '%s' was invalid: %w", spec.TableName, err)
 	}
 
 	getSpec := GetSpec{
@@ -124,7 +161,7 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 	}
 	getter, err := NewGetter(getSpec)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build getter: %w", err)
+		return nil, fmt.Errorf("build getter for state query '%s': %w", spec.TableName, err)
 	}
 
 	listSpec := ListSpec{
@@ -138,7 +175,7 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 	}
 	lister, err := NewLister(listSpec)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build lister: %w", err)
+		return nil, fmt.Errorf("build main lister for state query '%s': %w", spec.TableName, err)
 	}
 
 	ss := &StateQuerySet{
@@ -166,7 +203,7 @@ func NewStateQuery(spec StateQuerySpec) (*StateQuerySet, error) {
 			AuthJoin:   eventsAuthJoin,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to build lister: %w", err)
+			return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", spec.TableName, err)
 		}
 
 	}

@@ -1,33 +1,27 @@
 syntax = "proto3";
 
-option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
-
-import "google/api/annotations.proto";
-import "listify/query/v1/page.proto";
-
-import "buf/validate/validate.proto";
-
 package test.v1;
 
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "listify/query/v1/page.proto";
+import "psm/v1/annotations.proto";
+
+option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
+
 service FooService {
-  rpc GetFoo (GetFooRequest) returns (GetFooResponse) {
-    option (google.api.http) = {
-      get: "/test/v1/foo/{foo_id}"
-    };
+  rpc GetFoo(GetFooRequest) returns (GetFooResponse) {
+    option (google.api.http) = {get: "/test/v1/foo/{foo_id}"};
   }
 
   rpc ListFoos(ListFoosRequest) returns (ListFoosResponse) {
-    option (google.api.http) = {
-      get: "/test/v1/foos"
-    };
+    option (google.api.http) = {get: "/test/v1/foos"};
   }
 
   rpc ListFooEvents(ListFooEventsRequest) returns (ListFooEventsResponse) {
-    option (google.api.http) = {
-      get: "/test/v1/foo/{foo_id}/events"
-    };
+    option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
   }
-
 }
 
 message GetFooRequest {
@@ -40,19 +34,71 @@ message GetFooResponse {
 }
 
 message FooState {
+  option (psm.v1.state).name = "foo";
+
   string foo_id = 1 [(buf.validate.field).string.uuid = true];
   string tenant_id = 2 [(buf.validate.field).string.uuid = true];
 
   string name = 3;
   string field = 4;
+
+  FooStatus status = 5;
+}
+
+enum FooStatus {
+  FOO_STATUS_UNSPECIFIED = 0;
+  FOO_STATUS_ACTIVE = 1;
+  FOO_STATUS_DELETED = 2;
 }
 
 message FooEvent {
-  string event_id = 1;
-  string text = 2;
+  option (psm.v1.event).name = "foo";
+
+  Metadata metadata = 1 [
+    (psm.v1.event_field).metadata = true,
+    (buf.validate.field).required = true
+  ];
+
+  string foo_id = 2 [
+    (psm.v1.event_field).state_key = true,
+    (buf.validate.field).string.uuid = true
+  ];
+
+  FooEventType event = 3 [
+    (psm.v1.event_field).event_type = true,
+    (buf.validate.field).required = true
+  ];
 }
 
+message Metadata {
+  string event_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  Actor actor = 3;
+}
 
+message Actor {
+  string actor_id = 1;
+}
+
+message FooEventType {
+  oneof type {
+    Created created = 1;
+    Updated updated = 2;
+    Deleted deleted = 3;
+  }
+
+  message Created {
+    string name = 1;
+    string field = 2;
+  }
+
+  message Updated {
+    string name = 1;
+    string field = 2;
+  }
+
+  message Deleted {}
+}
 
 message ListFoosRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
@@ -73,4 +119,3 @@ message ListFooEventsResponse {
   repeated FooEvent events = 1;
   listify.query.v1.PageResponse page = 2;
 }
-

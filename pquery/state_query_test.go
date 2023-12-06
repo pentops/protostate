@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.daemonl.com/sqrlx"
 )
 
@@ -37,12 +38,40 @@ func TestStateQuery(t *testing.T) {
 	}
 
 	event1 := &testpb.FooEvent{
-		EventId: uuid.NewString(),
-		Text:    "event1",
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: testFoo.FooId,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Created_{
+				Created: &testpb.FooEventType_Created{
+					Name:  "foo",
+					Field: "event1",
+				},
+			},
+		},
 	}
 	event2 := &testpb.FooEvent{
-		EventId: uuid.NewString(),
-		Text:    "event2",
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: testFoo.FooId,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Created_{
+				Created: &testpb.FooEventType_Created{
+					Name:  "foo",
+					Field: "event2",
+				},
+			},
+		},
 	}
 
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
@@ -68,11 +97,21 @@ func TestStateQuery(t *testing.T) {
 			if err != nil {
 				return err
 			}
+			actorBytes, err := protojson.Marshal(event.Metadata.Actor)
+			if err != nil {
+				return err
+			}
 
 			if _, err := tx.Insert(ctx, sq.
 				Insert("foo_event").
-				Columns("id", "foo_id", "data").
-				Values(event.EventId, testFoo.FooId, asBytes)); err != nil {
+				Columns("id", "timestamp", "foo_id", "data", "actor").
+				Values(
+					event.Metadata.EventId,
+					event.Metadata.Timestamp.AsTime(),
+					testFoo.FooId,
+					asBytes,
+					actorBytes,
+				)); err != nil {
 				return err
 			}
 		}

@@ -110,12 +110,17 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 	}
 
 	// TODO: Use an annotation not a passed in name
+	defaultState := false
 	if spec.StateResponseField == "" {
+		defaultState = true
 		spec.StateResponseField = protoreflect.Name("state")
 	}
 	sc.stateField = resDesc.Fields().ByName(spec.StateResponseField)
 	if sc.stateField == nil {
-		return nil, fmt.Errorf("no 'state' field in proto message")
+		if defaultState {
+			return nil, fmt.Errorf("no 'state' field in proto message - did you mean to override StateResponseField?")
+		}
+		return nil, fmt.Errorf("no '%s' field in proto message", spec.StateResponseField)
 	}
 
 	if spec.Join != nil {

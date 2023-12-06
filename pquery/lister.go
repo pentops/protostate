@@ -94,7 +94,7 @@ func NewLister(spec ListSpec) (*Lister, error) {
 		field := fields.Get(i)
 		msg := field.Message()
 		if msg == nil {
-			return nil, fmt.Errorf("field %s is not a message", field.Name())
+			return nil, fmt.Errorf("field %s is a '%s', but should be a listify.query.v1.PageResponse", field.Name(), field.Kind())
 		}
 
 		if msg.FullName() == "listify.query.v1.PageResponse" {

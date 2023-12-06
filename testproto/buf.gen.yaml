@@ -9,3 +9,13 @@ plugins:
     opt:
       - module=github.com/pentops/protostate/testproto
 
+  - name: go-short-enum
+    out: .
+    opt:
+      - module=github.com/pentops/protostate/testproto
+
+  - name: go-psm
+    path: ./protoc-gen-go-psm.sh
+    out: .
+    opt:
+      - module=github.com/pentops/protostate/testproto

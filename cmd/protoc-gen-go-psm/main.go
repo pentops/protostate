@@ -154,7 +154,7 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 	}
 
 	if ss.statusFieldInState == nil {
-		return nil, fmt.Errorf("state object %s does not have a state field", src.stateOptions.Name)
+		return nil, fmt.Errorf("state object %s does not have a 'status' field", src.stateOptions.Name)
 	}
 
 	if ss.statusFieldInState.Enum == nil {
@@ -234,7 +234,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	printTypes()
 	g.P("]")
 	g.P()
-	g.P("type ", ss.machineName, "TransitionBaton = ", sm.Ident("TransitionBaton"), "[", ss.eventName, "]")
+	g.P("type ", ss.machineName, "TransitionBaton = ", sm.Ident("TransitionBaton"), "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
 
 	g.P()
 	g.P("type ", ss.eventName, "Key string")
@@ -251,48 +251,9 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 
 	// Converting types
-
-	g.P("type ", ss.machineName, "Converter struct {")
-	g.P("Metadata ", ss.machineName, "EventMetadataConverter")
-	g.P("}")
-	g.P()
-
-	g.P("type ", ss.eventName, "MetadataConverter interface {")
-	g.P("  NewMetadata(", protogen.GoImportPath("context").Ident("Context"), ") *", ss.metadataField.Message.GoIdent)
-	g.P("  ExtractMetadata(*", ss.metadataField.Message.GoIdent, ") *", sm.Ident("Metadata"))
-	g.P("}")
-
-	// eventStateKeyField is the a field in the event which comes from the state
-
-	g.P("func(c *", ss.machineName, "Converter) Wrap(ctx ",
-		protogen.GoImportPath("context").Ident("Context"),
-		", s *", ss.stateMessage.GoIdent, ", e ", ss.eventName, ") *", ss.eventMessage.GoIdent, " {")
-	g.P("wrapper := &", ss.eventMessage.GoIdent, "{")
-	g.P(ss.metadataField.GoName, ": c.Metadata.NewMetadata(ctx),")
-	// Copy all of the shared fields from State
-	for _, field := range ss.eventStateKeyFields {
-		g.P(field.eventField.GoName, ": s.", field.stateField.GoName, ",")
+	if err := addTypeConverter(g, ss); err != nil {
+		return err
 	}
-	g.P("}")
-	g.P("wrapper.SetPSMEvent(e)")
-	g.P("return wrapper")
-	g.P("}")
-	g.P()
-	g.P("func (c *", ss.machineName, "Converter) Unwrap(e *", ss.eventMessage.GoIdent, ") ", ss.eventName, " {")
-	g.P("return e.UnwrapPSMEvent()")
-	g.P("}")
-	g.P()
-	g.P("func (c *", ss.machineName, "Converter) StateLabel(s *", ss.stateMessage.GoIdent, ") string {")
-	g.P("return s.Status.String()")
-	g.P("}")
-	g.P()
-	g.P("func (c *", ss.machineName, "Converter) EventLabel(e ", ss.eventName, ") string {")
-	g.P("return string(e.PSMEventKey())")
-	g.P("}")
-	g.P()
-	g.P("func (c *", ss.machineName, "Converter) EventMetadata(e *", ss.eventMessage.GoIdent, ") *", sm.Ident("Metadata"), " {")
-	g.P("return c.Metadata.ExtractMetadata(e.", ss.metadataField.GoName, ")")
-	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
 	g.P("	switch v := ee.", ss.eventTypeField.GoName, ".Type.(type) {")
@@ -325,4 +286,54 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	return nil
 
+}
+
+func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
+	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
+
+	g.P("type ", ss.machineName, "Converter struct {")
+	g.P("  NewMetadata func(", protogen.GoImportPath("context").Ident("Context"), ") *", ss.metadataField.Message.GoIdent)
+	g.P("  ExtractMetadata func(*", ss.metadataField.Message.GoIdent, ") *", sm.Ident("Metadata"))
+	g.P("}")
+
+	g.P("func(c ", ss.machineName, "Converter) Wrap(ctx ",
+		protogen.GoImportPath("context").Ident("Context"),
+		", s *", ss.stateMessage.GoIdent, ", e ", ss.eventName, ") *", ss.eventMessage.GoIdent, " {")
+	g.P("wrapper := &", ss.eventMessage.GoIdent, "{")
+	g.P(ss.metadataField.GoName, ": c.NewMetadata(ctx),")
+	// Copy all of the shared fields from State
+	for _, field := range ss.eventStateKeyFields {
+		g.P(field.eventField.GoName, ": s.", field.stateField.GoName, ",")
+	}
+	g.P("}")
+	g.P("wrapper.SetPSMEvent(e)")
+	g.P("return wrapper")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) Unwrap(e *", ss.eventMessage.GoIdent, ") ", ss.eventName, " {")
+	g.P("return e.UnwrapPSMEvent()")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) StateLabel(s *", ss.stateMessage.GoIdent, ") string {")
+	g.P("return s.Status.String()")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) EventLabel(e ", ss.eventName, ") string {")
+	g.P("return string(e.PSMEventKey())")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) EventMetadata(e *", ss.eventMessage.GoIdent, ") *", sm.Ident("Metadata"), " {")
+	g.P("return c.ExtractMetadata(e.", ss.metadataField.GoName, ")")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) EmptyState(e *", ss.eventMessage.GoIdent, ") *", ss.stateMessage.GoIdent, " {")
+	g.P("return &", ss.stateMessage.GoIdent, "{")
+	for _, field := range ss.eventStateKeyFields {
+		g.P(field.stateField.GoName, ": e.", field.eventField.GoName, ",")
+	}
+	g.P("}")
+	g.P("}")
+	g.P()
+
+	return nil
 }
