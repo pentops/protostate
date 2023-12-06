@@ -34,6 +34,14 @@ func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]interface{
 	return f(ctx)
 }
 
+// LeftJoin is a specification for joining in the form
+// <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
+// Main is defined in the outer struct holding this LeftJoin
+type LeftJoin struct {
+	TableName string
+	On        JoinFields
+}
+
 // MethodDescriptor is the RequestResponse pair in the gRPC Method
 type methodDescriptor[REQ proto.Message, RES proto.Message] struct {
 	request  protoreflect.MessageDescriptor

@@ -39,19 +39,15 @@ type Lister[
 	REQ ListRequest,
 	RES ListResponse,
 ] struct {
-	pageSize   uint64
-	selecQuery func(ctx context.Context) (*sq.SelectBuilder, error)
+	pageSize uint64
 
 	arrayField        protoreflect.FieldDescriptor
 	pageResponseField protoreflect.FieldDescriptor
-}
 
-// LeftJoin is a specification for joining in the form
-// <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
-// Main is defined in the outer struct holding this LeftJoin
-type LeftJoin struct {
-	TableName string
-	On        JoinFields
+	tableName  string
+	dataColumn string
+	auth       AuthProvider
+	authJoin   []*LeftJoin
 }
 
 func NewLister[
@@ -60,43 +56,11 @@ func NewLister[
 ](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
 
 	ll := &Lister[REQ, RES]{
-		pageSize: uint64(20),
-		selecQuery: func(ctx context.Context) (*sq.SelectBuilder, error) {
-			as := newAliasSet()
-			tableAlias := as.Next()
-
-			selectQuery := sq.
-				Select(fmt.Sprintf("%s.%s", tableAlias, spec.DataColumn)).
-				From(fmt.Sprintf("%s AS %s", spec.TableName, tableAlias))
-
-			if spec.Auth != nil {
-
-				authFilter, err := spec.Auth.AuthFilter(ctx)
-				if err != nil {
-					return nil, err
-				}
-				authAlias := tableAlias
-
-				for _, join := range spec.AuthJoin {
-					priorAlias := authAlias
-					authAlias = as.Next()
-					// LEFT JOIN
-					//   <t> AS authAlias
-					//   ON authAlias.<authJoin.foreignKeyColumn> = tableAlias.<authJoin.primaryKeyColumn>
-					selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-						"%s AS %s ON %s",
-						join.TableName,
-						authAlias,
-						join.On.SQL(priorAlias, authAlias),
-					))
-				}
-
-				for k, v := range authFilter {
-					selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
-				}
-			}
-			return selectQuery, nil
-		},
+		pageSize:   uint64(20),
+		tableName:  spec.TableName,
+		dataColumn: spec.DataColumn,
+		auth:       spec.Auth,
+		authJoin:   spec.AuthJoin,
 	}
 
 	descriptors := newMethodDescriptor[REQ, RES]()
@@ -150,10 +114,37 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	var jsonRows = make([][]byte, 0, ll.pageSize)
 
-	selectQuery, err := ll.selecQuery(ctx)
-	if err != nil {
-		return err
+	as := newAliasSet()
+	tableAlias := as.Next()
+
+	selectQuery := sq.
+		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
+		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
+
+	if ll.auth != nil {
+
+		authFilter, err := ll.auth.AuthFilter(ctx)
+		if err != nil {
+			return err
+		}
+		authAlias := tableAlias
+
+		for _, join := range ll.authJoin {
+			priorAlias := authAlias
+			authAlias = as.Next()
+			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+				"%s AS %s ON %s",
+				join.TableName,
+				authAlias,
+				join.On.SQL(priorAlias, authAlias),
+			))
+		}
+
+		for k, v := range authFilter {
+			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
+		}
 	}
+
 	selectQuery.Limit(ll.pageSize + 1)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
