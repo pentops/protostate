@@ -5,19 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	sq "github.com/elgris/sqrl"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.daemonl.com/sqrlx"
 )
-
-type Metadata struct {
-	Actor     proto.Message
-	Timestamp time.Time
-	EventID   string
-}
 
 type TableSpec[
 	S IState[ST], // Outer State Entity
@@ -26,11 +20,14 @@ type TableSpec[
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
 	PrimaryKey        func(E) map[string]interface{}
-	AdditionalColumns func(E) map[string]interface{}
-	EventForeignKey   func(E) map[string]interface{}
+	ExtraStateColumns func(S) map[string]interface{}
 
 	StateTable string
 	EventTable string
+
+	StateDataColumn string // default: state
+
+	EventColumns func(E) (map[string]interface{}, error)
 }
 
 func (spec TableSpec[S, ST, E, IE]) Validate() error {
@@ -38,10 +35,8 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 		return fmt.Errorf("missing PrimaryKey func")
 	}
 
-	// AdditionalColumns may be nil
-
-	if spec.EventForeignKey == nil {
-		return fmt.Errorf("missing EventForeignKey func")
+	if spec.EventColumns == nil {
+		return fmt.Errorf("missing EventColumns func")
 	}
 
 	if spec.StateTable == "" {
@@ -55,6 +50,13 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 	return nil
 }
 
+func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
+	if spec.StateDataColumn == "" {
+		spec.StateDataColumn = "state"
+	}
+
+}
+
 type EventTypeConverter[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -64,9 +66,7 @@ type EventTypeConverter[
 	Unwrap(E) IE
 	StateLabel(S) string
 	EventLabel(IE) string
-	EventMetadata(E) *Metadata
 	EmptyState(E) S
-	Validate() error
 }
 
 type Transactor interface {
@@ -155,9 +155,7 @@ func NewStateMachine[
 		return nil, err
 	}
 
-	if err := cb.conversions.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid conversions: %w", err)
-	}
+	(&cb.spec).setDefaults()
 
 	ee := &Eventer[S, ST, E, IE]{
 		UnwrapEvent: cb.conversions.Unwrap,
@@ -177,7 +175,9 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 
 	primaryKey := sm.spec.PrimaryKey(event)
 
-	selectQuery := sq.Select("state").From(sm.spec.StateTable)
+	selectQuery := sq.
+		Select(sm.spec.StateDataColumn).
+		From(sm.spec.StateTable)
 	for k, v := range primaryKey {
 		selectQuery = selectQuery.Where(sq.Eq{k: v})
 	}
@@ -204,40 +204,19 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	state S,
 	event E,
 ) error {
-	metadata := sm.conversions.EventMetadata(event)
 
 	stateSpec := sm.spec
 
-	eventJSON, err := protojson.Marshal(event)
+	eventMap, err := sm.spec.EventColumns(event)
 	if err != nil {
-		return err
-	}
-
-	actorJSON, err := protojson.Marshal(metadata.Actor)
-	if err != nil {
-		return err
-	}
-
-	eventMap := map[string]interface{}{
-		"id":        metadata.EventID,
-		"timestamp": metadata.Timestamp,
-		"data":      eventJSON,
-		"actor":     actorJSON,
+		return fmt.Errorf("event columns: %w", err)
 	}
 
 	primaryKey := stateSpec.PrimaryKey(event)
 
 	additionalColumns := map[string]interface{}{}
-	if stateSpec.AdditionalColumns != nil {
-		additionalColumns = stateSpec.AdditionalColumns(event)
-	}
-
-	for k, v := range additionalColumns {
-		eventMap[k] = v
-	}
-
-	for k, v := range stateSpec.EventForeignKey(event) {
-		eventMap[k] = v
+	if stateSpec.ExtraStateColumns != nil {
+		additionalColumns = stateSpec.ExtraStateColumns(state)
 	}
 
 	stateJSON, err := protojson.Marshal(state)
@@ -245,21 +224,59 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return err
 	}
 
+	stateKeyMap, err := fieldsToDBValues(primaryKey)
+	if err != nil {
+		return fmt.Errorf("failed to map state primary key to DB values: %w", err)
+	}
+
+	stateSetMap, err := fieldsToDBValues(additionalColumns)
+	if err != nil {
+		return fmt.Errorf("failed to map state fields to DB values: %w", err)
+	}
+
 	_, err = tx.Insert(ctx, sqrlx.Upsert(sm.spec.StateTable).
-		KeyMap(primaryKey).
-		SetMap(additionalColumns).
-		Set("state", stateJSON))
+		KeyMap(stateKeyMap).
+		SetMap(stateSetMap).
+		Set(sm.spec.StateDataColumn, stateJSON))
 
 	if err != nil {
 		return fmt.Errorf("upsert state: %w", err)
 	}
 
-	_, err = tx.Insert(ctx, sq.Insert(sm.spec.EventTable).SetMap(eventMap))
+	eventSetMap, err := fieldsToDBValues(eventMap)
+	if err != nil {
+		return fmt.Errorf("failed to map event fields to DB values: %w", err)
+	}
+
+	_, err = tx.Insert(ctx, sq.Insert(sm.spec.EventTable).SetMap(eventSetMap))
 	if err != nil {
 		return fmt.Errorf("insert event: %w", err)
 	}
 	return nil
 
+}
+
+func fieldsToDBValues(m map[string]interface{}) (map[string]interface{}, error) {
+	out := map[string]interface{}{}
+	for k, v := range m {
+		converted, err := interfaceToDBValue(v)
+		if err != nil {
+			return nil, err
+		}
+
+		out[k] = converted
+	}
+	return out, nil
+}
+
+func interfaceToDBValue(i interface{}) (interface{}, error) {
+	switch v := i.(type) {
+	case *timestamppb.Timestamp:
+		return v.AsTime(), nil
+	case proto.Message:
+		return protojson.Marshal(v)
+	}
+	return i, nil
 }
 
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {

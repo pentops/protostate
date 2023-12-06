@@ -52,10 +52,14 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			"id": event.FooId,
 		}
 	},
-	EventForeignKey: func(event *FooEvent) map[string]interface{} {
+	EventColumns: func(event *FooEvent) (map[string]interface{}, error) {
+		metadata := event.Metadata
 		return map[string]interface{}{
-			"foo_id": event.FooId,
-		}
+			"id":        metadata.EventId,
+			"timestamp": metadata.Timestamp,
+			"actor":     metadata.Actor,
+			"data":      event,
+		}, nil
 	},
 }
 
@@ -89,9 +93,7 @@ type FooPSMEvent interface {
 	proto.Message
 	PSMEventKey() FooPSMEventKey
 }
-type FooPSMConverter struct {
-	ExtractMetadata func(*Metadata) *psm.Metadata
-}
+type FooPSMConverter struct{}
 
 func (c FooPSMConverter) Unwrap(e *FooEvent) FooPSMEvent {
 	return e.UnwrapPSMEvent()
@@ -109,22 +111,6 @@ func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{
 		FooId: e.FooId,
 	}
-}
-
-func (c FooPSMConverter) EventMetadata(e *FooEvent) *psm.Metadata {
-	if c.ExtractMetadata != nil {
-		return c.ExtractMetadata(e.Metadata)
-	}
-	md := e.Metadata
-	return &psm.Metadata{
-		Actor:     md.Actor,
-		Timestamp: md.Timestamp.AsTime(),
-		EventID:   md.EventId,
-	}
-}
-
-func (c FooPSMConverter) Validate() error {
-	return nil
 }
 
 func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {

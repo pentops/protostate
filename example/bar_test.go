@@ -15,14 +15,7 @@ import (
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 
-	sm, err := testpb.NewBarPSM(db, psm.WithEventTypeConverter(testpb.BarPSMConverter{
-		ExtractMetadata: func(event *testpb.StrangeMetadata) *psm.Metadata {
-			return &psm.Metadata{
-				EventID:   event.EventId,
-				Timestamp: event.Timestamp.AsTime(),
-			}
-		},
-	}), psm.WithTableSpec(testpb.BarPSMTableSpec{
+	sm, err := testpb.NewBarPSM(db, psm.WithTableSpec(testpb.BarPSMTableSpec{
 		StateTable: "foo",
 		EventTable: "foo_event",
 		PrimaryKey: func(event *testpb.BarEvent) map[string]interface{} {
@@ -30,10 +23,13 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 				"id": event.BarId,
 			}
 		},
-		EventForeignKey: func(event *testpb.BarEvent) map[string]interface{} {
+		EventColumns: func(event *testpb.BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"foo_id": event.BarId,
-			}
+				"foo_id":    event.BarId,
+				"id":        event.Metadata.EventId,
+				"timestamp": event.Metadata.Timestamp,
+				"data":      event,
+			}, nil
 		},
 	}))
 	if err != nil {

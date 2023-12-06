@@ -4,7 +4,6 @@ package testpb
 
 import (
 	context "context"
-	errors "errors"
 	psm "github.com/pentops/protostate/psm"
 	proto "google.golang.org/protobuf/proto"
 )
@@ -53,11 +52,6 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			"id": event.BarId,
 		}
 	},
-	EventForeignKey: func(event *BarEvent) map[string]interface{} {
-		return map[string]interface{}{
-			"bar_id": event.BarId,
-		}
-	},
 }
 
 type BarPSMTransitionBaton = psm.TransitionBaton[*BarEvent, BarPSMEvent]
@@ -90,9 +84,7 @@ type BarPSMEvent interface {
 	proto.Message
 	PSMEventKey() BarPSMEventKey
 }
-type BarPSMConverter struct {
-	ExtractMetadata func(*StrangeMetadata) *psm.Metadata
-}
+type BarPSMConverter struct{}
 
 func (c BarPSMConverter) Unwrap(e *BarEvent) BarPSMEvent {
 	return e.UnwrapPSMEvent()
@@ -110,17 +102,6 @@ func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 	return &BarState{
 		BarId: e.BarId,
 	}
-}
-
-func (c BarPSMConverter) EventMetadata(e *BarEvent) *psm.Metadata {
-	return c.ExtractMetadata(e.Metadata)
-}
-
-func (c BarPSMConverter) Validate() error {
-	if c.ExtractMetadata == nil {
-		return errors.New("missing ExtractMetadata func")
-	}
-	return nil
 }
 
 func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
