@@ -33,22 +33,7 @@ type TableSpec[
 	EventTable string
 }
 
-type Converter[
-	S IState[ST], // Outer State Entity
-	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[IE], // Event Wrapper, with IDs and Metadata
-	IE IInnerEvent, // Inner Event, the typed event
-] interface {
-	Wrap(context.Context, S, IE) E
-	Unwrap(E) IE
-	StateLabel(S) string
-	EventLabel(IE) string
-	EventMetadata(E) *Metadata
-	EmptyState(E) S
-}
-
 func (spec TableSpec[S, ST, E, IE]) Validate() error {
-
 	if spec.PrimaryKey == nil {
 		return fmt.Errorf("missing PrimaryKey func")
 	}
@@ -70,6 +55,24 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 	return nil
 }
 
+type EventTypeConverter[
+	S IState[ST], // Outer State Entity
+	ST IStatusEnum, // Status Enum in State Entity
+	E IEvent[IE], // Event Wrapper, with IDs and Metadata
+	IE IInnerEvent, // Inner Event, the typed event
+] interface {
+	Unwrap(E) IE
+	StateLabel(S) string
+	EventLabel(IE) string
+	EventMetadata(E) *Metadata
+	EmptyState(E) S
+	Validate() error
+}
+
+type Transactor interface {
+	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
+}
+
 type StateMachine[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -78,13 +81,54 @@ type StateMachine[
 ] struct {
 	db          Transactor
 	spec        TableSpec[S, ST, E, IE]
-	conversions Converter[S, ST, E, IE]
+	conversions EventTypeConverter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
 }
 
-type Transactor interface {
-	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
+// stateMachineConfigBuilder allows the generated code to build a default
+// machine, but expose options to the user to override the defaults
+type stateMachineConfigBuilder[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] struct {
+	conversions EventTypeConverter[S, ST, E, IE]
+	spec        TableSpec[S, ST, E, IE]
 }
+
+func WithTableSpec[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+](
+	spec TableSpec[S, ST, E, IE],
+) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
+	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
+		cb.spec = spec
+	}
+}
+
+func WithEventTypeConverter[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+](
+	conversions EventTypeConverter[S, ST, E, IE],
+) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
+	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
+		cb.conversions = conversions
+	}
+}
+
+type StateMachineOption[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] func(*stateMachineConfigBuilder[S, ST, E, IE])
 
 func NewStateMachine[
 	S IState[ST], // Outer State Entity
@@ -93,25 +137,38 @@ func NewStateMachine[
 	IE IInnerEvent, // Inner Event, the typed event
 ](
 	db Transactor,
-	conversions Converter[S, ST, E, IE],
-	spec TableSpec[S, ST, E, IE],
+	defaultConversions EventTypeConverter[S, ST, E, IE],
+	defaultSpec TableSpec[S, ST, E, IE],
+	options ...StateMachineOption[S, ST, E, IE],
 ) (*StateMachine[S, ST, E, IE], error) {
 
-	if err := spec.Validate(); err != nil {
+	cb := &stateMachineConfigBuilder[S, ST, E, IE]{
+		conversions: defaultConversions,
+		spec:        defaultSpec,
+	}
+
+	for _, option := range options {
+		option(cb)
+	}
+
+	if err := cb.spec.Validate(); err != nil {
 		return nil, err
 	}
 
+	if err := cb.conversions.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid conversions: %w", err)
+	}
+
 	ee := &Eventer[S, ST, E, IE]{
-		WrapEvent:   conversions.Wrap,
-		UnwrapEvent: conversions.Unwrap,
-		StateLabel:  conversions.StateLabel,
-		EventLabel:  conversions.EventLabel,
+		UnwrapEvent: cb.conversions.Unwrap,
+		StateLabel:  cb.conversions.StateLabel,
+		EventLabel:  cb.conversions.EventLabel,
 	}
 
 	return &StateMachine[S, ST, E, IE]{
 		db:          db,
-		spec:        spec,
-		conversions: conversions,
+		spec:        cb.spec,
+		conversions: cb.conversions,
 		Eventer:     ee,
 	}, nil
 }

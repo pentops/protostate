@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/pentops/protostate/gen/v1/psm_pb"
@@ -108,6 +109,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 }
 
 type stateSet struct {
+	specifiedName string
+
 	namePrefix  string
 	machineName string
 
@@ -142,6 +145,7 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 		stateMessage: src.stateMessage,
 		eventMessage: src.eventMessage,
 	}
+	ss.specifiedName = src.stateOptions.Name
 	ss.namePrefix = strings.TrimSuffix(src.stateMessage.GoIdent.GoName, "State")
 	ss.machineName = ss.namePrefix + "PSM"
 	ss.eventName = ss.namePrefix + "PSMEvent"
@@ -232,17 +236,67 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("]")
 
 	g.P()
-	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", conversions ", ss.machineName, "Converter, spec ", ss.machineName, "TableSpec) (*", ss.machineName, ", error) {")
+
+	FooPSM := ss.machineName
+	FooPSMConverter := ss.machineName + "Converter"
+	FooPSMTableSpec := ss.machineName + "TableSpec"
+	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
+
+	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
+	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", options ...", sm.Ident("StateMachineOption"), "[")
+	printTypes()
+	g.P("]) (*", FooPSM, ", error) {")
 	g.P("return ", sm.Ident("NewStateMachine"), "[")
 	printTypes()
-	g.P("](db, conversions, spec)")
+	g.P("](db, ", FooPSMConverter, "{}, ", DefaultFooPSMTableSpec, ", options...)")
 	g.P("}")
 	g.P()
 
-	g.P("type ", ss.machineName, "TableSpec = ", sm.Ident("TableSpec"), "[")
+	g.P("type ", FooPSMTableSpec, " = ", sm.Ident("TableSpec"), "[")
 	printTypes()
 	g.P("]")
 	g.P()
+
+	/* Let's make some assumptions!
+	var DefaultFOOPsmTableSpec = testpb.FooPSMTableSpec{
+		StateTable: "foo",
+		EventTable: "foo_event",
+		PrimaryKey: func(event *testpb.FooEvent) map[string]interface{} {
+			return map[string]interface{}{
+				"id": event.FooId,
+			}
+		},
+		EventForeignKey: func(event *testpb.FooEvent) map[string]interface{} {
+			return map[string]interface{}{
+				"foo_id": event.FooId,
+			}
+		},
+	}
+	*/
+	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
+	g.P("  StateTable: \"", ss.specifiedName, "\",")
+	g.P("  EventTable: \"", ss.specifiedName, "_event\",")
+	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") map[string]interface{} {")
+	g.P("    return map[string]interface{}{")
+	for _, field := range ss.eventStateKeyFields {
+		// stripping the prefix foo_ from the name in the event. In the DB, we
+		// expect the primary key to be called just id, so foo_id -> id
+		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
+		g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
+	}
+	g.P("    }")
+	g.P("  },")
+	g.P("  EventForeignKey: func(event *", ss.eventMessage.GoIdent, ") map[string]interface{} {")
+	g.P("    return map[string]interface{}{")
+	for _, field := range ss.eventStateKeyFields {
+		g.P("      \"", field.stateField.Desc.Name(), "\": event.", field.eventField.GoName, ",")
+	}
+	g.P("    }")
+	g.P("  },")
+	g.P("}")
+
+	g.P()
+
 	g.P("type ", ss.machineName, "TransitionBaton = ", sm.Ident("TransitionBaton"), "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
 
 	g.P()
@@ -317,22 +371,7 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
 
 	g.P("type ", ss.machineName, "Converter struct {")
-	g.P("  NewMetadata func(", protogen.GoImportPath("context").Ident("Context"), ") *", ss.metadataField.Message.GoIdent)
 	g.P("  ExtractMetadata func(*", ss.metadataField.Message.GoIdent, ") *", sm.Ident("Metadata"))
-	g.P("}")
-
-	g.P("func(c ", ss.machineName, "Converter) Wrap(ctx ",
-		protogen.GoImportPath("context").Ident("Context"),
-		", s *", ss.stateMessage.GoIdent, ", e ", ss.eventName, ") *", ss.eventMessage.GoIdent, " {")
-	g.P("wrapper := &", ss.eventMessage.GoIdent, "{")
-	g.P(ss.metadataField.GoName, ": c.NewMetadata(ctx),")
-	// Copy all of the shared fields from State
-	for _, field := range ss.eventStateKeyFields {
-		g.P(field.eventField.GoName, ": s.", field.stateField.GoName, ",")
-	}
-	g.P("}")
-	g.P("wrapper.SetPSMEvent(e)")
-	g.P("return wrapper")
 	g.P("}")
 	g.P()
 	g.P("func (c ", ss.machineName, "Converter) Unwrap(e *", ss.eventMessage.GoIdent, ") ", ss.eventName, " {")
@@ -347,16 +386,77 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("return string(e.PSMEventKey())")
 	g.P("}")
 	g.P()
-	g.P("func (c ", ss.machineName, "Converter) EventMetadata(e *", ss.eventMessage.GoIdent, ") *", sm.Ident("Metadata"), " {")
-	g.P("return c.ExtractMetadata(e.", ss.metadataField.GoName, ")")
-	g.P("}")
-	g.P()
 	g.P("func (c ", ss.machineName, "Converter) EmptyState(e *", ss.eventMessage.GoIdent, ") *", ss.stateMessage.GoIdent, " {")
 	g.P("return &", ss.stateMessage.GoIdent, "{")
 	for _, field := range ss.eventStateKeyFields {
 		g.P(field.stateField.GoName, ": e.", field.eventField.GoName, ",")
 	}
 	g.P("}")
+	g.P("}")
+	g.P()
+
+	metadataMessage := ss.metadataField.Message
+
+	// Look for a 'well formed' metadata message which has:
+	// 'actor' as a message
+	// 'timestamp' as google.protobuf.Timestamp
+	// 'event_id', 'message_id' or 'id' as a string
+	// If all the above match, we can automate the ExtractMetadata function
+	var actorField *protogen.Field
+	var timestampField *protogen.Field
+	var eventIDField *protogen.Field
+	for _, field := range metadataMessage.Fields {
+		switch field.Desc.Name() {
+		case "actor":
+			if field.Message == nil {
+				break // This will not match
+			}
+			actorField = field
+		case "timestamp":
+			if field.Message == nil || field.Message.Desc.FullName() != "google.protobuf.Timestamp" {
+				break // This will not match
+			}
+			timestampField = field
+
+		case "event_id", "message_id", "id":
+			if field.Desc.Kind() != protoreflect.StringKind {
+				break // This will not match
+			}
+			eventIDField = field
+		}
+	}
+
+	canAutomateMetadata := actorField != nil && timestampField != nil && eventIDField != nil
+
+	if !canAutomateMetadata {
+		g.P("func (c ", ss.machineName, "Converter) EventMetadata(e *", ss.eventMessage.GoIdent, ") *", sm.Ident("Metadata"), " {")
+		g.P("return c.ExtractMetadata(e.", ss.metadataField.GoName, ")")
+		g.P("}")
+		g.P()
+		g.P("func (c ", ss.machineName, "Converter) Validate() error {")
+		g.P("if c.ExtractMetadata == nil {")
+		g.P("return ", protogen.GoImportPath("errors").Ident("New"), "(\"missing ExtractMetadata func\")")
+		g.P("}")
+		g.P("return nil")
+		g.P("}")
+		g.P()
+		return nil
+	}
+
+	g.P("func (c ", ss.machineName, "Converter) EventMetadata(e *", ss.eventMessage.GoIdent, ") *", sm.Ident("Metadata"), " {")
+	g.P("  if c.ExtractMetadata != nil {")
+	g.P("    return c.ExtractMetadata(e.", ss.metadataField.GoName, ")")
+	g.P("  }")
+	g.P("  md := e.", ss.metadataField.GoName)
+	g.P("  return &", sm.Ident("Metadata"), "{")
+	g.P("    Actor: md.", actorField.GoName, ",")
+	g.P("    Timestamp: md.", timestampField.GoName, ".AsTime(),")
+	g.P("    EventID: md.", eventIDField.GoName, ",")
+	g.P("  }")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) Validate() error {")
+	g.P("  return nil") // Nothing to validate when we can automate
 	g.P("}")
 	g.P()
 

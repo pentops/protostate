@@ -23,13 +23,18 @@ type FooPSM = psm.StateMachine[
 	FooPSMEvent,
 ]
 
-func NewFooPSM(db psm.Transactor, conversions FooPSMConverter, spec FooPSMTableSpec) (*FooPSM, error) {
+func NewFooPSM(db psm.Transactor, options ...psm.StateMachineOption[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]) (*FooPSM, error) {
 	return psm.NewStateMachine[
 		*FooState,
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
-	](db, conversions, spec)
+	](db, FooPSMConverter{}, DefaultFooPSMTableSpec, options...)
 }
 
 type FooPSMTableSpec = psm.TableSpec[
@@ -38,6 +43,21 @@ type FooPSMTableSpec = psm.TableSpec[
 	*FooEvent,
 	FooPSMEvent,
 ]
+
+var DefaultFooPSMTableSpec = FooPSMTableSpec{
+	StateTable: "foo",
+	EventTable: "foo_event",
+	PrimaryKey: func(event *FooEvent) map[string]interface{} {
+		return map[string]interface{}{
+			"id": event.FooId,
+		}
+	},
+	EventForeignKey: func(event *FooEvent) map[string]interface{} {
+		return map[string]interface{}{
+			"foo_id": event.FooId,
+		}
+	},
+}
 
 type FooPSMTransitionBaton = psm.TransitionBaton[*FooEvent, FooPSMEvent]
 
@@ -70,17 +90,7 @@ type FooPSMEvent interface {
 	PSMEventKey() FooPSMEventKey
 }
 type FooPSMConverter struct {
-	NewMetadata     func(context.Context) *Metadata
 	ExtractMetadata func(*Metadata) *psm.Metadata
-}
-
-func (c FooPSMConverter) Wrap(ctx context.Context, s *FooState, e FooPSMEvent) *FooEvent {
-	wrapper := &FooEvent{
-		Metadata: c.NewMetadata(ctx),
-		FooId:    s.FooId,
-	}
-	wrapper.SetPSMEvent(e)
-	return wrapper
 }
 
 func (c FooPSMConverter) Unwrap(e *FooEvent) FooPSMEvent {
@@ -95,14 +105,26 @@ func (c FooPSMConverter) EventLabel(e FooPSMEvent) string {
 	return string(e.PSMEventKey())
 }
 
-func (c FooPSMConverter) EventMetadata(e *FooEvent) *psm.Metadata {
-	return c.ExtractMetadata(e.Metadata)
-}
-
 func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{
 		FooId: e.FooId,
 	}
+}
+
+func (c FooPSMConverter) EventMetadata(e *FooEvent) *psm.Metadata {
+	if c.ExtractMetadata != nil {
+		return c.ExtractMetadata(e.Metadata)
+	}
+	md := e.Metadata
+	return &psm.Metadata{
+		Actor:     md.Actor,
+		Timestamp: md.Timestamp.AsTime(),
+		EventID:   md.EventId,
+	}
+}
+
+func (c FooPSMConverter) Validate() error {
+	return nil
 }
 
 func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {

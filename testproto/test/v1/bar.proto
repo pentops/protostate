@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package test.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "listify/query/v1/page.proto";
+import "psm/v1/annotations.proto";
+
+option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
+
+// BarService is a little strange, it requires a lot of overrides for defaults
+// when building the state query and state machine.
+service BarService {
+  rpc GetBar(GetBarRequest) returns (GetBarResponse) {
+    option (google.api.http) = {get: "/test/v1/bar/{bar_id}"};
+  }
+
+  rpc ListBars(ListBarsRequest) returns (ListBarsResponse) {
+    option (google.api.http) = {get: "/test/v1/bars"};
+  }
+
+  rpc ListBarEvents(ListBarEventsRequest) returns (ListBarEventsResponse) {
+    option (google.api.http) = {get: "/test/v1/bar/{bar_id}/events"};
+  }
+}
+
+message GetBarRequest {
+  string bar_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetBarResponse {
+  BarState state = 1;
+  repeated BarEvent events = 2;
+}
+
+message BarState {
+  option (psm.v1.state).name = "bar";
+
+  string bar_id = 1 [(buf.validate.field).string.uuid = true];
+  string tenant_id = 2 [(buf.validate.field).string.uuid = true];
+
+  string name = 3;
+  string field = 4;
+
+  BarStatus status = 5;
+}
+
+enum BarStatus {
+  BAR_STATUS_UNSPECIFIED = 0;
+  BAR_STATUS_ACTIVE = 1;
+  BAR_STATUS_DELETED = 2;
+}
+
+message BarEvent {
+  option (psm.v1.event).name = "bar";
+
+  StrangeMetadata metadata = 1 [
+    (psm.v1.event_field).metadata = true,
+    (buf.validate.field).required = true
+  ];
+
+  string bar_id = 2 [
+    (psm.v1.event_field).state_key = true,
+    (buf.validate.field).string.uuid = true
+  ];
+
+  BarEventType event = 3 [
+    (psm.v1.event_field).event_type = true,
+    (buf.validate.field).required = true
+  ];
+}
+
+message StrangeMetadata {
+  string event_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+message BarEventType {
+  oneof type {
+    Created created = 1;
+    Updated updated = 2;
+    Deleted deleted = 3;
+  }
+
+  message Created {
+    string name = 1;
+    string field = 2;
+  }
+
+  message Updated {
+    string name = 1;
+    string field = 2;
+  }
+
+  message Deleted {}
+}
+
+message ListBarsRequest {
+  optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
+  listify.query.v1.PageRequest page = 2;
+}
+
+message ListBarsResponse {
+  repeated BarState bars = 1;
+  listify.query.v1.PageResponse page = 2;
+}
+
+message ListBarEventsRequest {
+  string bar_id = 1 [(buf.validate.field).string.uuid = true];
+  listify.query.v1.PageRequest page = 2;
+}
+
+message ListBarEventsResponse {
+  repeated BarEvent events = 1;
+  listify.query.v1.PageResponse page = 2;
+}

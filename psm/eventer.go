@@ -12,20 +12,26 @@ import (
 
 type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
 	SideEffect(outbox.OutboxMessage)
-	ChainEvent(IE)
+	ChainEvent(E)
+	FullCause() E
 }
 
-type TransitionData[Event any] struct {
+type TransitionData[E IEvent[IE], IE IInnerEvent] struct {
 	SideEffects []outbox.OutboxMessage
-	ChainEvents []Event
+	ChainEvents []E
+	causedBy    E
 }
 
-func (td *TransitionData[Event]) ChainEvent(event Event) {
+func (td *TransitionData[E, IE]) ChainEvent(event E) {
 	td.ChainEvents = append(td.ChainEvents, event)
 }
 
-func (td *TransitionData[Event]) SideEffect(msg outbox.OutboxMessage) {
+func (td *TransitionData[E, IE]) SideEffect(msg outbox.OutboxMessage) {
 	td.SideEffects = append(td.SideEffects, msg)
+}
+
+func (td *TransitionData[E, IE]) FullCause() E {
+	return td.causedBy
 }
 
 type Eventer[
@@ -34,7 +40,6 @@ type Eventer[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
-	WrapEvent   func(context.Context, S, IE) E
 	UnwrapEvent func(E) IE
 	StateLabel  func(S) string
 	EventLabel  func(IE) string
@@ -57,20 +62,20 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 	)
 }
 
-func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
+func (ee Eventer[S, ST, E, IE]) Run(
 	ctx context.Context,
-	tx Transaction[State, WrappedEvent],
-	state State,
-	outerEvent WrappedEvent,
+	tx Transaction[S, E],
+	state S,
+	outerEvent E,
 ) error {
 
-	eventQueue := []WrappedEvent{outerEvent}
+	eventQueue := []E{outerEvent}
 
 	for len(eventQueue) > 0 {
 		innerEvent := eventQueue[0]
 		eventQueue = eventQueue[1:]
 
-		baton := &TransitionData[Event]{}
+		baton := &TransitionData[E, IE]{}
 
 		unwrapped := ee.UnwrapEvent(innerEvent)
 
@@ -111,8 +116,7 @@ func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
 		}
 
 		for _, event := range baton.ChainEvents {
-			wrappedEvent := ee.WrapEvent(ctx, state, event)
-			eventQueue = append(eventQueue, wrappedEvent)
+			eventQueue = append(eventQueue, event)
 		}
 	}
 
