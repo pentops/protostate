@@ -65,10 +65,9 @@ type StateSpec[
 	ListEventsRES ListResponse,
 
 ] struct {
-	AuthFunc    AuthProvider
-	AuthJoin    *LeftJoin
-	SkipEvents  bool
-	EventsInGet bool
+	AuthFunc   AuthProvider
+	AuthJoin   *LeftJoin
+	SkipEvents bool
 }
 
 func FromStateMachine[
@@ -87,16 +86,17 @@ func FromStateMachine[
 
 	getSpec := GetSpec[GetREQ, GetRES]{
 		TableName:  smSpec.StateTable,
-		DataColumn: smSpec.DataColumn,
+		DataColumn: smSpec.StateDataColumn,
 		Auth:       spec.AuthFunc,
 		AuthJoin:   spec.AuthJoin,
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
 	eventJoinMap := JoinFields{}
-	getReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
-	for i := 0; i < getReflect.Fields().Len(); i++ {
-		field := getReflect.Fields().Get(i)
+	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
+
+	for i := 0; i < requestReflect.Fields().Len(); i++ {
+		field := requestReflect.Fields().Get(i)
 		fullKey := string(field.Name())
 		rootKey := strings.TrimPrefix(fullKey, smSpec.StateTable+"_")
 		pkFields[rootKey] = field
@@ -115,11 +115,28 @@ func FromStateMachine[
 		return out, nil
 	}
 
-	if spec.EventsInGet {
+	var eventsInGet protoreflect.Name
+
+	getResponseReflect := (*new(GetRES)).ProtoReflect().Descriptor()
+	for i := 0; i < getResponseReflect.Fields().Len(); i++ {
+		field := getResponseReflect.Fields().Get(i)
+		msg := field.Message()
+		if msg == nil {
+			continue
+		}
+
+		if msg.FullName() == smSpec.EventTypeName {
+			eventsInGet = field.Name()
+		} else if msg.FullName() == smSpec.StateTypeName {
+			getSpec.StateResponseField = field.Name()
+		}
+	}
+
+	if eventsInGet != "" {
 		getSpec.Join = &GetJoinSpec{
 			TableName:     smSpec.EventTable,
-			DataColumn:    "data",   // TODO: make this configurable
-			FieldInParent: "events", // TODO: look this up in the proto
+			DataColumn:    smSpec.EventDataColumn,
+			FieldInParent: eventsInGet,
 			On:            eventJoinMap,
 		}
 	}
@@ -131,7 +148,7 @@ func FromStateMachine[
 
 	listSpec := ListSpec[ListREQ, ListRES]{
 		TableName:  smSpec.StateTable,
-		DataColumn: smSpec.DataColumn,
+		DataColumn: smSpec.StateDataColumn,
 		Auth:       spec.AuthFunc,
 	}
 	if spec.AuthJoin != nil {
@@ -164,7 +181,7 @@ func FromStateMachine[
 
 	eventListSpec := ListSpec[ListEventsREQ, ListEventsRES]{
 		TableName:  smSpec.EventTable,
-		DataColumn: "data",
+		DataColumn: smSpec.EventDataColumn,
 		Auth:       spec.AuthFunc,
 		AuthJoin:   eventsAuthJoin,
 	}

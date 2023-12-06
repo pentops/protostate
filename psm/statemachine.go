@@ -9,6 +9,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/dbconvert"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"gopkg.daemonl.com/sqrlx"
 )
 
@@ -25,8 +26,8 @@ type TableSpec[
 	EventTable string
 
 	StateDataColumn string // default: state
-
-	EventColumns func(E) (map[string]interface{}, error)
+	EventDataColumn string // default: data
+	EventColumns    func(E) (map[string]interface{}, error)
 }
 
 func (spec TableSpec[S, ST, E, IE]) Validate() error {
@@ -50,22 +51,34 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 }
 
 type QuerySpec struct {
-	StateTable string
-	EventTable string
-	DataColumn string
+	StateTable      string
+	StateDataColumn string
+
+	EventTable      string
+	EventDataColumn string
+
+	EventTypeName protoreflect.FullName
+	StateTypeName protoreflect.FullName
 }
 
 func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
 	return QuerySpec{
-		StateTable: spec.StateTable,
-		EventTable: spec.EventTable,
-		DataColumn: spec.StateDataColumn,
+		StateTable:      spec.StateTable,
+		StateDataColumn: spec.StateDataColumn,
+		EventTable:      spec.EventTable,
+		EventDataColumn: spec.EventDataColumn,
+
+		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
+		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
 	}
 }
 
 func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	if spec.StateDataColumn == "" {
 		spec.StateDataColumn = "state"
+	}
+	if spec.EventDataColumn == "" {
+		spec.EventDataColumn = "data"
 	}
 }
 
@@ -227,6 +240,7 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	if err != nil {
 		return fmt.Errorf("event columns: %w", err)
 	}
+	eventMap[stateSpec.EventDataColumn] = event
 
 	primaryKey := stateSpec.PrimaryKey(event)
 

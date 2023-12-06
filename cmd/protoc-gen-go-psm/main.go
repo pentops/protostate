@@ -393,7 +393,6 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 		g.P("      \"id\": metadata.", eventIDField.GoName, ",")
 		g.P("      \"timestamp\": metadata.", timestampField.GoName, ",")
 		g.P("      \"actor\": metadata.", actorField.GoName, ",")
-		g.P("      \"data\": event,")
 		// Assumes that all fields in the event marked as state key should be
 		// directly written to the table. If not, they should not be in the
 		// event, i.e. if they are derivable from the state, rather than

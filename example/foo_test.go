@@ -146,9 +146,7 @@ func TestFooStateMachine(t *testing.T) {
 		*testpb.ListFoosResponse,
 		*testpb.ListFooEventsRequest,
 		*testpb.ListFooEventsResponse,
-	]{
-		EventsInGet: true,
-	})
+	]{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

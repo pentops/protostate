@@ -81,7 +81,7 @@ type GetJoinSpec struct {
 	TableName     string
 	DataColumn    string
 	On            JoinFields
-	FieldInParent string
+	FieldInParent protoreflect.Name
 }
 
 func (gc GetJoinSpec) validate() error {
