@@ -7,7 +7,10 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/testproto/gen/testpb"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.daemonl.com/sqrlx"
 )
@@ -32,6 +35,18 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Status = testpb.FooStatus_ACTIVE
 			state.Name = event.Name
 			state.Field = event.Field
+			return nil
+		}))
+
+	sm.From(testpb.FooStatus_ACTIVE).
+		Do(testpb.FooPSMFunc(func(
+			ctx context.Context,
+			tb testpb.FooPSMTransitionBaton,
+			state *testpb.FooState,
+			event *testpb.FooEventType_Updated,
+		) error {
+			state.Field = event.Field
+			state.Name = event.Name
 			return nil
 		}))
 
@@ -72,13 +87,146 @@ func TestFooStateMachine(t *testing.T) {
 		},
 	}
 
-	stateOut, err := sm.Transition(ctx, event1)
+	event2 := &testpb.FooEvent{
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: fooID,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Updated_{
+				Updated: &testpb.FooEventType_Updated{
+					Name:  "foo",
+					Field: "event2",
+				},
+			},
+		},
+	}
+
+	foo2ID := uuid.NewString()
+	event3 := &testpb.FooEvent{
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: foo2ID,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Created_{
+				Created: &testpb.FooEventType_Created{
+					Name:  "foo2",
+					Field: "event3",
+				},
+			},
+		},
+	}
+
+	statesOut := map[string]*testpb.FooState{}
+	for _, event := range []*testpb.FooEvent{event1, event2, event3} {
+		stateOut, err := sm.Transition(ctx, event)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		statesOut[event.FooId] = stateOut
+	}
+
+	if statesOut[fooID].GetStatus() != testpb.FooStatus_ACTIVE {
+		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
+	}
+
+	queryer, err := pquery.FromStateMachine[
+		*testpb.GetFooRequest,
+		*testpb.GetFooResponse,
+		*testpb.ListFoosRequest,
+		*testpb.ListFoosResponse,
+		*testpb.ListFooEventsRequest,
+		*testpb.ListFooEventsResponse,
+	](sm, pquery.StateSpec[
+		*testpb.GetFooRequest,
+		*testpb.GetFooResponse,
+		*testpb.ListFoosRequest,
+		*testpb.ListFoosResponse,
+		*testpb.ListFooEventsRequest,
+		*testpb.ListFooEventsResponse,
+	]{
+		GetMethod: &pquery.MethodDescriptor[
+			*testpb.GetFooRequest,
+			*testpb.GetFooResponse,
+		]{
+			Request:  &testpb.GetFooRequest{},
+			Response: &testpb.GetFooResponse{},
+		},
+		ListMethod: &pquery.MethodDescriptor[
+			*testpb.ListFoosRequest,
+			*testpb.ListFoosResponse,
+		]{
+			Request:  &testpb.ListFoosRequest{},
+			Response: &testpb.ListFoosResponse{},
+		},
+		EventsInGet: true,
+	})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	if stateOut.GetStatus() != testpb.FooStatus_ACTIVE {
-		t.Fatalf("Expect state ACTIVE, got %s", stateOut.GetStatus().ShortString())
-	}
+	t.Run("Get", func(t *testing.T) {
 
+		req := &testpb.GetFooRequest{
+			FooId: fooID,
+		}
+
+		res := &testpb.GetFooResponse{}
+
+		err = queryer.Get(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if !proto.Equal(res.State, statesOut[fooID]) {
+			t.Fatalf("expected %v, got %v", statesOut[fooID], res.State)
+		}
+
+		if len(res.Events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(res.Events))
+		}
+		t.Log(res.Events)
+	})
+
+	t.Run("List", func(t *testing.T) {
+
+		req := &testpb.ListFoosRequest{}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Foos) != 2 {
+			t.Fatalf("expected 2 states, got %d", len(res.Foos))
+		}
+
+	})
+
+	t.Run("ListEvents", func(t *testing.T) {
+
+		req := &testpb.ListFooEventsRequest{}
+		res := &testpb.ListFooEventsResponse{}
+
+		err = queryer.ListEvents(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(res.Events))
+		}
+	})
 }

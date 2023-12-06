@@ -16,17 +16,31 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type ListSpec struct {
+type ListRequest interface {
+	proto.Message
+}
+
+type ListResponse interface {
+	proto.Message
+}
+
+type ListSpec[
+	REQ ListRequest,
+	RES ListResponse,
+] struct {
 	TableName  string
 	DataColumn string
 
-	Method *MethodDescriptor
+	Method *MethodDescriptor[REQ, RES]
 
 	Auth     AuthProvider
 	AuthJoin []*LeftJoin
 }
 
-type Lister struct {
+type Lister[
+	REQ ListRequest,
+	RES ListResponse,
+] struct {
 	pageSize   uint64
 	selecQuery func(ctx context.Context) (*sq.SelectBuilder, error)
 
@@ -43,9 +57,12 @@ type LeftJoin struct {
 	MainKeyColumn string
 }
 
-func NewLister(spec ListSpec) (*Lister, error) {
+func NewLister[
+	REQ ListRequest,
+	RES ListResponse,
+](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
 
-	ll := &Lister{
+	ll := &Lister[REQ, RES]{
 		pageSize: uint64(20),
 		selecQuery: func(ctx context.Context) (*sq.SelectBuilder, error) {
 			as := newAliasSet()
@@ -88,7 +105,7 @@ func NewLister(spec ListSpec) (*Lister, error) {
 		},
 	}
 
-	fields := spec.Method.Response.Fields()
+	fields := spec.Method.Response.ProtoReflect().Descriptor().Fields()
 
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
@@ -132,7 +149,7 @@ func NewLister(spec ListSpec) (*Lister, error) {
 	return ll, nil
 }
 
-func (ll *Lister) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 
 	res := resMsg.ProtoReflect()
 
@@ -180,7 +197,7 @@ func (ll *Lister) List(ctx context.Context, db Transactor, reqMsg proto.Message,
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
 		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-			return fmt.Errorf("unmarshal row %s: %w", string(rowBytes), err)
+			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
 		if idx >= int(ll.pageSize) {
 			// This is just pretend. The eventual solution will need to look at

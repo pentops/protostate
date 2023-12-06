@@ -7,9 +7,8 @@ import (
 	"fmt"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/pentops/protostate/dbconvert"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.daemonl.com/sqrlx"
 )
 
@@ -50,11 +49,24 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 	return nil
 }
 
+type QuerySpec struct {
+	StateTable string
+	EventTable string
+	DataColumn string
+}
+
+func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
+	return QuerySpec{
+		StateTable: spec.StateTable,
+		EventTable: spec.EventTable,
+		DataColumn: spec.StateDataColumn,
+	}
+}
+
 func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	if spec.StateDataColumn == "" {
 		spec.StateDataColumn = "state"
 	}
-
 }
 
 type EventTypeConverter[
@@ -198,6 +210,10 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	return state, nil
 }
 
+func (sm *StateMachine[S, ST, E, IE]) GetQuerySpec() QuerySpec {
+	return sm.spec.QuerySpec()
+}
+
 func (sm *StateMachine[S, ST, E, IE]) store(
 	ctx context.Context,
 	tx sqrlx.Transaction,
@@ -224,12 +240,12 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return err
 	}
 
-	stateKeyMap, err := fieldsToDBValues(primaryKey)
+	stateKeyMap, err := dbconvert.FieldsToDBValues(primaryKey)
 	if err != nil {
 		return fmt.Errorf("failed to map state primary key to DB values: %w", err)
 	}
 
-	stateSetMap, err := fieldsToDBValues(additionalColumns)
+	stateSetMap, err := dbconvert.FieldsToDBValues(additionalColumns)
 	if err != nil {
 		return fmt.Errorf("failed to map state fields to DB values: %w", err)
 	}
@@ -243,7 +259,7 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return fmt.Errorf("upsert state: %w", err)
 	}
 
-	eventSetMap, err := fieldsToDBValues(eventMap)
+	eventSetMap, err := dbconvert.FieldsToDBValues(eventMap)
 	if err != nil {
 		return fmt.Errorf("failed to map event fields to DB values: %w", err)
 	}
@@ -254,29 +270,6 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	}
 	return nil
 
-}
-
-func fieldsToDBValues(m map[string]interface{}) (map[string]interface{}, error) {
-	out := map[string]interface{}{}
-	for k, v := range m {
-		converted, err := interfaceToDBValue(v)
-		if err != nil {
-			return nil, err
-		}
-
-		out[k] = converted
-	}
-	return out, nil
-}
-
-func interfaceToDBValue(i interface{}) (interface{}, error) {
-	switch v := i.(type) {
-	case *timestamppb.Timestamp:
-		return v.AsTime(), nil
-	case proto.Message:
-		return protojson.Marshal(v)
-	}
-	return i, nil
 }
 
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
