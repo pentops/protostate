@@ -122,14 +122,6 @@ type TransitionFilter[
 	Matches(S, IE) bool
 }
 
-type CastTransitionFilter[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-] struct {
-}
-
 type TypedTransition[
 	S IState[ST],
 	ST IStatusEnum,

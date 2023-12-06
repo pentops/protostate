@@ -9,7 +9,7 @@ CREATE TABLE foo (
 CREATE TABLE foo_event (
 	id uuid primary key,
 	timestamp timestamptz NOT NULL,
-	foo_id uuid references foo(id),
+	foo_id uuid references foo(id) NOT NULL,
 	actor jsonb,
 	data jsonb
 );

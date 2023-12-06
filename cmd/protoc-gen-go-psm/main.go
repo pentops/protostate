@@ -257,7 +257,9 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("]")
 	g.P()
 
-	addDefaultTableSpec(g, ss)
+	if err := addDefaultTableSpec(g, ss); err != nil {
+		return err
+	}
 
 	g.P()
 
@@ -335,22 +337,7 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	FooPSMTableSpec := ss.machineName + "TableSpec"
 	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
 
-	/* Let's make some assumptions!
-	var DefaultFOOPsmTableSpec = testpb.FooPSMTableSpec{
-		StateTable: "foo",
-		EventTable: "foo_event",
-		PrimaryKey: func(event *testpb.FooEvent) map[string]interface{} {
-			return map[string]interface{}{
-				"id": event.FooId,
-			}
-		},
-		EventForeignKey: func(event *testpb.FooEvent) map[string]interface{} {
-			return map[string]interface{}{
-				"foo_id": event.FooId,
-			}
-		},
-	}
-	*/
+	/* Let's make some assumptions! */
 
 	metadataMessage := ss.metadataField.Message
 
@@ -406,7 +393,14 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 		g.P("      \"id\": metadata.", eventIDField.GoName, ",")
 		g.P("      \"timestamp\": metadata.", timestampField.GoName, ",")
 		g.P("      \"actor\": metadata.", actorField.GoName, ",")
-		g.P("      \"data\": event,")
+		// Assumes that all fields in the event marked as state key should be
+		// directly written to the table. If not, they should not be in the
+		// event, i.e. if they are derivable from the state, rather than
+		// identifying the state, there is no need to copy them to the event.
+		for _, field := range ss.eventStateKeyFields {
+			keyName := string(field.stateField.Desc.Name())
+			g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
+		}
 		g.P("    }, nil")
 		g.P("  },")
 	}

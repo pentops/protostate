@@ -16,79 +16,55 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type ListSpec struct {
+type ListRequest interface {
+	proto.Message
+}
+
+type ListResponse interface {
+	proto.Message
+}
+
+type ListSpec[
+	REQ ListRequest,
+	RES ListResponse,
+] struct {
 	TableName  string
 	DataColumn string
-
-	Method *MethodDescriptor
 
 	Auth     AuthProvider
 	AuthJoin []*LeftJoin
 }
 
-type Lister struct {
-	pageSize   uint64
-	selecQuery func(ctx context.Context) (*sq.SelectBuilder, error)
+type Lister[
+	REQ ListRequest,
+	RES ListResponse,
+] struct {
+	pageSize uint64
 
 	arrayField        protoreflect.FieldDescriptor
 	pageResponseField protoreflect.FieldDescriptor
+
+	tableName  string
+	dataColumn string
+	auth       AuthProvider
+	authJoin   []*LeftJoin
 }
 
-// LeftJoin is a specification for joining in the form
-// <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
-// Main is defined in the outer struct holding this LeftJoin
-type LeftJoin struct {
-	TableName     string
-	JoinKeyColumn string
-	MainKeyColumn string
-}
+func NewLister[
+	REQ ListRequest,
+	RES ListResponse,
+](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
 
-func NewLister(spec ListSpec) (*Lister, error) {
-
-	ll := &Lister{
-		pageSize: uint64(20),
-		selecQuery: func(ctx context.Context) (*sq.SelectBuilder, error) {
-			as := newAliasSet()
-			tableAlias := as.Next()
-
-			selectQuery := sq.
-				Select(fmt.Sprintf("%s.%s", tableAlias, spec.DataColumn)).
-				From(fmt.Sprintf("%s AS %s", spec.TableName, tableAlias))
-
-			if spec.Auth != nil {
-
-				authFilter, err := spec.Auth.AuthFilter(ctx)
-				if err != nil {
-					return nil, err
-				}
-				authAlias := tableAlias
-
-				for _, join := range spec.AuthJoin {
-					priorAlias := authAlias
-					authAlias = as.Next()
-					// LEFT JOIN
-					//   <t> AS authAlias
-					//   ON authAlias.<authJoin.foreignKeyColumn> = tableAlias.<authJoin.primaryKeyColumn>
-					selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-						"%s AS %s ON %s.%s = %s.%s",
-						join.TableName,
-						authAlias,
-						authAlias,
-						join.JoinKeyColumn,
-						priorAlias,
-						join.MainKeyColumn,
-					))
-				}
-
-				for k, v := range authFilter {
-					selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
-				}
-			}
-			return selectQuery, nil
-		},
+	ll := &Lister[REQ, RES]{
+		pageSize:   uint64(20),
+		tableName:  spec.TableName,
+		dataColumn: spec.DataColumn,
+		auth:       spec.Auth,
+		authJoin:   spec.AuthJoin,
 	}
 
-	fields := spec.Method.Response.Fields()
+	descriptors := newMethodDescriptor[REQ, RES]()
+	fields := descriptors.response.Fields()
 
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
@@ -132,16 +108,43 @@ func NewLister(spec ListSpec) (*Lister, error) {
 	return ll, nil
 }
 
-func (ll *Lister) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 
 	res := resMsg.ProtoReflect()
 
 	var jsonRows = make([][]byte, 0, ll.pageSize)
 
-	selectQuery, err := ll.selecQuery(ctx)
-	if err != nil {
-		return err
+	as := newAliasSet()
+	tableAlias := as.Next()
+
+	selectQuery := sq.
+		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
+		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
+
+	if ll.auth != nil {
+
+		authFilter, err := ll.auth.AuthFilter(ctx)
+		if err != nil {
+			return err
+		}
+		authAlias := tableAlias
+
+		for _, join := range ll.authJoin {
+			priorAlias := authAlias
+			authAlias = as.Next()
+			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+				"%s AS %s ON %s",
+				join.TableName,
+				authAlias,
+				join.On.SQL(priorAlias, authAlias),
+			))
+		}
+
+		for k, v := range authFilter {
+			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
+		}
 	}
+
 	selectQuery.Limit(ll.pageSize + 1)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
@@ -180,7 +183,7 @@ func (ll *Lister) List(ctx context.Context, db Transactor, reqMsg proto.Message,
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
 		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-			return fmt.Errorf("unmarshal row %s: %w", string(rowBytes), err)
+			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
 		if idx >= int(ll.pageSize) {
 			// This is just pretend. The eventual solution will need to look at

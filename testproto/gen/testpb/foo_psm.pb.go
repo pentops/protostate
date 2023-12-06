@@ -58,7 +58,7 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			"id":        metadata.EventId,
 			"timestamp": metadata.Timestamp,
 			"actor":     metadata.Actor,
-			"data":      event,
+			"foo_id":    event.FooId,
 		}, nil
 	},
 }

@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bufbuild/protovalidate-go"
 	sq "github.com/elgris/sqrl"
 	"github.com/lib/pq"
+	"github.com/pentops/protostate/dbconvert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -17,26 +19,68 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type GetSpec struct {
-	TableName        string
-	DataColumn       string
-	PrimaryKeyColumn string
-	Auth             AuthProvider
-	AuthJoin         *LeftJoin
+type GetRequest interface {
+	proto.Message
+}
 
-	PrimaryKeyRequestField protoreflect.Name
-	StateResponseField     protoreflect.Name
+type GetResponse interface {
+	proto.Message
+}
+
+type GetSpec[
+	REQ GetRequest,
+	RES GetResponse,
+] struct {
+	TableName  string
+	DataColumn string
+	Auth       AuthProvider
+	AuthJoin   *LeftJoin
+
+	PrimaryKey func(REQ) (map[string]interface{}, error)
+
+	StateResponseField protoreflect.Name
 
 	Join *GetJoinSpec
+}
 
-	Method *MethodDescriptor
+// JoinConstraint defines a
+// LEFT JOIN <JoinTable>
+// ON <JoinTable>.<JoinColumn> = <RootTable>.<RootColumn>
+type JoinField struct {
+	JoinColumn string // The name of the column in the table being introduced
+	RootColumn string // The name of the column in the root table
+}
+
+type JoinFields []JoinField
+
+func (jc JoinFields) Reverse() JoinFields {
+	out := make(JoinFields, 0, len(jc))
+	for _, c := range jc {
+		out = append(out, JoinField{
+			JoinColumn: c.RootColumn,
+			RootColumn: c.JoinColumn,
+		})
+	}
+	return out
+}
+
+func (jc JoinFields) SQL(rootAlias string, joinAlias string) string {
+	conditions := make([]string, 0, len(jc))
+	for _, c := range jc {
+		conditions = append(conditions, fmt.Sprintf("%s.%s = %s.%s",
+			joinAlias,
+			c.JoinColumn,
+			rootAlias,
+			c.RootColumn,
+		))
+	}
+	return strings.Join(conditions, " AND ")
 }
 
 type GetJoinSpec struct {
-	TableName        string
-	DataColumn       string
-	ForeignKeyColumn string
-
+	TableName     string
+	DataColumn    string
+	On            JoinFields
 	FieldInParent protoreflect.Name
 }
 
@@ -47,25 +91,24 @@ func (gc GetJoinSpec) validate() error {
 	if gc.DataColumn == "" {
 		return fmt.Errorf("missing DataColumn")
 	}
-	if gc.ForeignKeyColumn == "" {
-		return fmt.Errorf("missing ForeignKeyColumn")
-	}
-	if gc.FieldInParent == "" {
-		return fmt.Errorf("missing FieldInParent")
+	if gc.On == nil {
+		return fmt.Errorf("missing On")
 	}
 
 	return nil
 }
 
-type Getter struct {
-	stateField     protoreflect.FieldDescriptor
-	requestPKField protoreflect.FieldDescriptor
+type Getter[
+	REQ GetRequest,
+	RES proto.Message,
+] struct {
+	stateField protoreflect.FieldDescriptor
 
-	dataColumn       string
-	tableName        string
-	primaryKeyColumn string
-	auth             AuthProvider
-	authJoin         *LeftJoin
+	dataColumn string
+	tableName  string
+	primaryKey func(REQ) (map[string]interface{}, error)
+	auth       AuthProvider
+	authJoin   *LeftJoin
 
 	validator *protovalidate.Validator
 
@@ -73,40 +116,25 @@ type Getter struct {
 }
 
 type getJoin struct {
-	Table            string
-	DataColunn       string
-	ForeignKeyColumn string
-
+	dataColunn    string
+	tableName     string
 	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+	on            JoinFields
 }
 
-func NewGetter(spec GetSpec) (*Getter, error) {
+func NewGetter[
+	REQ GetRequest,
+	RES GetResponse,
+](spec GetSpec[REQ, RES]) (*Getter[REQ, RES], error) {
+	descriptors := newMethodDescriptor[REQ, RES]()
+	resDesc := descriptors.response
 
-	if spec.Method == nil {
-		return nil, fmt.Errorf("missing Method")
-	}
-	if spec.Method.Request == nil {
-		return nil, fmt.Errorf("missing Method.Request")
-	}
-	if spec.Method.Response == nil {
-		return nil, fmt.Errorf("missing Method.Response")
-	}
-
-	reqDesc := spec.Method.Request
-	resDesc := spec.Method.Response
-
-	sc := &Getter{
-		dataColumn:       spec.DataColumn,
-		tableName:        spec.TableName,
-		primaryKeyColumn: spec.PrimaryKeyColumn,
-		auth:             spec.Auth,
-		authJoin:         spec.AuthJoin,
-	}
-
-	// TODO: Use an annotation not a passed in name
-	sc.requestPKField = reqDesc.Fields().ByName(spec.PrimaryKeyRequestField)
-	if sc.requestPKField == nil {
-		return nil, fmt.Errorf("request message has no field %s: %s", spec.PrimaryKeyRequestField, reqDesc.FullName())
+	sc := &Getter[REQ, RES]{
+		dataColumn: spec.DataColumn,
+		tableName:  spec.TableName,
+		primaryKey: spec.PrimaryKey,
+		auth:       spec.Auth,
+		authJoin:   spec.AuthJoin,
 	}
 
 	// TODO: Use an annotation not a passed in name
@@ -124,6 +152,11 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 	}
 
 	if spec.Join != nil {
+
+		if err := spec.Join.validate(); err != nil {
+			return nil, fmt.Errorf("invalid join spec: %w", err)
+		}
+
 		joinField := resDesc.Fields().ByName(protoreflect.Name(spec.Join.FieldInParent))
 		if joinField == nil {
 			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
@@ -134,10 +167,10 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 		}
 
 		sc.join = &getJoin{
-			Table:            spec.Join.TableName,
-			DataColunn:       spec.Join.DataColumn,
-			fieldInParent:    joinField,
-			ForeignKeyColumn: spec.Join.ForeignKeyColumn,
+			tableName:     spec.Join.TableName,
+			dataColunn:    spec.Join.DataColumn,
+			fieldInParent: joinField,
+			on:            spec.Join.On,
 		}
 	}
 
@@ -150,27 +183,36 @@ func NewGetter(spec GetSpec) (*Getter, error) {
 	return sc, nil
 }
 
-func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
 
 	as := newAliasSet()
 	rootAlias := as.Next()
 
 	resReflect := resMsg.ProtoReflect()
-	reqReflect := reqMsg.ProtoReflect()
 
 	if err := gc.validator.Validate(reqMsg); err != nil {
 		return err
 	}
 
-	idVal := reqReflect.Get(gc.requestPKField).Interface()
+	primaryKeyFields, err := gc.primaryKey(reqMsg)
+	if err != nil {
+		return err
+	}
+
+	rootFilter, err := dbconvert.FieldsToEqMap(rootAlias, primaryKeyFields)
+	if err != nil {
+		return err
+	}
 
 	selectQuery := sq.
 		Select().
 		Column(fmt.Sprintf("%s.%s", rootAlias, gc.dataColumn)).
 		From(fmt.Sprintf("%s AS %s", gc.tableName, rootAlias)).
-		Where(sq.Eq{
-			fmt.Sprintf("%s.%s", rootAlias, gc.primaryKeyColumn): idVal,
-		}).GroupBy(fmt.Sprintf("%s.%s", rootAlias, gc.primaryKeyColumn))
+		Where(rootFilter)
+
+	for pkField := range rootFilter {
+		selectQuery.GroupBy(pkField)
+	}
 
 	if gc.auth != nil {
 		authFilter, err := gc.auth.AuthFilter(ctx)
@@ -185,13 +227,10 @@ func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg proto.Message, 
 			//   <t> AS authAlias
 			//   ON authAlias.<authJoin.foreignKeyColumn> = rootAlias.<authJoin.primaryKeyColumn>
 			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-				"%s AS %s ON %s.%s = %s.%s",
+				"%s AS %s ON %s",
 				gc.authJoin.TableName,
 				authAlias,
-				authAlias,
-				gc.authJoin.JoinKeyColumn,
-				rootAlias,
-				gc.authJoin.MainKeyColumn,
+				gc.authJoin.On.SQL(rootAlias, authAlias),
 			))
 		}
 
@@ -204,20 +243,23 @@ func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg proto.Message, 
 		joinAlias := as.Next()
 
 		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.DataColunn)).
+			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColunn)).
 			LeftJoin(fmt.Sprintf(
-				"%s AS %s ON %s.%s = %s.%s",
-				gc.join.Table,
+				"%s AS %s ON %s",
+				gc.join.tableName,
 				joinAlias,
-				joinAlias,
-				gc.join.ForeignKeyColumn,
-				rootAlias,
-				gc.primaryKeyColumn,
+				gc.join.on.SQL(rootAlias, joinAlias),
 			))
 	}
 
 	var foundJSON []byte
 	var joinedJSON pq.ByteaArray
+
+	query, args, err := selectQuery.ToSql()
+	if err != nil {
+		return err
+	}
+	fmt.Print(query+"\n", args)
 
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,
@@ -234,7 +276,20 @@ func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg proto.Message, 
 		}
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return status.Errorf(codes.NotFound, "entity %s not found", idVal)
+				var pkDescription string
+				if len(primaryKeyFields) == 1 {
+					for _, v := range primaryKeyFields {
+						pkDescription = fmt.Sprintf("%v", v)
+					}
+				} else {
+					all := make([]string, 0, len(primaryKeyFields))
+					for k, v := range primaryKeyFields {
+						all = append(all, fmt.Sprintf("%s=%v", k, v))
+					}
+					pkDescription = strings.Join(all, ", ")
+				}
+
+				return status.Errorf(codes.NotFound, "entity %s not found", pkDescription)
 			}
 			return err
 		}
