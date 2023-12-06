@@ -9,16 +9,30 @@ import (
 )
 
 // StateObjectOptions: FooPSM
-type FooPSM struct {
-	*psm.Eventer[
+type FooPSMEventer = psm.Eventer[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
+type FooPSM = psm.StateMachine[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
+func NewFooPSM(db psm.Transactor, conversions FooPSMConverter, spec FooPSMTableSpec) (*FooPSM, error) {
+	return psm.NewStateMachine[
 		*FooState,
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
-	]
+	](db, conversions, spec)
 }
 
-type FooPSMSpec = psm.StateSpec[
+type FooPSMTableSpec = psm.TableSpec[
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -26,6 +40,22 @@ type FooPSMSpec = psm.StateSpec[
 ]
 
 type FooPSMTransitionBaton = psm.TransitionBaton[*FooEvent, FooPSMEvent]
+
+func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.TransitionFunc[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+	SE,
+] {
+	return psm.TransitionFunc[
+		*FooState,
+		FooStatus,
+		*FooEvent,
+		FooPSMEvent,
+		SE,
+	](cb)
+}
 
 type FooPSMEventKey string
 

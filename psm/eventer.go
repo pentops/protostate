@@ -10,9 +10,9 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type TransitionBaton[OuterEvent IEvent[NextInnerEvent], NextInnerEvent any] interface {
+type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
 	SideEffect(outbox.OutboxMessage)
-	ChainEvent(NextInnerEvent)
+	ChainEvent(IE)
 }
 
 type TransitionData[Event any] struct {
@@ -31,7 +31,7 @@ func (td *TransitionData[Event]) SideEffect(msg outbox.OutboxMessage) {
 type Eventer[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[E], // Event Wrapper, with IDs and Metadata
+	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
 	WrapEvent   func(context.Context, S, IE) E
@@ -42,21 +42,19 @@ type Eventer[
 	Transitions []ITransition[S, ST, E, IE]
 }
 
-func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event IE) (ITransition[S, ST, E, IE], error) {
+func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S, ST, E, IE], error) {
 	for _, search := range ee.Transitions {
 		if search.Matches(state, event) {
 			return search, nil
 		}
 	}
-	typeKey := ee.EventLabel(event)
+
+	innerEvent := ee.UnwrapEvent(event)
+	typeKey := ee.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
 		ee.StateLabel(state),
 		typeKey,
 	)
-}
-
-func (ee *Eventer[S, ST, E, IE]) Register(transition ITransition[S, ST, E, IE]) {
-	ee.Transitions = append(ee.Transitions, transition)
 }
 
 func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
@@ -84,7 +82,7 @@ func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
 			"transition": fmt.Sprintf("%s -> ? : %s", stateBefore, typeKey),
 		})
 
-		transition, err := ee.FindTransition(state, unwrapped)
+		transition, err := ee.FindTransition(state, innerEvent)
 		if err != nil {
 			return err
 		}
@@ -119,6 +117,56 @@ func (ee Eventer[State, Status, WrappedEvent, Event]) Run(
 	}
 
 	return nil
+}
+
+type ITransition[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] interface {
+	Matches(S, E) bool
+	RunTransition(context.Context, TransitionBaton[E, IE], S, IE) error
+}
+
+func (ee *Eventer[S, ST, E, IE]) Register(transition ITransition[S, ST, E, IE]) {
+	ee.Transitions = append(ee.Transitions, transition)
+}
+
+type EventerTransitionBuilder[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] struct {
+	eventer    *Eventer[S, ST, E, IE]
+	fromStates []ST
+	filter     func(E) bool
+}
+
+func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, ST, E, IE] {
+	return EventerTransitionBuilder[S, ST, E, IE]{
+		eventer:    ee,
+		fromStates: states,
+	}
+}
+
+func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event E) bool) EventerTransitionBuilder[S, ST, E, IE] {
+	tb.filter = filter
+	return tb
+}
+
+func (tb EventerTransitionBuilder[S, ST, E, IE]) Do(
+	transition TypedTransitionHandler[S, ST, E, IE],
+) EventerTransitionBuilder[S, ST, E, IE] {
+
+	tb.eventer.Register(&TypedTransition[S, ST, E, IE]{
+		handler:     transition,
+		fromStatus:  tb.fromStates,
+		eventFilter: tb.filter,
+	})
+
+	return tb
 }
 
 var TxOptions = &sqrlx.TxOptions{

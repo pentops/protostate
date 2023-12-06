@@ -221,20 +221,45 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 		g.P(ss.statusFieldInState.Enum.GoIdent.GoName, ",")
 		g.P("*", ss.eventMessage.GoIdent, ",")
 		g.P(ss.eventName, ",")
-
 	}
 
-	g.P("type ", ss.machineName, " struct {")
-	g.P("*", sm.Ident("Eventer"), "[")
+	g.P("type ", ss.machineName, "Eventer = ", sm.Ident("Eventer"), "[")
 	printTypes()
 	g.P("]")
+	g.P()
+	g.P("type ", ss.machineName, " = ", sm.Ident("StateMachine"), "[")
+	printTypes()
+	g.P("]")
+
+	g.P()
+	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", conversions ", ss.machineName, "Converter, spec ", ss.machineName, "TableSpec) (*", ss.machineName, ", error) {")
+	g.P("return ", sm.Ident("NewStateMachine"), "[")
+	printTypes()
+	g.P("](db, conversions, spec)")
 	g.P("}")
 	g.P()
-	g.P("type ", ss.machineName, "Spec = ", sm.Ident("StateSpec"), "[")
+
+	g.P("type ", ss.machineName, "TableSpec = ", sm.Ident("TableSpec"), "[")
 	printTypes()
 	g.P("]")
 	g.P()
 	g.P("type ", ss.machineName, "TransitionBaton = ", sm.Ident("TransitionBaton"), "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
+
+	g.P()
+	g.P("func ", ss.machineName,
+		"Func[SE ", ss.eventName, "]",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		ss.machineName, "TransitionBaton, *",
+		ss.stateMessage.GoIdent, ", SE) error) ", sm.Ident("TransitionFunc"), "[")
+	printTypes()
+	g.P("SE,")
+	g.P("] {")
+	g.P("return ", sm.Ident("TransitionFunc"), "[")
+	printTypes()
+	g.P("SE,")
+	g.P("](cb)")
+	g.P("}")
 
 	g.P()
 	g.P("type ", ss.eventName, "Key string")

@@ -63,83 +63,93 @@ type IState[Status IStatusEnum] interface {
 
 type IEvent[Inner any] interface {
 	proto.Message
+	UnwrapPSMEvent() Inner
 }
 
 type IInnerEvent interface {
 	proto.Message
 }
 
-type ITransition[
+type TypedTransitionHandler[
 	S proto.Message,
 	ST IStatusEnum,
 	E IEvent[IE],
 	IE IInnerEvent,
 ] interface {
-	Matches(S, IE) bool
 	RunTransition(context.Context, TransitionBaton[E, IE], S, IE) error
+	HandlesEvent(E) bool
 }
 
-type Transition[
-	S IState[ST],
+type TransitionFunc[
+	S proto.Message,
 	ST IStatusEnum,
 	E IEvent[IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] struct {
-	fromStatus  []ST
-	eventFilter func(SE) bool
-	transition  func(context.Context, TransitionBaton[E, IE], S, SE) error
-}
+] func(context.Context, TransitionBaton[E, IE], S, SE) error
 
-func NewTransition[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-	SE IInnerEvent,
-](
-	fromStatus []ST,
-	transition func(context.Context, TransitionBaton[E, IE], S, SE) error,
-) *Transition[S, ST, E, IE, SE] {
-	return &Transition[S, ST, E, IE, SE]{
-		fromStatus: fromStatus,
-		transition: transition,
-	}
-}
-
-func (ts *Transition[S, ST, E, IE, SE]) WithEventFilter(eventFilter func(SE) bool) *Transition[S, ST, E, IE, SE] {
-	ts.eventFilter = eventFilter
-	return ts
-}
-
-func (ts Transition[S, ST, E, ET, SE]) RunTransition(
+// RunTransition implements TransitionHandler, where SE is the specific event
+// cast from the interface IE provided in the call
+func (f TransitionFunc[S, ST, E, IE, SE]) RunTransition(
 	ctx context.Context,
-	tb TransitionBaton[E, ET],
+	tb TransitionBaton[E, IE],
 	state S,
-	event ET,
+	event IE,
 ) error {
 	// Cast the interface ET IInnerEvent to the specific type of event which
-	// this transition handles
+	// this func handles
 	asType, ok := any(event).(SE)
 	if !ok {
 		return fmt.Errorf("unexpected event type: %T", event)
 	}
-
-	return ts.transition(ctx, tb, state, asType)
+	return f(ctx, tb, state, asType)
 }
 
-func (ts Transition[S, ST, E, IE, SE]) Matches(state S, event IE) bool {
+func (f TransitionFunc[S, ST, E, IE, SE]) HandlesEvent(outerEvent E) bool {
 	// Check if the parameter passed as ET (IInnerEvent) is the specific type
 	// (IE, also IInnerEvent, but typed) which this transition handles
-	asType, ok := any(event).(SE)
-	if !ok {
+	event := outerEvent.UnwrapPSMEvent()
+	_, ok := any(event).(SE)
+	return ok
+}
+
+type TransitionFilter[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] interface {
+	Matches(S, IE) bool
+}
+
+type CastTransitionFilter[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] struct {
+}
+
+type TypedTransition[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] struct {
+	handler     TypedTransitionHandler[S, ST, E, IE]
+	fromStatus  []ST
+	eventFilter func(E) bool
+}
+
+func (f TypedTransition[S, ST, E, IE]) Matches(state S, outerEvent E) bool {
+	if !f.handler.HandlesEvent(outerEvent) {
 		return false
 	}
-	didMatch := false
 
-	if ts.fromStatus != nil {
+	if f.fromStatus != nil {
+		didMatch := false
 		currentStatus := state.GetStatus()
-		for _, fromStatus := range ts.fromStatus {
+		for _, fromStatus := range f.fromStatus {
 			if fromStatus == currentStatus {
 				didMatch = true
 				break
@@ -150,8 +160,17 @@ func (ts Transition[S, ST, E, IE, SE]) Matches(state S, event IE) bool {
 		}
 	}
 
-	if ts.eventFilter != nil && !ts.eventFilter(asType) {
+	if f.eventFilter != nil && !f.eventFilter(outerEvent) {
 		return false
 	}
 	return true
+}
+
+func (f TypedTransition[S, ST, E, IE]) RunTransition(
+	ctx context.Context,
+	tb TransitionBaton[E, IE],
+	state S,
+	event IE,
+) error {
+	return f.handler.RunTransition(ctx, tb, state, event)
 }

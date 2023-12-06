@@ -13,23 +13,9 @@ import (
 	"gopkg.daemonl.com/sqrlx"
 )
 
-type FooStateMachine struct {
-	*psm.StateMachine[
-		*testpb.FooState,
-		testpb.FooStatus,
-		*testpb.FooEvent,
-		testpb.FooPSMEvent,
-	]
-}
+func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 
-func NewFooStateMachine(db *sqrlx.Wrapper) (*FooStateMachine, error) {
-
-	sm, err := psm.NewStateMachine[
-		*testpb.FooState,
-		testpb.FooStatus,
-		*testpb.FooEvent,
-		testpb.FooPSMEvent,
-	](db, testpb.FooPSMConverter{
+	sm, err := testpb.NewFooPSM(db, testpb.FooPSMConverter{
 		NewMetadata: func(context.Context) *testpb.Metadata {
 			return &testpb.Metadata{
 				EventId:   uuid.NewString(),
@@ -42,7 +28,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*FooStateMachine, error) {
 				Timestamp: event.Timestamp.AsTime(),
 			}
 		},
-	}, testpb.FooPSMSpec{
+	}, testpb.FooPSMTableSpec{
 		StateTable: "foo",
 		EventTable: "foo_event",
 		PrimaryKey: func(event *testpb.FooEvent) map[string]interface{} {
@@ -60,30 +46,23 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*FooStateMachine, error) {
 		return nil, err
 	}
 
-	sm.Register(psm.NewTransition[
-		*testpb.FooState,
-		testpb.FooStatus,
-		*testpb.FooEvent,
-		testpb.FooPSMEvent,
-		*testpb.FooEventType_Created,
-	]([]testpb.FooStatus{
-		testpb.FooStatus_UNSPECIFIED,
-	}, func(
-		ctx context.Context,
-		tb testpb.FooPSMTransitionBaton,
-		state *testpb.FooState,
-		event *testpb.FooEventType_Created,
-	) error {
-		state.Status = testpb.FooStatus_ACTIVE
-		state.Name = event.Name
-		state.Field = event.Field
+	sm.From(testpb.FooStatus_UNSPECIFIED).
+		Where(func(event *testpb.FooEvent) bool {
+			return true
+		}).
+		Do(testpb.FooPSMFunc(func(
+			ctx context.Context,
+			tb testpb.FooPSMTransitionBaton,
+			state *testpb.FooState,
+			event *testpb.FooEventType_Created,
+		) error {
+			state.Status = testpb.FooStatus_ACTIVE
+			state.Name = event.Name
+			state.Field = event.Field
+			return nil
+		}))
 
-		return nil
-	}))
-
-	return &FooStateMachine{
-		StateMachine: sm,
-	}, nil
+	return (*testpb.FooPSM)(sm), nil
 }
 
 func TestStateMachine(t *testing.T) {

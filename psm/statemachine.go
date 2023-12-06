@@ -19,7 +19,7 @@ type Metadata struct {
 	EventID   string
 }
 
-type StateSpec[
+type TableSpec[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
@@ -47,7 +47,7 @@ type Converter[
 	EmptyState(E) S
 }
 
-func (spec StateSpec[S, ST, E, IE]) Validate() error {
+func (spec TableSpec[S, ST, E, IE]) Validate() error {
 
 	if spec.PrimaryKey == nil {
 		return fmt.Errorf("missing PrimaryKey func")
@@ -76,10 +76,14 @@ type StateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	db          *sqrlx.Wrapper
-	spec        StateSpec[S, ST, E, IE]
+	db          Transactor
+	spec        TableSpec[S, ST, E, IE]
 	conversions Converter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
+}
+
+type Transactor interface {
+	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
 }
 
 func NewStateMachine[
@@ -88,9 +92,9 @@ func NewStateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ](
-	db *sqrlx.Wrapper,
+	db Transactor,
 	conversions Converter[S, ST, E, IE],
-	spec StateSpec[S, ST, E, IE],
+	spec TableSpec[S, ST, E, IE],
 ) (*StateMachine[S, ST, E, IE], error) {
 
 	if err := spec.Validate(); err != nil {
