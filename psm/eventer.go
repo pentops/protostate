@@ -115,9 +115,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 			}
 		}
 
-		for _, event := range baton.ChainEvents {
-			eventQueue = append(eventQueue, event)
-		}
+		eventQueue = append(eventQueue, baton.ChainEvents...)
 	}
 
 	return nil
