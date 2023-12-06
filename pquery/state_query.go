@@ -96,14 +96,17 @@ func FromStateMachine[
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
-	eventJoinMap := map[string]string{}
+	eventJoinMap := JoinFields{}
 	getReflect := getSpec.Method.Request.ProtoReflect().Descriptor()
 	for i := 0; i < getReflect.Fields().Len(); i++ {
 		field := getReflect.Fields().Get(i)
 		fullKey := string(field.Name())
 		rootKey := strings.TrimPrefix(fullKey, smSpec.StateTable+"_")
 		pkFields[rootKey] = field
-		eventJoinMap[fullKey] = rootKey
+		eventJoinMap = append(eventJoinMap, JoinField{
+			RootColumn: rootKey,
+			JoinColumn: fullKey,
+		})
 	}
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
@@ -144,36 +147,38 @@ func FromStateMachine[
 		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.EventTable, err)
 	}
 
-	/*
-		if spec.Events != nil {
-			eventsAuthJoin := []*LeftJoin{{
-				// Main is the events table, joining to the state table
-				TableName:     spec.TableName,
-				MainKeyColumn: spec.Events.ForeignKeyColumn,
-				JoinKeyColumn: spec.PrimaryKeyColumn,
-			}}
-
-			if spec.AuthJoin != nil {
-				eventsAuthJoin = append(eventsAuthJoin, spec.AuthJoin)
-			}
-
-			ss.eventLister, err = NewLister(ListSpec{
-				TableName:  spec.Events.TableName,
-				DataColumn: spec.Events.DataColumn,
-				Auth:       spec.Auth,
-				Method:     spec.ListEvents,
-				AuthJoin:   eventsAuthJoin,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", spec.TableName, err)
-			}
-
-		}
-		return ss, nil
-	*/
-
-	return &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
+	querySet := &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
 		getter:     getter,
 		mainLister: lister,
-	}, nil
+	}
+
+	if spec.ListEventsMethod == nil {
+		return querySet, nil
+	}
+
+	eventsAuthJoin := []*LeftJoin{{
+		// Main is the events table, joining to the state table
+		TableName: smSpec.EventTable,
+		On:        eventJoinMap.Reverse(),
+	}}
+
+	if spec.AuthJoin != nil {
+		eventsAuthJoin = append(eventsAuthJoin, spec.AuthJoin)
+	}
+
+	eventListSpec := ListSpec[ListEventsREQ, ListEventsRES]{
+		TableName:  smSpec.EventTable,
+		DataColumn: "data",
+		Auth:       spec.AuthFunc,
+		Method:     spec.ListEventsMethod,
+		AuthJoin:   eventsAuthJoin,
+	}
+	eventLister, err := NewLister(eventListSpec)
+	if err != nil {
+		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.EventTable, err)
+	}
+
+	querySet.eventLister = eventLister
+
+	return querySet, nil
 }

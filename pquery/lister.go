@@ -52,9 +52,8 @@ type Lister[
 // <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
 // Main is defined in the outer struct holding this LeftJoin
 type LeftJoin struct {
-	TableName     string
-	JoinKeyColumn string
-	MainKeyColumn string
+	TableName string
+	On        JoinFields
 }
 
 func NewLister[
@@ -87,13 +86,10 @@ func NewLister[
 					//   <t> AS authAlias
 					//   ON authAlias.<authJoin.foreignKeyColumn> = tableAlias.<authJoin.primaryKeyColumn>
 					selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-						"%s AS %s ON %s.%s = %s.%s",
+						"%s AS %s ON %s",
 						join.TableName,
 						authAlias,
-						authAlias,
-						join.JoinKeyColumn,
-						priorAlias,
-						join.MainKeyColumn,
+						join.On.SQL(priorAlias, authAlias),
 					))
 				}
 

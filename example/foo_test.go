@@ -168,6 +168,14 @@ func TestFooStateMachine(t *testing.T) {
 			Request:  &testpb.ListFoosRequest{},
 			Response: &testpb.ListFoosResponse{},
 		},
+		ListEventsMethod: &pquery.MethodDescriptor[
+			*testpb.ListFooEventsRequest,
+			*testpb.ListFooEventsResponse,
+		]{
+			Request:  &testpb.ListFooEventsRequest{},
+			Response: &testpb.ListFooEventsResponse{},
+		},
+
 		EventsInGet: true,
 	})
 	if err != nil {
@@ -225,8 +233,8 @@ func TestFooStateMachine(t *testing.T) {
 		}
 
 		t.Log(protojson.Format(res))
-		if len(res.Events) != 2 {
-			t.Fatalf("expected 2 events, got %d", len(res.Events))
+		if len(res.Events) != 3 {
+			t.Fatalf("expected 3 events, got %d", len(res.Events))
 		}
 	})
 }

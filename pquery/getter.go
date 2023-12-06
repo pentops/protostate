@@ -45,10 +45,44 @@ type GetSpec[
 	Method *MethodDescriptor[REQ, RES]
 }
 
+// JoinConstraint defines a
+// LEFT JOIN <JoinTable>
+// ON <JoinTable>.<JoinColumn> = <RootTable>.<RootColumn>
+type JoinField struct {
+	JoinColumn string // The name of the column in the table being introduced
+	RootColumn string // The name of the column in the root table
+}
+
+type JoinFields []JoinField
+
+func (jc JoinFields) Reverse() JoinFields {
+	out := make(JoinFields, 0, len(jc))
+	for _, c := range jc {
+		out = append(out, JoinField{
+			JoinColumn: c.RootColumn,
+			RootColumn: c.JoinColumn,
+		})
+	}
+	return out
+}
+
+func (jc JoinFields) SQL(rootAlias string, joinAlias string) string {
+	conditions := make([]string, 0, len(jc))
+	for _, c := range jc {
+		conditions = append(conditions, fmt.Sprintf("%s.%s = %s.%s",
+			joinAlias,
+			c.JoinColumn,
+			rootAlias,
+			c.RootColumn,
+		))
+	}
+	return strings.Join(conditions, " AND ")
+}
+
 type GetJoinSpec struct {
 	TableName     string
 	DataColumn    string
-	On            map[string]string // <TableName>.<key> = <parent>.<val>
+	On            JoinFields
 	FieldInParent string
 }
 
@@ -84,11 +118,10 @@ type Getter[
 }
 
 type getJoin struct {
-	Table      string
-	DataColunn string
-	on         map[string]string // <TableName>.<key> = <parent>.<val>
-
+	dataColunn    string
+	tableName     string
 	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+	on            JoinFields
 }
 
 func NewGetter[
@@ -140,8 +173,8 @@ func NewGetter[
 		}
 
 		sc.join = &getJoin{
-			Table:         spec.Join.TableName,
-			DataColunn:    spec.Join.DataColumn,
+			tableName:     spec.Join.TableName,
+			dataColunn:    spec.Join.DataColumn,
 			fieldInParent: joinField,
 			on:            spec.Join.On,
 		}
@@ -200,13 +233,10 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			//   <t> AS authAlias
 			//   ON authAlias.<authJoin.foreignKeyColumn> = rootAlias.<authJoin.primaryKeyColumn>
 			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-				"%s AS %s ON %s.%s = %s.%s",
+				"%s AS %s ON %s",
 				gc.authJoin.TableName,
 				authAlias,
-				authAlias,
-				gc.authJoin.JoinKeyColumn,
-				rootAlias,
-				gc.authJoin.MainKeyColumn,
+				gc.authJoin.On.SQL(rootAlias, authAlias),
 			))
 		}
 
@@ -218,18 +248,13 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	if gc.join != nil {
 		joinAlias := as.Next()
 
-		joinConditions := make([]string, 0, len(primaryKeyFields))
-		for joinColumn, rootColumn := range gc.join.on {
-			joinConditions = append(joinConditions, fmt.Sprintf("%s.%s = %s.%s", joinAlias, joinColumn, rootAlias, rootColumn))
-		}
-
 		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.DataColunn)).
+			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColunn)).
 			LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
-				gc.join.Table,
+				gc.join.tableName,
 				joinAlias,
-				strings.Join(joinConditions, " AND "),
+				gc.join.on.SQL(rootAlias, joinAlias),
 			))
 	}
 
