@@ -139,14 +139,7 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := pquery.FromStateMachine[
-		*testpb.GetFooRequest,
-		*testpb.GetFooResponse,
-		*testpb.ListFoosRequest,
-		*testpb.ListFoosResponse,
-		*testpb.ListFooEventsRequest,
-		*testpb.ListFooEventsResponse,
-	](sm, pquery.StateSpec[
+	queryer, err := pquery.FromStateMachine(sm, pquery.StateSpec[
 		*testpb.GetFooRequest,
 		*testpb.GetFooResponse,
 		*testpb.ListFoosRequest,
@@ -154,28 +147,6 @@ func TestFooStateMachine(t *testing.T) {
 		*testpb.ListFooEventsRequest,
 		*testpb.ListFooEventsResponse,
 	]{
-		GetMethod: &pquery.MethodDescriptor[
-			*testpb.GetFooRequest,
-			*testpb.GetFooResponse,
-		]{
-			Request:  &testpb.GetFooRequest{},
-			Response: &testpb.GetFooResponse{},
-		},
-		ListMethod: &pquery.MethodDescriptor[
-			*testpb.ListFoosRequest,
-			*testpb.ListFoosResponse,
-		]{
-			Request:  &testpb.ListFoosRequest{},
-			Response: &testpb.ListFoosResponse{},
-		},
-		ListEventsMethod: &pquery.MethodDescriptor[
-			*testpb.ListFooEventsRequest,
-			*testpb.ListFooEventsResponse,
-		]{
-			Request:  &testpb.ListFooEventsRequest{},
-			Response: &testpb.ListFooEventsResponse{},
-		},
-
 		EventsInGet: true,
 	})
 	if err != nil {

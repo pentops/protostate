@@ -31,8 +31,6 @@ type ListSpec[
 	TableName  string
 	DataColumn string
 
-	Method *MethodDescriptor[REQ, RES]
-
 	Auth     AuthProvider
 	AuthJoin []*LeftJoin
 }
@@ -101,7 +99,8 @@ func NewLister[
 		},
 	}
 
-	fields := spec.Method.Response.ProtoReflect().Descriptor().Fields()
+	descriptors := newMethodDescriptor[REQ, RES]()
+	fields := descriptors.response.Fields()
 
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)

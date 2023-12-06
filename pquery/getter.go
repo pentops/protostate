@@ -41,8 +41,6 @@ type GetSpec[
 	StateResponseField protoreflect.Name
 
 	Join *GetJoinSpec
-
-	Method *MethodDescriptor[REQ, RES]
 }
 
 // JoinConstraint defines a
@@ -128,12 +126,8 @@ func NewGetter[
 	REQ GetRequest,
 	RES GetResponse,
 ](spec GetSpec[REQ, RES]) (*Getter[REQ, RES], error) {
-
-	if spec.Method == nil {
-		return nil, fmt.Errorf("missing Method")
-	}
-
-	resDesc := spec.Method.Response.ProtoReflect().Descriptor()
+	descriptors := newMethodDescriptor[REQ, RES]()
+	resDesc := descriptors.response
 
 	sc := &Getter[REQ, RES]{
 		dataColumn: spec.DataColumn,

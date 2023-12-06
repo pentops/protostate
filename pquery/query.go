@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"gopkg.daemonl.com/sqrlx"
 )
 
@@ -34,7 +35,16 @@ func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]interface{
 }
 
 // MethodDescriptor is the RequestResponse pair in the gRPC Method
-type MethodDescriptor[REQ proto.Message, RES proto.Message] struct {
-	Request  REQ //protoreflect.MessageDescriptor
-	Response RES //protoreflect.MessageDescriptor
+type methodDescriptor[REQ proto.Message, RES proto.Message] struct {
+	request  protoreflect.MessageDescriptor
+	response protoreflect.MessageDescriptor
+}
+
+func newMethodDescriptor[REQ proto.Message, RES proto.Message]() *methodDescriptor[REQ, RES] {
+	req := *new(REQ)
+	res := *new(RES)
+	return &methodDescriptor[REQ, RES]{
+		request:  req.ProtoReflect().Descriptor(),
+		response: res.ProtoReflect().Descriptor(),
+	}
 }

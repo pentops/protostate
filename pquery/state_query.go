@@ -65,12 +65,10 @@ type StateSpec[
 	ListEventsRES ListResponse,
 
 ] struct {
-	AuthFunc         AuthProvider
-	AuthJoin         *LeftJoin
-	GetMethod        *MethodDescriptor[GetREQ, GetRES]
-	ListMethod       *MethodDescriptor[ListREQ, ListRES]
-	ListEventsMethod *MethodDescriptor[ListEventsREQ, ListEventsRES]
-	EventsInGet      bool
+	AuthFunc    AuthProvider
+	AuthJoin    *LeftJoin
+	SkipEvents  bool
+	EventsInGet bool
 }
 
 func FromStateMachine[
@@ -92,12 +90,11 @@ func FromStateMachine[
 		DataColumn: smSpec.DataColumn,
 		Auth:       spec.AuthFunc,
 		AuthJoin:   spec.AuthJoin,
-		Method:     spec.GetMethod,
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
 	eventJoinMap := JoinFields{}
-	getReflect := getSpec.Method.Request.ProtoReflect().Descriptor()
+	getReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
 	for i := 0; i < getReflect.Fields().Len(); i++ {
 		field := getReflect.Fields().Get(i)
 		fullKey := string(field.Name())
@@ -136,7 +133,6 @@ func FromStateMachine[
 		TableName:  smSpec.StateTable,
 		DataColumn: smSpec.DataColumn,
 		Auth:       spec.AuthFunc,
-		Method:     spec.ListMethod,
 	}
 	if spec.AuthJoin != nil {
 		listSpec.AuthJoin = []*LeftJoin{spec.AuthJoin}
@@ -152,7 +148,7 @@ func FromStateMachine[
 		mainLister: lister,
 	}
 
-	if spec.ListEventsMethod == nil {
+	if spec.SkipEvents {
 		return querySet, nil
 	}
 
@@ -170,7 +166,6 @@ func FromStateMachine[
 		TableName:  smSpec.EventTable,
 		DataColumn: "data",
 		Auth:       spec.AuthFunc,
-		Method:     spec.ListEventsMethod,
 		AuthJoin:   eventsAuthJoin,
 	}
 	eventLister, err := NewLister(eventListSpec)
