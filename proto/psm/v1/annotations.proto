@@ -20,14 +20,12 @@ message EventObjectOptions {
   string name = 1;
 }
 
-message EventTypeObjectOptions {
-}
+message EventTypeObjectOptions {}
 
 extend google.protobuf.FieldOptions {
   EventField event_field = 90443403;
   EventTypeField event_type_field = 90443404;
 }
-
 
 message EventField {
   bool event_type = 1;
@@ -37,4 +35,22 @@ message EventField {
 
 message EventTypeField {
   bool sub_key = 1;
+}
+
+extend google.protobuf.ServiceOptions {
+  StateQueryServiceOptions state_query = 90443405;
+}
+
+message StateQueryServiceOptions {
+  string name = 1;
+}
+
+extend google.protobuf.MethodOptions {
+  StateQueryMethodOptions state_query_method = 90443406;
+}
+
+message StateQueryMethodOptions {
+  bool get = 1;
+  bool list = 2;
+  bool list_events = 3;
 }

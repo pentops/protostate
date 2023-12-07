@@ -14,16 +14,21 @@ option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 // take advantage of all defaults when constructing the state query and state
 // machine
 service FooService {
+  option (psm.v1.state_query).name = "foo";
+
   rpc GetFoo(GetFooRequest) returns (GetFooResponse) {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}"};
+    option (psm.v1.state_query_method).get = true;
   }
 
   rpc ListFoos(ListFoosRequest) returns (ListFoosResponse) {
     option (google.api.http) = {get: "/test/v1/foos"};
+    option (psm.v1.state_query_method).list = true;
   }
 
   rpc ListFooEvents(ListFooEventsRequest) returns (ListFooEventsResponse) {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
+    option (psm.v1.state_query_method).list_events = true;
   }
 }
 
@@ -44,6 +49,8 @@ message FooState {
 
   string name = 3;
   string field = 4;
+
+  string last_event_id = 6;
 
   FooStatus status = 5;
 }

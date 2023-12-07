@@ -46,8 +46,26 @@ type buildingStateSet struct {
 	eventOptions *psm_pb.EventObjectOptions
 }
 
+type buildingStateQueryService struct {
+	service *protogen.Service
+	options *psm_pb.StateQueryServiceOptions
+}
+
 // generateFile generates a _psm.pb.go
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
+
+	stateServices := []buildingStateQueryService{}
+	for _, service := range file.Services {
+		stateQueryAnnotation, ok := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
+		if !ok || stateQueryAnnotation == nil {
+			continue
+		}
+
+		stateServices = append(stateServices, buildingStateQueryService{
+			service: service,
+			options: stateQueryAnnotation,
+		})
+	}
 
 	stateSets := make(map[string]*buildingStateSet)
 
@@ -84,7 +102,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		}
 	}
 
-	if len(stateSets) == 0 {
+	if len(stateSets) == 0 && len(stateServices) == 0 {
 		return nil
 	}
 
@@ -94,6 +112,12 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	g.P()
 	g.P("package ", file.GoPackageName)
 	g.P()
+
+	for _, stateService := range stateServices {
+		if err := addStateQueryService(g, stateService); err != nil {
+			gen.Error(err)
+		}
+	}
 
 	for _, stateSet := range stateSets {
 		converted, err := buildStateSet(stateSet)
@@ -106,6 +130,68 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		}
 	}
 	return g
+}
+
+func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryService) error {
+
+	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
+	protoPackage := protogen.GoImportPath("google.golang.org/protobuf/proto")
+
+	g.P("// State Query Service for %s", service.options.Name)
+
+	var getMethod, listMethod, listEventsMethod *protogen.Method
+	for _, method := range service.service.Methods {
+		methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
+		if methodOpt == nil {
+			continue
+		}
+		if methodOpt.Get {
+			getMethod = method
+		} else if methodOpt.List {
+			listMethod = method
+		} else if methodOpt.ListEvents {
+			listEventsMethod = method
+		}
+	}
+
+	if getMethod == nil {
+		return fmt.Errorf("service %s does not have a get method", service.service.GoName)
+	}
+
+	if listMethod == nil {
+		return fmt.Errorf("service %s does not have a list method", service.service.GoName)
+	}
+
+	g.P("type ", service.service.GoName, "PSMStateQuerySet = ", sm.Ident("StateQuerySet"), "[")
+	g.P("*", getMethod.Input.GoIdent, ",")
+	g.P("*", getMethod.Output.GoIdent, ",")
+	g.P("*", listMethod.Input.GoIdent, ",")
+	g.P("*", listMethod.Output.GoIdent, ",")
+	if listEventsMethod != nil {
+		g.P("*", listEventsMethod.Input.GoIdent, ",")
+		g.P("*", listEventsMethod.Output.GoIdent, ",")
+	} else {
+		g.P(protoPackage.Ident("Message"), ",")
+		g.P(protoPackage.Ident("Message"), ",")
+	}
+	g.P("]")
+	g.P()
+	g.P("type ", service.service.GoName, "PSMStateQuerySpec = ", sm.Ident("StateQuerySpec"), "[")
+	g.P("*", getMethod.Input.GoIdent, ",")
+	g.P("*", getMethod.Output.GoIdent, ",")
+	g.P("*", listMethod.Input.GoIdent, ",")
+	g.P("*", listMethod.Output.GoIdent, ",")
+	if listEventsMethod != nil {
+		g.P("*", listEventsMethod.Input.GoIdent, ",")
+		g.P("*", listEventsMethod.Output.GoIdent, ",")
+	} else {
+		g.P(protoPackage.Ident("Message"), ",")
+		g.P(protoPackage.Ident("Message"), ",")
+	}
+	g.P("]")
+	g.P()
+
+	return nil
 }
 
 type stateSet struct {
