@@ -23,9 +23,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 	}
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
-		Where(func(event *testpb.FooEvent) bool {
-			return true
-		}).
 		Do(testpb.FooPSMFunc(func(
 			ctx context.Context,
 			tb testpb.FooPSMTransitionBaton,

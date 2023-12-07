@@ -37,7 +37,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 	}
 
 	sm.From(testpb.BarStatus_UNSPECIFIED).
-		Where(func(event *testpb.BarEvent) bool {
+		Where(func(event testpb.BarPSMEvent) bool {
 			return true
 		}).
 		Do(testpb.BarPSMFunc(func(
