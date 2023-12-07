@@ -19,9 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	BarService_GetBar_FullMethodName        = "/test.v1.BarService/GetBar"
-	BarService_ListBars_FullMethodName      = "/test.v1.BarService/ListBars"
-	BarService_ListBarEvents_FullMethodName = "/test.v1.BarService/ListBarEvents"
+	BarService_GetBar_FullMethodName   = "/test.v1.BarService/GetBar"
+	BarService_ListBars_FullMethodName = "/test.v1.BarService/ListBars"
 )
 
 // BarServiceClient is the client API for BarService service.
@@ -30,7 +29,6 @@ const (
 type BarServiceClient interface {
 	GetBar(ctx context.Context, in *GetBarRequest, opts ...grpc.CallOption) (*GetBarResponse, error)
 	ListBars(ctx context.Context, in *ListBarsRequest, opts ...grpc.CallOption) (*ListBarsResponse, error)
-	ListBarEvents(ctx context.Context, in *ListBarEventsRequest, opts ...grpc.CallOption) (*ListBarEventsResponse, error)
 }
 
 type barServiceClient struct {
@@ -59,22 +57,12 @@ func (c *barServiceClient) ListBars(ctx context.Context, in *ListBarsRequest, op
 	return out, nil
 }
 
-func (c *barServiceClient) ListBarEvents(ctx context.Context, in *ListBarEventsRequest, opts ...grpc.CallOption) (*ListBarEventsResponse, error) {
-	out := new(ListBarEventsResponse)
-	err := c.cc.Invoke(ctx, BarService_ListBarEvents_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // BarServiceServer is the server API for BarService service.
 // All implementations must embed UnimplementedBarServiceServer
 // for forward compatibility
 type BarServiceServer interface {
 	GetBar(context.Context, *GetBarRequest) (*GetBarResponse, error)
 	ListBars(context.Context, *ListBarsRequest) (*ListBarsResponse, error)
-	ListBarEvents(context.Context, *ListBarEventsRequest) (*ListBarEventsResponse, error)
 	mustEmbedUnimplementedBarServiceServer()
 }
 
@@ -87,9 +75,6 @@ func (UnimplementedBarServiceServer) GetBar(context.Context, *GetBarRequest) (*G
 }
 func (UnimplementedBarServiceServer) ListBars(context.Context, *ListBarsRequest) (*ListBarsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListBars not implemented")
-}
-func (UnimplementedBarServiceServer) ListBarEvents(context.Context, *ListBarEventsRequest) (*ListBarEventsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListBarEvents not implemented")
 }
 func (UnimplementedBarServiceServer) mustEmbedUnimplementedBarServiceServer() {}
 
@@ -140,24 +125,6 @@ func _BarService_ListBars_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BarService_ListBarEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListBarEventsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(BarServiceServer).ListBarEvents(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: BarService_ListBarEvents_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BarServiceServer).ListBarEvents(ctx, req.(*ListBarEventsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // BarService_ServiceDesc is the grpc.ServiceDesc for BarService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -172,10 +139,6 @@ var BarService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBars",
 			Handler:    _BarService_ListBars_Handler,
-		},
-		{
-			MethodName: "ListBarEvents",
-			Handler:    _BarService_ListBarEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

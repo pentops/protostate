@@ -7,7 +7,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +35,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Status = testpb.FooStatus_ACTIVE
 			state.Name = event.Name
 			state.Field = event.Field
+			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
 
@@ -47,6 +48,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 		) error {
 			state.Field = event.Field
 			state.Name = event.Name
+			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
 
@@ -139,14 +141,7 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := pquery.FromStateMachine(sm, pquery.StateSpec[
-		*testpb.GetFooRequest,
-		*testpb.GetFooResponse,
-		*testpb.ListFoosRequest,
-		*testpb.ListFoosResponse,
-		*testpb.ListFooEventsRequest,
-		*testpb.ListFooEventsResponse,
-	]{})
+	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooServicePSMStateQuerySpec{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -162,6 +157,10 @@ func TestFooStateMachine(t *testing.T) {
 		err = queryer.Get(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
+		}
+
+		if res.State.LastEventId != event2.Metadata.EventId {
+			t.Fatalf("event ID not passed, want %s, got %s", event2.Metadata.EventId, res.State.LastEventId)
 		}
 
 		if !proto.Equal(res.State, statesOut[fooID]) {

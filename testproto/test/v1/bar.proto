@@ -13,16 +13,16 @@ option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 // BarService is a little strange, it requires a lot of overrides for defaults
 // when building the state query and state machine.
 service BarService {
+  option (psm.v1.state_query).name = "bar";
+
   rpc GetBar(GetBarRequest) returns (GetBarResponse) {
     option (google.api.http) = {get: "/test/v1/bar/{bar_id}"};
+    option (psm.v1.state_query_method).get = true;
   }
 
   rpc ListBars(ListBarsRequest) returns (ListBarsResponse) {
     option (google.api.http) = {get: "/test/v1/bars"};
-  }
-
-  rpc ListBarEvents(ListBarEventsRequest) returns (ListBarEventsResponse) {
-    option (google.api.http) = {get: "/test/v1/bar/{bar_id}/events"};
+    option (psm.v1.state_query_method).list = true;
   }
 }
 

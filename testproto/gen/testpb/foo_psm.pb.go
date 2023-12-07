@@ -8,6 +8,25 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+// State Query Service for %sfoo
+type FooServicePSMStateQuerySet = psm.StateQuerySet[
+	*GetFooRequest,
+	*GetFooResponse,
+	*ListFoosRequest,
+	*ListFoosResponse,
+	*ListFooEventsRequest,
+	*ListFooEventsResponse,
+]
+
+type FooServicePSMStateQuerySpec = psm.StateQuerySpec[
+	*GetFooRequest,
+	*GetFooResponse,
+	*ListFoosRequest,
+	*ListFoosResponse,
+	*ListFooEventsRequest,
+	*ListFooEventsResponse,
+]
+
 // StateObjectOptions: FooPSM
 type FooPSMEventer = psm.Eventer[
 	*FooState,

@@ -8,6 +8,25 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+// State Query Service for %sbar
+type BarServicePSMStateQuerySet = psm.StateQuerySet[
+	*GetBarRequest,
+	*GetBarResponse,
+	*ListBarsRequest,
+	*ListBarsResponse,
+	proto.Message,
+	proto.Message,
+]
+
+type BarServicePSMStateQuerySpec = psm.StateQuerySpec[
+	*GetBarRequest,
+	*GetBarResponse,
+	*ListBarsRequest,
+	*ListBarsResponse,
+	proto.Message,
+	proto.Message,
+]
+
 // StateObjectOptions: BarPSM
 type BarPSMEventer = psm.Eventer[
 	*BarState,

@@ -75,7 +75,9 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		innerEvent := eventQueue[0]
 		eventQueue = eventQueue[1:]
 
-		baton := &TransitionData[E, IE]{}
+		baton := &TransitionData[E, IE]{
+			causedBy: innerEvent,
+		}
 
 		unwrapped := ee.UnwrapEvent(innerEvent)
 

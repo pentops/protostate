@@ -62,6 +62,7 @@ type QuerySpec struct {
 }
 
 func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
+	spec.setDefaults()
 	return QuerySpec{
 		StateTable:      spec.StateTable,
 		StateDataColumn: spec.StateDataColumn,

@@ -1,11 +1,11 @@
-package pquery
+package psm
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/pentops/protostate/psm"
+	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -16,16 +16,16 @@ import (
 // 2. A lister for the main state
 // 3. A lister for the events of the main state
 type StateQuerySet[
-	GetREQ GetRequest,
-	GetRES proto.Message,
-	ListREQ ListRequest,
-	ListRES ListResponse,
-	ListEventsREQ ListRequest,
-	ListEventsRES ListResponse,
+	GetREQ pquery.GetRequest,
+	GetRES pquery.GetResponse,
+	ListREQ pquery.ListRequest,
+	ListRES pquery.ListResponse,
+	ListEventsREQ pquery.ListRequest,
+	ListEventsRES pquery.ListResponse,
 ] struct {
-	getter      *Getter[GetREQ, GetRES]
-	mainLister  *Lister[ListREQ, ListRES]
-	eventLister *Lister[ListEventsREQ, ListEventsRES]
+	getter      *pquery.Getter[GetREQ, GetRES]
+	mainLister  *pquery.Lister[ListREQ, ListRES]
+	eventLister *pquery.Lister[ListEventsREQ, ListEventsRES]
 }
 
 func (gc *StateQuerySet[
@@ -52,47 +52,41 @@ func (gc *StateQuerySet[
 	return gc.eventLister.List(ctx, db, reqMsg, resMsg)
 }
 
-type SourceSM interface {
-	GetQuerySpec() psm.QuerySpec
-}
-
-type StateSpec[
-	GetREQ GetRequest,
-	GetRES GetResponse,
-	ListREQ ListRequest,
-	ListRES ListResponse,
-	ListEventsREQ ListRequest,
-	ListEventsRES ListResponse,
+type StateQuerySpec[
+	GetREQ pquery.GetRequest,
+	GetRES pquery.GetResponse,
+	ListREQ pquery.ListRequest,
+	ListRES pquery.ListResponse,
+	ListEventsREQ pquery.ListRequest,
+	ListEventsRES pquery.ListResponse,
 
 ] struct {
-	AuthFunc   AuthProvider
-	AuthJoin   *LeftJoin
+	Auth       pquery.AuthProvider
+	AuthJoin   *pquery.LeftJoin
 	SkipEvents bool
 }
 
-func FromStateMachine[
-	GetREQ GetRequest,
-	GetRES GetResponse,
-	ListREQ ListRequest,
-	ListRES ListResponse,
-	ListEventsREQ ListRequest,
-	ListEventsRES ListResponse,
+func BuildStateQuerySet[
+	GetREQ pquery.GetRequest,
+	GetRES pquery.GetResponse,
+	ListREQ pquery.ListRequest,
+	ListRES pquery.ListResponse,
+	ListEventsREQ pquery.ListRequest,
+	ListEventsRES pquery.ListResponse,
 ](
-	source SourceSM,
-	spec StateSpec[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES],
+	smSpec QuerySpec,
+	spec StateQuerySpec[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES],
 ) (*StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES], error) {
 
-	smSpec := source.GetQuerySpec()
-
-	getSpec := GetSpec[GetREQ, GetRES]{
+	getSpec := pquery.GetSpec[GetREQ, GetRES]{
 		TableName:  smSpec.StateTable,
 		DataColumn: smSpec.StateDataColumn,
-		Auth:       spec.AuthFunc,
+		Auth:       spec.Auth,
 		AuthJoin:   spec.AuthJoin,
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
-	eventJoinMap := JoinFields{}
+	eventJoinMap := pquery.JoinFields{}
 	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
 
 	for i := 0; i < requestReflect.Fields().Len(); i++ {
@@ -100,7 +94,7 @@ func FromStateMachine[
 		fullKey := string(field.Name())
 		rootKey := strings.TrimPrefix(fullKey, smSpec.StateTable+"_")
 		pkFields[rootKey] = field
-		eventJoinMap = append(eventJoinMap, JoinField{
+		eventJoinMap = append(eventJoinMap, pquery.JoinField{
 			RootColumn: rootKey,
 			JoinColumn: fullKey,
 		})
@@ -133,7 +127,13 @@ func FromStateMachine[
 	}
 
 	if eventsInGet != "" {
-		getSpec.Join = &GetJoinSpec{
+		if smSpec.EventTable == "" {
+			return nil, fmt.Errorf("missing EventTable in state spec for %s", smSpec.StateTable)
+		}
+		if smSpec.EventDataColumn == "" {
+			return nil, fmt.Errorf("missing EventDataColumn in state spec for %s", smSpec.StateTable)
+		}
+		getSpec.Join = &pquery.GetJoinSpec{
 			TableName:     smSpec.EventTable,
 			DataColumn:    smSpec.EventDataColumn,
 			FieldInParent: eventsInGet,
@@ -141,21 +141,21 @@ func FromStateMachine[
 		}
 	}
 
-	getter, err := NewGetter(getSpec)
+	getter, err := pquery.NewGetter(getSpec)
 	if err != nil {
 		return nil, fmt.Errorf("build getter for state query '%s': %w", smSpec.StateTable, err)
 	}
 
-	listSpec := ListSpec[ListREQ, ListRES]{
+	listSpec := pquery.ListSpec[ListREQ, ListRES]{
 		TableName:  smSpec.StateTable,
 		DataColumn: smSpec.StateDataColumn,
-		Auth:       spec.AuthFunc,
+		Auth:       spec.Auth,
 	}
 	if spec.AuthJoin != nil {
-		listSpec.AuthJoin = []*LeftJoin{spec.AuthJoin}
+		listSpec.AuthJoin = []*pquery.LeftJoin{spec.AuthJoin}
 	}
 
-	lister, err := NewLister(listSpec)
+	lister, err := pquery.NewLister(listSpec)
 	if err != nil {
 		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.EventTable, err)
 	}
@@ -169,9 +169,9 @@ func FromStateMachine[
 		return querySet, nil
 	}
 
-	eventsAuthJoin := []*LeftJoin{{
+	eventsAuthJoin := []*pquery.LeftJoin{{
 		// Main is the events table, joining to the state table
-		TableName: smSpec.EventTable,
+		TableName: smSpec.StateTable,
 		On:        eventJoinMap.Reverse(),
 	}}
 
@@ -179,13 +179,13 @@ func FromStateMachine[
 		eventsAuthJoin = append(eventsAuthJoin, spec.AuthJoin)
 	}
 
-	eventListSpec := ListSpec[ListEventsREQ, ListEventsRES]{
+	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
 		TableName:  smSpec.EventTable,
 		DataColumn: smSpec.EventDataColumn,
-		Auth:       spec.AuthFunc,
+		Auth:       spec.Auth,
 		AuthJoin:   eventsAuthJoin,
 	}
-	eventLister, err := NewLister(eventListSpec)
+	eventLister, err := pquery.NewLister(eventListSpec)
 	if err != nil {
 		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.EventTable, err)
 	}
