@@ -255,12 +255,6 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	var foundJSON []byte
 	var joinedJSON pq.ByteaArray
 
-	query, args, err := selectQuery.ToSql()
-	if err != nil {
-		return err
-	}
-	fmt.Print(query+"\n", args)
-
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,
 		Retryable: true,
@@ -296,7 +290,8 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 
 		return nil
 	}); err != nil {
-		return err
+		query, _, _ := selectQuery.ToSql()
+		return fmt.Errorf("%s: %w", query, err)
 	}
 
 	if foundJSON == nil {

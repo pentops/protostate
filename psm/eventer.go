@@ -2,12 +2,10 @@ package psm
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/outbox.pg.go/outbox"
-	"gopkg.daemonl.com/sqrlx"
 )
 
 type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
@@ -17,17 +15,17 @@ type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
 }
 
 type TransitionData[E IEvent[IE], IE IInnerEvent] struct {
-	SideEffects []outbox.OutboxMessage
-	ChainEvents []E
+	sideEffects []outbox.OutboxMessage
+	chainEvents []E
 	causedBy    E
 }
 
 func (td *TransitionData[E, IE]) ChainEvent(event E) {
-	td.ChainEvents = append(td.ChainEvents, event)
+	td.chainEvents = append(td.chainEvents, event)
 }
 
 func (td *TransitionData[E, IE]) SideEffect(msg outbox.OutboxMessage) {
-	td.SideEffects = append(td.SideEffects, msg)
+	td.sideEffects = append(td.sideEffects, msg)
 }
 
 func (td *TransitionData[E, IE]) FullCause() E {
@@ -111,13 +109,13 @@ func (ee Eventer[S, ST, E, IE]) Run(
 			return err
 		}
 
-		for _, se := range baton.SideEffects {
+		for _, se := range baton.sideEffects {
 			if err := tx.Outbox(ctx, se); err != nil {
 				return fmt.Errorf("side effect outbox: %w", err)
 			}
 		}
 
-		eventQueue = append(eventQueue, baton.ChainEvents...)
+		eventQueue = append(eventQueue, baton.chainEvents...)
 	}
 
 	return nil
@@ -145,7 +143,7 @@ type EventerTransitionBuilder[
 ] struct {
 	eventer    *Eventer[S, ST, E, IE]
 	fromStates []ST
-	filter     func(E) bool
+	filters    []func(E) bool
 }
 
 func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, ST, E, IE] {
@@ -155,8 +153,12 @@ func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, 
 	}
 }
 
-func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event E) bool) EventerTransitionBuilder[S, ST, E, IE] {
-	tb.filter = filter
+func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE) bool) EventerTransitionBuilder[S, ST, E, IE] {
+	innerFilter := func(fullEvent E) bool {
+		innerEvent := tb.eventer.UnwrapEvent(fullEvent)
+		return filter(innerEvent)
+	}
+	tb.filters = append(tb.filters, innerFilter)
 	return tb
 }
 
@@ -173,8 +175,11 @@ func (tb EventerTransitionBuilder[S, ST, E, IE]) Do(
 	return tb
 }
 
-var TxOptions = &sqrlx.TxOptions{
-	Isolation: sql.LevelReadCommitted,
-	Retryable: true,
-	ReadOnly:  false,
+func (tb EventerTransitionBuilder[S, ST, E, IE]) filter(event E) bool {
+	for _, filter := range tb.filters {
+		if !filter(event) {
+			return false
+		}
+	}
+	return true
 }

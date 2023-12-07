@@ -149,6 +149,19 @@ func WithEventTypeConverter[
 	}
 }
 
+func WithExtraStateColumns[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+](
+	extraStateColumns func(S) (map[string]interface{}, error),
+) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
+	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
+		cb.spec.ExtraStateColumns = extraStateColumns
+	}
+}
+
 type StateMachineOption[
 	S IState[ST],
 	ST IStatusEnum,

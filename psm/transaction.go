@@ -2,6 +2,7 @@ package psm
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/pentops/outbox.pg.go/outbox"
 	"google.golang.org/protobuf/proto"
@@ -36,4 +37,10 @@ func NewSqrlxTransaction[State proto.Message, WrappedEvent proto.Message](
 		Transaction: tx,
 		callback:    callback,
 	}
+}
+
+var TxOptions = &sqrlx.TxOptions{
+	Isolation: sql.LevelReadCommitted,
+	Retryable: true,
+	ReadOnly:  false,
 }
