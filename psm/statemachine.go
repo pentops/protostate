@@ -19,8 +19,8 @@ type TableSpec[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	PrimaryKey        func(E) map[string]interface{}
-	ExtraStateColumns func(S) map[string]interface{}
+	PrimaryKey        func(E) (map[string]interface{}, error)
+	ExtraStateColumns func(S) (map[string]interface{}, error)
 
 	StateTable string
 	EventTable string
@@ -198,8 +198,12 @@ func NewStateMachine[
 }
 
 func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
+	state := sm.conversions.EmptyState(event)
 
-	primaryKey := sm.spec.PrimaryKey(event)
+	primaryKey, err := sm.spec.PrimaryKey(event)
+	if err != nil {
+		return state, fmt.Errorf("primary key: %w", err)
+	}
 
 	selectQuery := sq.
 		Select(sm.spec.StateDataColumn).
@@ -208,14 +212,13 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 		selectQuery = selectQuery.Where(sq.Eq{k: v})
 	}
 
-	state := sm.conversions.EmptyState(event)
-
 	var stateJSON []byte
-	err := tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
+	err = tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		// OK, leave empty state alone
 	} else if err != nil {
-		return state, fmt.Errorf("selecting current state: %w", err)
+		qq, _, _ := selectQuery.ToSql()
+		return state, fmt.Errorf("selecting current state (%s): %w", qq, err)
 	} else {
 		if err := protojson.Unmarshal(stateJSON, state); err != nil {
 			return state, err
@@ -243,11 +246,17 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	}
 	eventMap[stateSpec.EventDataColumn] = event
 
-	primaryKey := stateSpec.PrimaryKey(event)
+	primaryKey, err := stateSpec.PrimaryKey(event)
+	if err != nil {
+		return fmt.Errorf("primary key: %w", err)
+	}
 
 	additionalColumns := map[string]interface{}{}
 	if stateSpec.ExtraStateColumns != nil {
-		additionalColumns = stateSpec.ExtraStateColumns(state)
+		additionalColumns, err = stateSpec.ExtraStateColumns(state)
+		if err != nil {
+			return fmt.Errorf("extra state columns: %w", err)
+		}
 	}
 
 	stateJSON, err := protojson.Marshal(state)

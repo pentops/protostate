@@ -9,7 +9,7 @@ import (
 )
 
 // State Query Service for %sbar
-type BarServicePSMStateQuerySet = psm.StateQuerySet[
+type BarPSMStateQuerySet = psm.StateQuerySet[
 	*GetBarRequest,
 	*GetBarResponse,
 	*ListBarsRequest,
@@ -18,7 +18,7 @@ type BarServicePSMStateQuerySet = psm.StateQuerySet[
 	proto.Message,
 ]
 
-type BarServicePSMStateQuerySpec = psm.StateQuerySpec[
+type BarPSMStateQuerySpec = psm.StateQuerySpec[
 	*GetBarRequest,
 	*GetBarResponse,
 	*ListBarsRequest,
@@ -66,10 +66,10 @@ type BarPSMTableSpec = psm.TableSpec[
 var DefaultBarPSMTableSpec = BarPSMTableSpec{
 	StateTable: "bar",
 	EventTable: "bar_event",
-	PrimaryKey: func(event *BarEvent) map[string]interface{} {
+	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
 			"id": event.BarId,
-		}
+		}, nil
 	},
 }
 

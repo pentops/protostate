@@ -7,6 +7,7 @@ require (
 	github.com/bufbuild/protovalidate-go v0.4.2
 	github.com/elgris/sqrl v0.0.0-20210727210741-7e0198b30236
 	github.com/google/uuid v1.4.0
+	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/listify-go v0.0.0-20231114210340-3454f5bb0a53
 	github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576
