@@ -141,7 +141,7 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooServicePSMStateQuerySpec{})
+	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

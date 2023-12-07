@@ -53,4 +53,8 @@ message StateQueryMethodOptions {
   bool get = 1;
   bool list = 2;
   bool list_events = 3;
+
+  // use name here instead of the service option to put multiple state query
+  // methods in one service
+  string name = 4;
 }

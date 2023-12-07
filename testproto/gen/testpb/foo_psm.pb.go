@@ -9,7 +9,7 @@ import (
 )
 
 // State Query Service for %sfoo
-type FooServicePSMStateQuerySet = psm.StateQuerySet[
+type FooPSMStateQuerySet = psm.StateQuerySet[
 	*GetFooRequest,
 	*GetFooResponse,
 	*ListFoosRequest,
@@ -18,7 +18,7 @@ type FooServicePSMStateQuerySet = psm.StateQuerySet[
 	*ListFooEventsResponse,
 ]
 
-type FooServicePSMStateQuerySpec = psm.StateQuerySpec[
+type FooPSMStateQuerySpec = psm.StateQuerySpec[
 	*GetFooRequest,
 	*GetFooResponse,
 	*ListFoosRequest,
@@ -66,10 +66,10 @@ type FooPSMTableSpec = psm.TableSpec[
 var DefaultFooPSMTableSpec = FooPSMTableSpec{
 	StateTable: "foo",
 	EventTable: "foo_event",
-	PrimaryKey: func(event *FooEvent) map[string]interface{} {
+	PrimaryKey: func(event *FooEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
 			"id": event.FooId,
-		}
+		}, nil
 	},
 	EventColumns: func(event *FooEvent) (map[string]interface{}, error) {
 		metadata := event.Metadata

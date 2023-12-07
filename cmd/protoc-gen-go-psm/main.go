@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/pluginpb"
 
+	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/v1/psm_pb"
 )
 
@@ -47,24 +48,59 @@ type buildingStateSet struct {
 }
 
 type buildingStateQueryService struct {
-	service *protogen.Service
-	options *psm_pb.StateQueryServiceOptions
+	name string
+
+	getMethod        *protogen.Method
+	listMethod       *protogen.Method
+	listEventsMethod *protogen.Method
+}
+
+func stateGoName(specified string) string {
+	// return the exported go name for the string, which is provided as _ case
+	// separated
+	return strcase.ToCamel(specified)
 }
 
 // generateFile generates a _psm.pb.go
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
 
-	stateServices := []buildingStateQueryService{}
+	stateServices := map[string]*buildingStateQueryService{}
 	for _, service := range file.Services {
-		stateQueryAnnotation, ok := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
-		if !ok || stateQueryAnnotation == nil {
-			continue
+		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
+
+		for _, method := range service.Methods {
+			methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
+			if methodOpt == nil {
+				continue
+			}
+			if methodOpt.Name == "" {
+				if stateQueryAnnotation == nil || stateQueryAnnotation.Name == "" {
+					gen.Error(fmt.Errorf("service %s method %s does not have a state query name, and no service default", service.GoName, method.GoName))
+					return nil
+				}
+				methodOpt.Name = stateQueryAnnotation.Name
+			}
+
+			methodSet, ok := stateServices[methodOpt.Name]
+			if !ok {
+				methodSet = &buildingStateQueryService{
+					name: methodOpt.Name,
+				}
+				stateServices[methodOpt.Name] = methodSet
+			}
+
+			if methodOpt.Get {
+				methodSet.getMethod = method
+			} else if methodOpt.List {
+				methodSet.listMethod = method
+			} else if methodOpt.ListEvents {
+				methodSet.listEventsMethod = method
+			} else {
+				gen.Error(fmt.Errorf("service %s method %s does not have a state query type", service.GoName, method.GoName))
+				return nil
+			}
 		}
 
-		stateServices = append(stateServices, buildingStateQueryService{
-			service: service,
-			options: stateQueryAnnotation,
-		})
 	}
 
 	stateSets := make(map[string]*buildingStateSet)
@@ -114,7 +150,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	g.P()
 
 	for _, stateService := range stateServices {
-		if err := addStateQueryService(g, stateService); err != nil {
+		if err := addStateQueryService(g, *stateService); err != nil {
 			gen.Error(err)
 		}
 	}
@@ -137,53 +173,40 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
 	protoPackage := protogen.GoImportPath("google.golang.org/protobuf/proto")
 
-	g.P("// State Query Service for %s", service.options.Name)
+	g.P("// State Query Service for %s", service.name)
 
-	var getMethod, listMethod, listEventsMethod *protogen.Method
-	for _, method := range service.service.Methods {
-		methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
-		if methodOpt == nil {
-			continue
-		}
-		if methodOpt.Get {
-			getMethod = method
-		} else if methodOpt.List {
-			listMethod = method
-		} else if methodOpt.ListEvents {
-			listEventsMethod = method
-		}
+	if service.getMethod == nil {
+		return fmt.Errorf("service %s does not have a get method", service.name)
 	}
 
-	if getMethod == nil {
-		return fmt.Errorf("service %s does not have a get method", service.service.GoName)
+	if service.listMethod == nil {
+		return fmt.Errorf("service %s does not have a list method", service.name)
 	}
 
-	if listMethod == nil {
-		return fmt.Errorf("service %s does not have a list method", service.service.GoName)
-	}
+	goServiceName := stateGoName(service.name)
 
-	g.P("type ", service.service.GoName, "PSMStateQuerySet = ", sm.Ident("StateQuerySet"), "[")
-	g.P("*", getMethod.Input.GoIdent, ",")
-	g.P("*", getMethod.Output.GoIdent, ",")
-	g.P("*", listMethod.Input.GoIdent, ",")
-	g.P("*", listMethod.Output.GoIdent, ",")
-	if listEventsMethod != nil {
-		g.P("*", listEventsMethod.Input.GoIdent, ",")
-		g.P("*", listEventsMethod.Output.GoIdent, ",")
+	g.P("type ", goServiceName, "PSMStateQuerySet = ", sm.Ident("StateQuerySet"), "[")
+	g.P("*", service.getMethod.Input.GoIdent, ",")
+	g.P("*", service.getMethod.Output.GoIdent, ",")
+	g.P("*", service.listMethod.Input.GoIdent, ",")
+	g.P("*", service.listMethod.Output.GoIdent, ",")
+	if service.listEventsMethod != nil {
+		g.P("*", service.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", service.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
 	}
 	g.P("]")
 	g.P()
-	g.P("type ", service.service.GoName, "PSMStateQuerySpec = ", sm.Ident("StateQuerySpec"), "[")
-	g.P("*", getMethod.Input.GoIdent, ",")
-	g.P("*", getMethod.Output.GoIdent, ",")
-	g.P("*", listMethod.Input.GoIdent, ",")
-	g.P("*", listMethod.Output.GoIdent, ",")
-	if listEventsMethod != nil {
-		g.P("*", listEventsMethod.Input.GoIdent, ",")
-		g.P("*", listEventsMethod.Output.GoIdent, ",")
+	g.P("type ", goServiceName, "PSMStateQuerySpec = ", sm.Ident("StateQuerySpec"), "[")
+	g.P("*", service.getMethod.Input.GoIdent, ",")
+	g.P("*", service.getMethod.Output.GoIdent, ",")
+	g.P("*", service.listMethod.Input.GoIdent, ",")
+	g.P("*", service.listMethod.Output.GoIdent, ",")
+	if service.listEventsMethod != nil {
+		g.P("*", service.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", service.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
@@ -232,7 +255,7 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 		eventMessage: src.eventMessage,
 	}
 	ss.specifiedName = src.stateOptions.Name
-	ss.namePrefix = strings.TrimSuffix(src.stateMessage.GoIdent.GoName, "State")
+	ss.namePrefix = stateGoName(ss.specifiedName)
 	ss.machineName = ss.namePrefix + "PSM"
 	ss.eventName = ss.namePrefix + "PSMEvent"
 
@@ -461,7 +484,7 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
 	g.P("  StateTable: \"", ss.specifiedName, "\",")
 	g.P("  EventTable: \"", ss.specifiedName, "_event\",")
-	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") map[string]interface{} {")
+	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
 	for _, field := range ss.eventStateKeyFields {
 		// stripping the prefix foo_ from the name in the event. In the DB, we
@@ -469,7 +492,7 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
 		g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
 	}
-	g.P("    }")
+	g.P("    }, nil")
 	g.P("  },")
 
 	if canAutomateMetadata {
