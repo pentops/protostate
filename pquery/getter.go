@@ -151,6 +151,10 @@ func NewGetter[
 		return nil, fmt.Errorf("no '%s' field in proto message", spec.StateResponseField)
 	}
 
+	if spec.PrimaryKey == nil {
+		return nil, fmt.Errorf("missing PrimaryKey func")
+	}
+
 	if spec.Join != nil {
 
 		if err := spec.Join.validate(); err != nil {
