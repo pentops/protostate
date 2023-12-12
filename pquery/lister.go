@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"gopkg.daemonl.com/sqrlx"
+	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type ListRequest interface {

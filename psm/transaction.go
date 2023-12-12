@@ -6,7 +6,7 @@ import (
 
 	"github.com/pentops/outbox.pg.go/outbox"
 	"google.golang.org/protobuf/proto"
-	"gopkg.daemonl.com/sqrlx"
+	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type Transaction[State proto.Message, WrappedEvent proto.Message] interface {

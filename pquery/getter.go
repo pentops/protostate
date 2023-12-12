@@ -11,12 +11,12 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/lib/pq"
 	"github.com/pentops/protostate/dbconvert"
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"gopkg.daemonl.com/sqrlx"
 )
 
 type GetRequest interface {
