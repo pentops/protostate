@@ -257,7 +257,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 
 	var foundJSON []byte
-	var joinedJSON pq.ByteaArray
+	var joinedJSON pq.StringArray
 
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,
@@ -311,12 +311,12 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	if gc.join != nil {
 		elementList := resReflect.Mutable(gc.join.fieldInParent).List()
 		for _, eventBytes := range joinedJSON {
-			if eventBytes == nil {
+			if eventBytes == "" {
 				continue
 			}
 
 			rowMessage := elementList.NewElement().Message()
-			if err := protojson.Unmarshal(eventBytes, rowMessage.Interface()); err != nil {
+			if err := protojson.Unmarshal([]byte(eventBytes), rowMessage.Interface()); err != nil {
 				return fmt.Errorf("joined unmarshal: %w", err)
 			}
 			elementList.Append(protoreflect.ValueOf(rowMessage))
