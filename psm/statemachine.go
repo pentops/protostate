@@ -8,9 +8,9 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/dbconvert"
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type TableSpec[

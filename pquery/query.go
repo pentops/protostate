@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type aliasSet int

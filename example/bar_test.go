@@ -9,8 +9,8 @@ import (
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
