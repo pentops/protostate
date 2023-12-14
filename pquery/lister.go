@@ -9,11 +9,11 @@ import (
 	sq "github.com/elgris/sqrl"
 	query_pb "github.com/pentops/listify-go/query/v1"
 	"github.com/pentops/log.go/log"
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"gopkg.daemonl.com/sqrlx"
 )
 
 type ListRequest interface {

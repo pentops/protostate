@@ -5,8 +5,8 @@ import (
 	"database/sql"
 
 	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
-	"gopkg.daemonl.com/sqrlx"
 )
 
 type Transaction[State proto.Message, WrappedEvent proto.Message] interface {
