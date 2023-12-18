@@ -247,6 +247,7 @@ type stateSet struct {
 type eventStateFieldMap struct {
 	eventField *protogen.Field
 	stateField *protogen.Field
+	isKey      bool
 }
 
 func buildStateSet(src *buildingStateSet) (*stateSet, error) {
@@ -287,7 +288,13 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 			ss.eventTypeField = field
 		} else if fieldOpt.Metadata {
 			ss.metadataField = field
-		} else if fieldOpt.StateKey {
+		} else if fieldOpt.StateKey || fieldOpt.StateField {
+
+			desc := field.Desc
+			if desc.IsList() || desc.IsMap() || desc.Kind() == protoreflect.MessageKind {
+				return nil, fmt.Errorf("event object %s state key field %s is not a scalar", src.eventOptions.Name, field.Desc.Name())
+			}
+
 			var matchingStateField *protogen.Field
 			for _, stateField := range src.stateMessage.Fields {
 				if stateField.Desc.Name() == field.Desc.Name() {
@@ -303,10 +310,20 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 				return nil, fmt.Errorf("event object %s state key field %s is not the same type as state object %s", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
 			}
 
+			if matchingStateField.Desc.HasOptionalKeyword() {
+				if !field.Desc.HasOptionalKeyword() {
+					return nil, fmt.Errorf("event object %s state key field %s is marked optional, but state object %s is not", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
+				}
+			} else if field.Desc.HasOptionalKeyword() {
+				return nil, fmt.Errorf("event object %s state key field %s is not marked optional, but state object %s is", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
+			}
+
 			ss.eventStateKeyFields = append(ss.eventStateKeyFields, eventStateFieldMap{
 				eventField: field,
 				stateField: matchingStateField,
+				isKey:      fieldOpt.StateKey,
 			})
+
 		}
 
 	}
@@ -487,6 +504,9 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
 	for _, field := range ss.eventStateKeyFields {
+		if !field.isKey {
+			continue
+		}
 		// stripping the prefix foo_ from the name in the event. In the DB, we
 		// expect the primary key to be called just id, so foo_id -> id
 		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
@@ -542,6 +562,27 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("}")
 	g.P("}")
+	g.P("func (c ", ss.machineName, "Converter) CheckStateKeys(s *", ss.stateMessage.GoIdent, ", e *", ss.eventMessage.GoIdent, ") error {")
+	for _, field := range ss.eventStateKeyFields {
+		if field.stateField.Desc.HasOptionalKeyword() {
+			g.P("if s.", field.eventField.GoName, " == nil {")
+			g.P("  if e.", field.eventField.GoName, " != nil {")
+			g.P("    return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' is nil, but event field is not (%q)\", *e.", field.eventField.GoName, ")")
+			g.P("  }")
+			g.P("} else if e.", field.eventField.GoName, " == nil {")
+			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' is not nil (%q), but event field is\", *e.", field.stateField.GoName, ")")
+			g.P("} else if *s.", field.stateField.GoName, " != *e.", field.eventField.GoName, " {")
+			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' %q does not match event field %q\", *s.", field.stateField.GoName, ", *e.", field.eventField.GoName, ")")
+			g.P("}")
+		} else {
+			g.P("if s.", field.stateField.GoName, " != e.", field.eventField.GoName, " {")
+			g.P("return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' %q does not match event field %q\", s.", field.stateField.GoName, ", e.", field.eventField.GoName, ")")
+			g.P("}")
+		}
+	}
+	g.P("return nil")
+	g.P("}")
+
 	g.P()
 
 	return nil

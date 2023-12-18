@@ -4,6 +4,7 @@ package testpb
 
 import (
 	context "context"
+	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
 	proto "google.golang.org/protobuf/proto"
 )
@@ -78,6 +79,7 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			"timestamp": metadata.Timestamp,
 			"actor":     metadata.Actor,
 			"foo_id":    event.FooId,
+			"tenant_id": event.TenantId,
 		}, nil
 	},
 }
@@ -128,8 +130,24 @@ func (c FooPSMConverter) EventLabel(e FooPSMEvent) string {
 
 func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{
-		FooId: e.FooId,
+		FooId:    e.FooId,
+		TenantId: e.TenantId,
 	}
+}
+func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
+	if s.FooId != e.FooId {
+		return fmt.Errorf("state field 'FooId' %q does not match event field %q", s.FooId, e.FooId)
+	}
+	if s.TenantId == nil {
+		if e.TenantId != nil {
+			return fmt.Errorf("state field 'TenantId' is nil, but event field is not (%q)", *e.TenantId)
+		}
+	} else if e.TenantId == nil {
+		return fmt.Errorf("state field 'TenantId' is not nil (%q), but event field is", *e.TenantId)
+	} else if *s.TenantId != *e.TenantId {
+		return fmt.Errorf("state field 'TenantId' %q does not match event field %q", *s.TenantId, *e.TenantId)
+	}
+	return nil
 }
 
 func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {

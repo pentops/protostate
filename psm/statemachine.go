@@ -93,6 +93,7 @@ type EventTypeConverter[
 	StateLabel(S) string
 	EventLabel(IE) string
 	EmptyState(E) S
+	CheckStateKeys(S, E) error
 }
 
 type Transactor interface {
@@ -229,14 +230,21 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	err = tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		// OK, leave empty state alone
-	} else if err != nil {
+		return state, nil
+	}
+	if err != nil {
 		qq, _, _ := selectQuery.ToSql()
 		return state, fmt.Errorf("selecting current state (%s): %w", qq, err)
-	} else {
-		if err := protojson.Unmarshal(stateJSON, state); err != nil {
-			return state, err
-		}
 	}
+
+	if err := protojson.Unmarshal(stateJSON, state); err != nil {
+		return state, err
+	}
+
+	if err := sm.conversions.CheckStateKeys(state, event); err != nil {
+		return state, err
+	}
+
 	return state, nil
 }
 
