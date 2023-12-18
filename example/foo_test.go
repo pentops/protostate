@@ -6,6 +6,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
+	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
@@ -202,4 +203,109 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected 3 events, got %d", len(res.Events))
 		}
 	})
+}
+
+func TestFooStateField(t *testing.T) {
+
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
+	defer ss.RunSteps(t)
+
+	fooID := uuid.NewString()
+	tenantID := uuid.NewString()
+
+	event1 := &testpb.FooEvent{
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		TenantId: &tenantID,
+		FooId:    fooID,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Created_{
+				Created: &testpb.FooEventType_Created{
+					Name:  "foo",
+					Field: "event1",
+				},
+			},
+		},
+	}
+
+	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+		stateOut, err := sm.Transition(ctx, event1)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		a.Equal(tenantID, *stateOut.TenantId)
+	})
+
+	ss.StepC("Update OK, Same Key", func(ctx context.Context, a flowtest.Asserter) {
+		event := &testpb.FooEvent{
+			Metadata: &testpb.Metadata{
+				EventId:   uuid.NewString(),
+				Timestamp: timestamppb.Now(),
+				Actor: &testpb.Actor{
+					ActorId: uuid.NewString(),
+				},
+			},
+			FooId:    fooID,
+			TenantId: &tenantID,
+			Event: &testpb.FooEventType{
+				Type: &testpb.FooEventType_Updated_{
+					Updated: &testpb.FooEventType_Updated{
+						Name:  "foo",
+						Field: "event2",
+					},
+				},
+			},
+		}
+		stateOut, err := sm.Transition(ctx, event)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		a.Equal(tenantID, *stateOut.TenantId)
+	})
+
+	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, a flowtest.Asserter) {
+		differentTenantId := uuid.NewString()
+		event := &testpb.FooEvent{
+			Metadata: &testpb.Metadata{
+				EventId:   uuid.NewString(),
+				Timestamp: timestamppb.Now(),
+				Actor: &testpb.Actor{
+					ActorId: uuid.NewString(),
+				},
+			},
+			FooId:    fooID,
+			TenantId: &differentTenantId,
+			Event: &testpb.FooEventType{
+				Type: &testpb.FooEventType_Updated_{
+					Updated: &testpb.FooEventType_Updated{
+						Name:  "foo",
+						Field: "event3",
+					},
+				},
+			},
+		}
+		_, err := sm.Transition(ctx, event)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 }

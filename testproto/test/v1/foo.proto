@@ -45,7 +45,7 @@ message FooState {
   option (psm.v1.state).name = "foo";
 
   string foo_id = 1 [(buf.validate.field).string.uuid = true];
-  string tenant_id = 2 [(buf.validate.field).string.uuid = true];
+  optional string tenant_id = 2 [(buf.validate.field).string.uuid = true];
 
   string name = 3;
   string field = 4;
@@ -71,6 +71,11 @@ message FooEvent {
 
   string foo_id = 2 [
     (psm.v1.event_field).state_key = true,
+    (buf.validate.field).string.uuid = true
+  ];
+
+  optional string tenant_id = 4 [
+    (psm.v1.event_field).state_field = true,
     (buf.validate.field).string.uuid = true
   ];
 

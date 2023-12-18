@@ -4,6 +4,7 @@ package testpb
 
 import (
 	context "context"
+	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
 	proto "google.golang.org/protobuf/proto"
 )
@@ -121,6 +122,12 @@ func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 	return &BarState{
 		BarId: e.BarId,
 	}
+}
+func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
+	if s.BarId != e.BarId {
+		return fmt.Errorf("state field 'BarId' %q does not match event field %q", s.BarId, e.BarId)
+	}
+	return nil
 }
 
 func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {

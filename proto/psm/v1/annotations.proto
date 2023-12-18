@@ -28,9 +28,20 @@ extend google.protobuf.FieldOptions {
 }
 
 message EventField {
+  // the field is the enum wrapper for the event type
   bool event_type = 1;
+
+  // the field contains the metadata for this message
   bool metadata = 2;
+
+  // the field contains a foreign key to the state object. This must be part of
+  // the state's primary key
   bool state_key = 3;
+
+  // a non-primary key field used to construct initial state. When this is
+  // specified on an event for a state which already exists, it must equal the
+  // value in the state after the transition caused by the event.
+  bool state_field = 4;
 }
 
 message EventTypeField {

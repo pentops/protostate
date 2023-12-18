@@ -9,8 +9,8 @@ deps:
   - remote: buf.build
     owner: googleapis
     repository: googleapis
-    commit: b30c5775bfb3485d9da2e87b26590ac9
-    digest: shake256:9d0caaf056949a0e1c883b9849d8a2fa66e22f18a2a48f867d1a8c700aa22abee50ad3ef0d8171637457cadc43c584998bdf3adac55da0f9e4614c72686b057d
+    commit: a86849a25cc04f4dbe9b15ddddfbc488
+    digest: shake256:e19143328f8cbfe13fc226aeee5e63773ca494693a72740a7560664270039a380d94a1344234b88c7691311460df9a9b1c2982190d0a2612eae80368718e1943
   - remote: buf.build
     owner: pentops
     repository: listify
@@ -19,5 +19,5 @@ deps:
   - remote: buf.build
     owner: pentops
     repository: psm
-    commit: cb790d0f03474c7ba1c92d4c2d115b71
-    digest: shake256:1df96d33cad876116597d78bc574422101931c611055601c51f3bcf9f91ae668c8342ab1b0c44f95121e38532d61f5081f6948823dead572592b45e093d9ba56
+    commit: cb5ab80a82ec4049a06e2f0cf3e1211c
+    digest: shake256:d792576516ebe452449a3524171d9ec705cfec910ddd242d9683e5476955a9c750ebc26f675c1e649fd86394bf8a33c3720a7517b5a169c4f9eef12749cb1bed
