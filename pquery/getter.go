@@ -238,9 +238,11 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			))
 		}
 
-		for k, v := range authFilter {
-			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
+		authFilterEq, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
+		if err != nil {
+			return err
 		}
+		selectQuery = selectQuery.Where(authFilterEq)
 	}
 
 	if gc.join != nil {
