@@ -7,6 +7,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
+	query_pb "github.com/pentops/listify-go/query/v1"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
@@ -34,6 +35,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Name = event.Name
 			state.Field = event.Field
 			state.LastEventId = tb.FullCause().Metadata.EventId
+			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			return nil
 		}))
 
@@ -203,6 +205,110 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected 3 events, got %d", len(res.Events))
 		}
 	})
+}
+
+func TestFooPagination(t *testing.T) {
+
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
+	defer ss.RunSteps(t)
+
+	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+		tenantID := uuid.NewString()
+
+		for ii := 0; ii < 30; ii++ {
+			fooID := uuid.NewString()
+
+			event1 := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				TenantId: &tenantID,
+				FooId:    fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Created_{
+						Created: &testpb.FooEventType_Created{
+							Name:  "foo",
+							Field: "event1",
+						},
+					},
+				},
+			}
+			stateOut, err := sm.Transition(ctx, event1)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+			a.Equal(tenantID, *stateOut.TenantId)
+		}
+	})
+
+	var pageResp *query_pb.PageResponse
+
+	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+
+		req := &testpb.ListFoosRequest{}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != 20 {
+			t.Fatalf("expected 20 states, got %d", len(res.Foos))
+		}
+
+		pageResp = res.Page
+
+		if pageResp.NextToken == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.FinalPage {
+			t.Fatalf("Should not be the final page")
+		}
+
+	})
+
+	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+
+		req := &testpb.ListFoosRequest{
+			Page: &query_pb.PageRequest{
+				Token: pageResp.NextToken,
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != 10 {
+			t.Fatalf("expected 10 states, got %d", len(res.Foos))
+		}
+
+	})
+
 }
 
 func TestFooStateField(t *testing.T) {

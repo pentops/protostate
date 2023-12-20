@@ -52,6 +52,8 @@ message FooState {
 
   string last_event_id = 6;
 
+  google.protobuf.Timestamp created_at = 7;
+
   FooStatus status = 5;
 }
 

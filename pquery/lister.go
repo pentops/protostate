@@ -3,7 +3,10 @@ package pquery
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"strings"
+	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	sq "github.com/elgris/sqrl"
@@ -15,6 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ListRequest interface {
@@ -36,6 +41,11 @@ type ListSpec[
 	AuthJoin []*LeftJoin
 }
 
+type sortSpec struct {
+	field protoreflect.FieldDescriptor
+	desc  bool
+}
+
 type Lister[
 	REQ ListRequest,
 	RES ListResponse,
@@ -44,6 +54,9 @@ type Lister[
 
 	arrayField        protoreflect.FieldDescriptor
 	pageResponseField protoreflect.FieldDescriptor
+	pageRequestField  protoreflect.FieldDescriptor
+
+	defaultSortFields []sortSpec
 
 	tableName  string
 	dataColumn string
@@ -71,7 +84,7 @@ func NewLister[
 		field := fields.Get(i)
 		msg := field.Message()
 		if msg == nil {
-			return nil, fmt.Errorf("field %s is a '%s', but should be a listify.query.v1.PageResponse", field.Name(), field.Kind())
+			return nil, fmt.Errorf("field %s is a '%s', but should be a message", field.Name(), field.Kind())
 		}
 
 		if msg.FullName() == "listify.query.v1.PageResponse" {
@@ -98,6 +111,43 @@ func NewLister[
 		return nil, fmt.Errorf("no page field in response, must have a listify.query.v1.PageResponse")
 	}
 
+	messageFields := ll.arrayField.Message().Fields()
+	for i := 0; i < messageFields.Len(); i++ {
+		field := messageFields.Get(i)
+		if strings.HasPrefix(string(field.Name()), "created") {
+			ll.defaultSortFields = []sortSpec{{
+				field: field,
+				desc:  true,
+			}}
+			break
+		}
+
+		if len(ll.defaultSortFields) == 0 && strings.HasSuffix(string(field.Name()), "_id") {
+			ll.defaultSortFields = append(ll.defaultSortFields, sortSpec{
+				field: field,
+				desc:  false,
+			})
+		}
+	}
+
+	requestFields := descriptors.request.Fields()
+	for i := 0; i < requestFields.Len(); i++ {
+		field := requestFields.Get(i)
+		msg := field.Message()
+		if msg == nil {
+			continue
+		}
+
+		if msg.FullName() == "listify.query.v1.PageRequest" {
+			ll.pageRequestField = field
+			continue
+		}
+	}
+
+	if ll.pageRequestField == nil {
+		return nil, fmt.Errorf("no page field in request, must have a listify.query.v1.PageRequest")
+	}
+
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
 	validateOpt := proto.GetExtension(arrayFieldOpt, validate.E_Field).(*validate.FieldConstraints)
 	if repeated := validateOpt.GetRepeated(); repeated != nil {
@@ -112,6 +162,7 @@ func NewLister[
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 
 	res := resMsg.ProtoReflect()
+	req := reqMsg.ProtoReflect()
 
 	var jsonRows = make([][]byte, 0, ll.pageSize)
 
@@ -122,8 +173,18 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
-	if ll.auth != nil {
+		// TODO: Dynamic Sorts
+	sortFields := ll.defaultSortFields
 
+	for _, sortField := range sortFields {
+		direction := "ASC"
+		if sortField.desc {
+			direction = "DESC"
+		}
+		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.field.JSONName(), direction))
+	}
+
+	if ll.auth != nil {
 		authFilter, err := ll.auth.AuthFilter(ctx)
 		if err != nil {
 			return err
@@ -152,8 +213,61 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	selectQuery.Limit(ll.pageSize + 1)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
-	// TODO: Request Sorts
-	// TODO: Pagination in Request
+
+	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*query_pb.PageRequest)
+	if ok && reqPage != nil {
+		if reqPage.Token != "" {
+			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
+
+			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.Token)
+			if err != nil {
+				return fmt.Errorf("decode token: %w", err)
+			}
+
+			if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
+				return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+			}
+
+			for _, sortField := range sortFields {
+				equality := ">="
+				if sortField.desc {
+					equality = "<="
+				}
+
+				dbVal := rowMessage.Get(sortField.field).Interface()
+				switch subType := dbVal.(type) {
+				case *dynamicpb.Message:
+					name := subType.Descriptor().FullName()
+					msgBytes, err := proto.Marshal(subType)
+					if err != nil {
+						return fmt.Errorf("marshal %s: %w", name, err)
+					}
+
+					switch name {
+					case "google.protobuf.Timestamp":
+						ts := timestamppb.Timestamp{}
+						if err := proto.Unmarshal(msgBytes, &ts); err != nil {
+							return fmt.Errorf("unmarshal %s: %w", name, err)
+						}
+						dbVal = ts.AsTime().Format(time.RFC3339Nano) // JSON Encoding
+					default:
+						return fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
+					}
+
+				default:
+					return fmt.Errorf("unknown sort field type %T", dbVal)
+				}
+
+				selectQuery = selectQuery.Where(
+					fmt.Sprintf("%s.%s->>'%s' %s ?",
+						tableAlias,
+						ll.dataColumn,
+						sortField.field.JSONName(),
+						equality,
+					), dbVal)
+			}
+		}
+	}
 
 	var nextToken string
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
@@ -197,7 +311,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			if err != nil {
 				return fmt.Errorf("marshalling final row: %w", err)
 			}
-			nextToken = string(lastBytes)
+			nextToken = base64.StdEncoding.EncodeToString(lastBytes)
 			break
 		}
 		list.Append(protoreflect.ValueOf(rowMessage))
@@ -205,7 +319,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	pageResponse := &query_pb.PageResponse{
 		NextToken: nextToken,
-		FinalPage: nextToken != "",
+		FinalPage: nextToken == "",
 	}
 
 	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
