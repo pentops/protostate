@@ -9,6 +9,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	query_pb "github.com/pentops/listify-go/query/v1"
 	"github.com/pentops/log.go/log"
+	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -140,9 +141,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			))
 		}
 
-		for k, v := range authFilter {
-			selectQuery = selectQuery.Where(sq.Eq{fmt.Sprintf("%s.%s", authAlias, k): v})
+		authFilterMapped, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
+		if err != nil {
+			return err
 		}
+
+		selectQuery = selectQuery.Where(authFilterMapped)
 	}
 
 	selectQuery.Limit(ll.pageSize + 1)

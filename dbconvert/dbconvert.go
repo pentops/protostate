@@ -2,6 +2,7 @@ package dbconvert
 
 import (
 	"fmt"
+	"reflect"
 
 	sq "github.com/elgris/sqrl"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -42,6 +43,19 @@ func interfaceToDBValue(i interface{}) (interface{}, error) {
 		return v.AsTime(), nil
 	case proto.Message:
 		return protojson.Marshal(v)
+	case *string:
+		if v == nil {
+			return nil, nil
+		}
+		return v, nil
 	}
+
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		if reflect.ValueOf(i).IsNil() {
+			return nil, nil
+		}
+	}
+
 	return i, nil
 }
