@@ -426,8 +426,8 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 		return err
 	}
 
-	g.P("func (ee *", ss.eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
-	g.P("	switch v := ee.", ss.eventTypeField.GoName, ".Type.(type) {")
+	g.P("func (ee *", ss.eventTypeField.Message.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
+	g.P("	switch v := ee.Type.(type) {")
 	for _, field := range ss.eventTypeField.Message.Fields {
 		g.P("	case *", field.GoIdent, ":")
 		g.P("		return v.", field.GoName)
@@ -435,6 +435,18 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("	default:")
 	g.P("		return nil")
 	g.P("	}")
+	g.P("}")
+
+	g.P("func (ee *", ss.eventTypeField.Message.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
+	g.P("	tt := ee.UnwrapPSMEvent()")
+	g.P("   if tt == nil {")
+	g.P("     return \"<nil>\"")
+	g.P("   }")
+	g.P("	return tt.PSMEventKey()")
+	g.P("}")
+
+	g.P("func (ee *", ss.eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
+	g.P("   return ee.", ss.eventTypeField.GoName, ".UnwrapPSMEvent()")
 	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") {")

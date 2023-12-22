@@ -110,6 +110,19 @@ type StateMachine[
 	spec        TableSpec[S, ST, E, IE]
 	conversions EventTypeConverter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
+
+	hooks []StateHook[S, ST, E, IE]
+}
+
+type StateHook[
+	S IState[ST], // Outer State Entity
+	ST IStatusEnum, // Status Enum in State Entity
+	E IEvent[IE], // Event Wrapper, with IDs and Metadata
+	IE IInnerEvent, // Inner Event, the typed event
+] func(context.Context, sqrlx.Transaction, S, E) error
+
+func (sm *StateMachine[S, ST, E, IE]) AddHook(hook StateHook[S, ST, E, IE]) {
+	sm.hooks = append(sm.hooks, hook)
 }
 
 // stateMachineConfigBuilder allows the generated code to build a default
@@ -312,6 +325,12 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	_, err = tx.Insert(ctx, sq.Insert(sm.spec.EventTable).SetMap(eventSetMap))
 	if err != nil {
 		return fmt.Errorf("insert event: %w", err)
+	}
+
+	for _, hook := range sm.hooks {
+		if err := hook(ctx, tx, state, event); err != nil {
+			return fmt.Errorf("hook: %w", err)
+		}
 	}
 	return nil
 
