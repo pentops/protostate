@@ -130,8 +130,8 @@ func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
 	return nil
 }
 
-func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
-	switch v := ee.Event.Type.(type) {
+func (ee *BarEventType) UnwrapPSMEvent() BarPSMEvent {
+	switch v := ee.Type.(type) {
 	case *BarEventType_Created_:
 		return v.Created
 	case *BarEventType_Updated_:
@@ -141,6 +141,16 @@ func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
 	default:
 		return nil
 	}
+}
+func (ee *BarEventType) PSMEventKey() BarPSMEventKey {
+	tt := ee.UnwrapPSMEvent()
+	if tt == nil {
+		return "<nil>"
+	}
+	return tt.PSMEventKey()
+}
+func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
+	return ee.Event.UnwrapPSMEvent()
 }
 func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) {
 	switch v := inner.(type) {

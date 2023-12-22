@@ -150,8 +150,8 @@ func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
 	return nil
 }
 
-func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
-	switch v := ee.Event.Type.(type) {
+func (ee *FooEventType) UnwrapPSMEvent() FooPSMEvent {
+	switch v := ee.Type.(type) {
 	case *FooEventType_Created_:
 		return v.Created
 	case *FooEventType_Updated_:
@@ -161,6 +161,16 @@ func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
 	default:
 		return nil
 	}
+}
+func (ee *FooEventType) PSMEventKey() FooPSMEventKey {
+	tt := ee.UnwrapPSMEvent()
+	if tt == nil {
+		return "<nil>"
+	}
+	return tt.PSMEventKey()
+}
+func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
+	return ee.Event.UnwrapPSMEvent()
 }
 func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) {
 	switch v := inner.(type) {
