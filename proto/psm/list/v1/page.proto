@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package psm.list.v1;
+
+option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
+
+message PageRequest {
+  optional string token = 1;
+  optional int64  limit = 2;
+}
+
+message PageResponse {
+  string next_token         = 1;
+  int64  total_page_records = 2;
+}

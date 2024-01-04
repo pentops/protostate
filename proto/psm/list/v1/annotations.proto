@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package psm.list.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
+
+extend google.protobuf.MessageOptions {
+  optional MessageConstraint message = 86510000;
+}
+
+message MessageConstraint {
+}
+
+extend google.protobuf.FieldOptions {
+  optional FieldConstraint field = 86510001;
+}
+
+extend google.protobuf.OneofOptions {
+  optional OneofConstraint oneof = 86510002;
+}
+
+message OneofConstraint {
+  FilteringConstraint filtering = 10;
+}
+
+message FieldConstraint {
+  oneof type {
+    NumericRules   double    =  1;
+    NumericRules   fixed32   =  2;
+    NumericRules   fixed64   =  3;
+    NumericRules   float     =  4;
+    NumericRules   int32     =  5;
+    NumericRules   int64     =  6;
+    NumericRules   sfixed32  =  7;
+    NumericRules   sfixed64  =  8;
+    NumericRules   sint32    =  9;
+    NumericRules   sint64    = 10;
+    NumericRules   uint32    = 11;
+    NumericRules   uint64    = 12;
+    BoolRules      bool      = 13;
+    StringRules    string    = 14;
+
+    EnumRules      enum      = 20;
+
+    TimestampRules timestamp = 30;
+  }
+}
+
+message FilteringConstraint {
+  bool filterable = 1;
+  bool exclude    = 2;
+}
+
+message SortingConstraint {
+  bool sortable     = 1;
+  bool default_sort = 2;
+}
+
+message SearchingConstraint {
+  bool searchable = 1;
+}
+
+message NumericRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+  SortingConstraint   sorting   = 11;
+}
+
+message BoolRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+}
+
+message StringRules {
+  oneof well_known {
+    OpenTextRules   open_text   = 1;
+    DateRules       date        = 2;
+    ForeignKeyRules foreign_key = 3;
+  }
+}
+
+message OpenTextRules {
+  string field_override = 1;
+
+  SearchingConstraint searching = 10;
+}
+
+message DateRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+}
+
+message ForeignKeyRules {
+  oneof type {
+    UniqueStringRules unique_string = 1;
+    UuidRules         uuid          = 2;
+  }
+}
+
+message UniqueStringRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+}
+
+message UuidRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+}
+
+message EnumRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+}
+
+message TimestampRules {
+  string field_override = 1;
+
+  FilteringConstraint filtering = 10;
+  SortingConstraint   sorting   = 11;
+}
+
