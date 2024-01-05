@@ -216,10 +216,10 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
 	if ok && reqPage != nil {
-		if reqPage.Token != "" {
+		if reqPage.GetToken() != "" {
 			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
 
-			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.Token)
+			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
 			if err != nil {
 				return fmt.Errorf("decode token: %w", err)
 			}
@@ -317,9 +317,9 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		list.Append(protoreflect.ValueOf(rowMessage))
 	}
 
-	pageResponse := &psml_pb.PageResponse{
-		NextToken: nextToken,
-		FinalPage: nextToken == "",
+	pageResponse := &psml_pb.PageResponse{}
+	if nextToken != "" {
+		pageResponse.NextToken = &nextToken
 	}
 
 	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
