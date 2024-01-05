@@ -280,10 +280,10 @@ func TestFooPagination(t *testing.T) {
 
 		pageResp = res.Page
 
-		if pageResp.NextToken == "" {
+		if pageResp.GetNextToken() == "" {
 			t.Fatalf("NextToken should not be empty")
 		}
-		if pageResp.FinalPage {
+		if pageResp.NextToken == nil {
 			t.Fatalf("Should not be the final page")
 		}
 
