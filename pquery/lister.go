@@ -10,9 +10,9 @@ import (
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	sq "github.com/elgris/sqrl"
-	query_pb "github.com/pentops/listify-go/query/v1"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
+	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -87,7 +87,7 @@ func NewLister[
 			return nil, fmt.Errorf("field %s is a '%s', but should be a message", field.Name(), field.Kind())
 		}
 
-		if msg.FullName() == "listify.query.v1.PageResponse" {
+		if msg.FullName() == "psm.list.v1.PageResponse" {
 			ll.pageResponseField = field
 			continue
 		}
@@ -108,7 +108,7 @@ func NewLister[
 	}
 
 	if ll.pageResponseField == nil {
-		return nil, fmt.Errorf("no page field in response, must have a listify.query.v1.PageResponse")
+		return nil, fmt.Errorf("no page field in response, must have a psm.list.v1.PageResponse")
 	}
 
 	messageFields := ll.arrayField.Message().Fields()
@@ -138,14 +138,14 @@ func NewLister[
 			continue
 		}
 
-		if msg.FullName() == "listify.query.v1.PageRequest" {
+		if msg.FullName() == "psm.list.v1.PageRequest" {
 			ll.pageRequestField = field
 			continue
 		}
 	}
 
 	if ll.pageRequestField == nil {
-		return nil, fmt.Errorf("no page field in request, must have a listify.query.v1.PageRequest")
+		return nil, fmt.Errorf("no page field in request, must have a psm.list.v1.PageRequest")
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
@@ -214,12 +214,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 
-	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*query_pb.PageRequest)
+	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
 	if ok && reqPage != nil {
-		if reqPage.Token != "" {
+		if reqPage.GetToken() != "" {
 			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
 
-			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.Token)
+			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
 			if err != nil {
 				return fmt.Errorf("decode token: %w", err)
 			}
@@ -317,9 +317,9 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		list.Append(protoreflect.ValueOf(rowMessage))
 	}
 
-	pageResponse := &query_pb.PageResponse{
-		NextToken: nextToken,
-		FinalPage: nextToken == "",
+	pageResponse := &psml_pb.PageResponse{}
+	if nextToken != "" {
+		pageResponse.NextToken = &nextToken
 	}
 
 	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))

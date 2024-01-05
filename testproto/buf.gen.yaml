@@ -9,7 +9,7 @@ plugins:
     opt:
       - module=github.com/pentops/protostate/testproto
 
-  - name: go-short-enum
+  - name: go-sugar
     out: .
     opt:
       - module=github.com/pentops/protostate/testproto

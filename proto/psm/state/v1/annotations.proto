@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package psm.v1;
+package psm.state.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/pentops/protostate/gen/v1/psm_pb";
+option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 
 extend google.protobuf.MessageOptions {
   StateObjectOptions state = 90443400;

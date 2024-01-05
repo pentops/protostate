@@ -11,8 +11,3 @@ deps:
     repository: googleapis
     commit: a86849a25cc04f4dbe9b15ddddfbc488
     digest: shake256:e19143328f8cbfe13fc226aeee5e63773ca494693a72740a7560664270039a380d94a1344234b88c7691311460df9a9b1c2982190d0a2612eae80368718e1943
-  - remote: buf.build
-    owner: pentops
-    repository: psm
-    commit: a6d90bfa8a004e4bb46eeeb6cde8e49f
-    digest: shake256:f7e2afee34cbd7357d15a01d1bac845a666c485a6ab43915fdf2b76b75e762c0883f3a60e6600fc93024b88b1dcb4bbc432ca7d0c25b54fed0a83df991e830cc

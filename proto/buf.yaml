@@ -1,5 +1,10 @@
 version: v1
 name: buf.build/pentops/psm
+
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+
 breaking:
   use:
     - FILE

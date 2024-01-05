@@ -5,24 +5,24 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "listify/query/v1/page.proto";
-import "psm/v1/annotations.proto";
+import "psm/list/v1/page.proto";
+import "psm/state/v1/annotations.proto";
 
 option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 
 // BarService is a little strange, it requires a lot of overrides for defaults
 // when building the state query and state machine.
 service BarService {
-  option (psm.v1.state_query).name = "bar";
+  option (psm.state.v1.state_query).name = "bar";
 
   rpc GetBar(GetBarRequest) returns (GetBarResponse) {
     option (google.api.http) = {get: "/test/v1/bar/{bar_id}"};
-    option (psm.v1.state_query_method).get = true;
+    option (psm.state.v1.state_query_method).get = true;
   }
 
   rpc ListBars(ListBarsRequest) returns (ListBarsResponse) {
     option (google.api.http) = {get: "/test/v1/bars"};
-    option (psm.v1.state_query_method).list = true;
+    option (psm.state.v1.state_query_method).list = true;
   }
 }
 
@@ -36,7 +36,7 @@ message GetBarResponse {
 }
 
 message BarState {
-  option (psm.v1.state).name = "bar";
+  option (psm.state.v1.state).name = "bar";
 
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
   string tenant_id = 2 [(buf.validate.field).string.uuid = true];
@@ -54,20 +54,20 @@ enum BarStatus {
 }
 
 message BarEvent {
-  option (psm.v1.event).name = "bar";
+  option (psm.state.v1.event).name = "bar";
 
   StrangeMetadata metadata = 1 [
-    (psm.v1.event_field).metadata = true,
+    (psm.state.v1.event_field).metadata = true,
     (buf.validate.field).required = true
   ];
 
   string bar_id = 2 [
-    (psm.v1.event_field).state_key = true,
+    (psm.state.v1.event_field).state_key = true,
     (buf.validate.field).string.uuid = true
   ];
 
   BarEventType event = 3 [
-    (psm.v1.event_field).event_type = true,
+    (psm.state.v1.event_field).event_type = true,
     (buf.validate.field).required = true
   ];
 }
@@ -99,20 +99,20 @@ message BarEventType {
 
 message ListBarsRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  listify.query.v1.PageRequest page = 2;
+  psm.list.v1.PageRequest  page = 2;
 }
 
 message ListBarsResponse {
   repeated BarState bars = 1;
-  listify.query.v1.PageResponse page = 2;
+  psm.list.v1.PageResponse page = 2;
 }
 
 message ListBarEventsRequest {
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  listify.query.v1.PageRequest page = 2;
+  psm.list.v1.PageRequest  page = 2;
 }
 
 message ListBarEventsResponse {
   repeated BarEvent events = 1;
-  listify.query.v1.PageResponse page = 2;
+  psm.list.v1.PageResponse page = 2;
 }

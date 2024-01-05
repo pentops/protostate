@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package psm.list.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
+
+message QueryRequest {
+  repeated Search search  = 1;
+  repeated Sort   sort    = 2;
+  repeated Filter filters = 3;
+}
+
+message Search {
+  string field = 1;
+  string value = 2;
+}
+
+message Sort {
+  string field      = 1;
+  bool   descending = 2;
+}
+
+message Filter {
+  string field = 1;
+
+  oneof filter_value {
+    option (buf.validate.oneof).required = true;
+
+    string value = 2;
+    Range  range = 3;
+  }
+}
+
+message Range {
+	string min = 1;
+	string max = 2;
+}
