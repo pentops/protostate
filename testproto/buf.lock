@@ -14,5 +14,5 @@ deps:
   - remote: buf.build
     owner: pentops
     repository: psm
-    commit: 17cf880bfeca4fe1b8a3013efe26a367
-    digest: shake256:53c5dd8d36c9e3b902d208508443e6c3946de3125fabbdc36fa69dfb5713a85194bacd8c30fd69b73539c53eb60f7e097b59b4315b4491b4c7b107cc3db2426f
+    commit: a6d90bfa8a004e4bb46eeeb6cde8e49f
+    digest: shake256:f7e2afee34cbd7357d15a01d1bac845a666c485a6ab43915fdf2b76b75e762c0883f3a60e6600fc93024b88b1dcb4bbc432ca7d0c25b54fed0a83df991e830cc
