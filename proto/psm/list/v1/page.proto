@@ -10,6 +10,5 @@ message PageRequest {
 }
 
 message PageResponse {
-  string next_token         = 1;
-  int64  total_page_records = 2;
+  optional string next_token = 1;
 }
