@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/iancoleman/strcase"
-	"github.com/pentops/protostate/gen/v1/psm_pb"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 )
 
 const version = "1.0"

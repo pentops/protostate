@@ -7,8 +7,8 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
-	query_pb "github.com/pentops/listify-go/query/v1"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -262,7 +262,7 @@ func TestFooPagination(t *testing.T) {
 		}
 	})
 
-	var pageResp *query_pb.PageResponse
+	var pageResp *psml_pb.PageResponse
 
 	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 
@@ -292,7 +292,7 @@ func TestFooPagination(t *testing.T) {
 	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 
 		req := &testpb.ListFoosRequest{
-			Page: &query_pb.PageRequest{
+			Page: &psml_pb.PageRequest{
 				Token: pageResp.NextToken,
 			},
 		}
