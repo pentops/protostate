@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   golangci:
-    name: lint
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -23,3 +23,6 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.54
+
+    name: Test
+    run: docker compose -f docker.compose.test.yaml up --abort-on-container-exit test
