@@ -144,7 +144,7 @@ func NewLister[
 			ll.pageRequestField = field
 			continue
 		case "psm.list.v1.QueryRequest":
-			ll.queryReequestField = field
+			ll.queryRequestField = field
 			continue
 		}
 	}
@@ -153,7 +153,7 @@ func NewLister[
 		return nil, fmt.Errorf("no page field in request, must have a psm.list.v1.PageRequest")
 	}
 
-	if ll.queryReequestField == nil {
+	if ll.queryRequestField == nil {
 		return nil, fmt.Errorf("no query field in request, must have a psm.list.v1.QueryRequest")
 	}
 
