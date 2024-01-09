@@ -52,10 +52,10 @@ type Lister[
 ] struct {
 	pageSize uint64
 
-	arrayField         protoreflect.FieldDescriptor
-	pageResponseField  protoreflect.FieldDescriptor
-	pageRequestField   protoreflect.FieldDescriptor
-	queryReequestField protoreflect.FieldDescriptor
+	arrayField        protoreflect.FieldDescriptor
+	pageResponseField protoreflect.FieldDescriptor
+	pageRequestField  protoreflect.FieldDescriptor
+	queryRequestField protoreflect.FieldDescriptor
 
 	defaultSortFields []sortSpec
 
