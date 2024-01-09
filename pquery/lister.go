@@ -52,9 +52,10 @@ type Lister[
 ] struct {
 	pageSize uint64
 
-	arrayField        protoreflect.FieldDescriptor
-	pageResponseField protoreflect.FieldDescriptor
-	pageRequestField  protoreflect.FieldDescriptor
+	arrayField         protoreflect.FieldDescriptor
+	pageResponseField  protoreflect.FieldDescriptor
+	pageRequestField   protoreflect.FieldDescriptor
+	queryReequestField protoreflect.FieldDescriptor
 
 	defaultSortFields []sortSpec
 
@@ -138,14 +139,22 @@ func NewLister[
 			continue
 		}
 
-		if msg.FullName() == "psm.list.v1.PageRequest" {
+		switch msg.FullName() {
+		case "psm.list.v1.PageRequest":
 			ll.pageRequestField = field
+			continue
+		case "psm.list.v1.QueryRequest":
+			ll.queryReequestField = field
 			continue
 		}
 	}
 
 	if ll.pageRequestField == nil {
 		return nil, fmt.Errorf("no page field in request, must have a psm.list.v1.PageRequest")
+	}
+
+	if ll.queryReequestField == nil {
+		return nil, fmt.Errorf("no query field in request, must have a psm.list.v1.QueryRequest")
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
