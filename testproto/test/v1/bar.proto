@@ -6,6 +6,7 @@ import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "psm/list/v1/page.proto";
+import "psm/list/v1/query.proto";
 import "psm/state/v1/annotations.proto";
 
 option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
@@ -100,6 +101,7 @@ message BarEventType {
 message ListBarsRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
   psm.list.v1.PageRequest  page = 2;
+  psm.list.v1.QueryRequest query = 3;
 }
 
 message ListBarsResponse {
@@ -110,6 +112,7 @@ message ListBarsResponse {
 message ListBarEventsRequest {
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
   psm.list.v1.PageRequest  page = 2;
+  psm.list.v1.QueryRequest query = 3;
 }
 
 message ListBarEventsResponse {
