@@ -50,7 +50,8 @@ message FieldConstraint {
 
 message FilteringConstraint {
   bool filterable = 1;
-  bool exclude    = 2;
+
+  repeated string default_filters = 2;
 }
 
 message SortingConstraint {
@@ -63,15 +64,11 @@ message SearchingConstraint {
 }
 
 message NumericRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
   SortingConstraint   sorting   = 11;
 }
 
 message BoolRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
 }
 
@@ -84,14 +81,10 @@ message StringRules {
 }
 
 message OpenTextRules {
-  string field_override = 1;
-
   SearchingConstraint searching = 10;
 }
 
 message DateRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
 }
 
@@ -103,26 +96,18 @@ message ForeignKeyRules {
 }
 
 message UniqueStringRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
 }
 
 message UuidRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
 }
 
 message EnumRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
 }
 
 message TimestampRules {
-  string field_override = 1;
-
   FilteringConstraint filtering = 10;
   SortingConstraint   sorting   = 11;
 }
