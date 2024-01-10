@@ -182,7 +182,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
-		// TODO: Dynamic Sorts
+	// TODO: Dynamic Sorts
 	sortFields := ll.defaultSortFields
 
 	for _, sortField := range sortFields {
