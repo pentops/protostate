@@ -67,8 +67,8 @@ github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb h1:GpLLtwdg/538OH
 github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb/go.mod h1:FNquTq/mafLEDD+w/yiiQKIuAuQycFD9zhZ+pbAivc0=
 github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576 h1:A/vY7Qiv1S/1mUtacZQVoXicaYiiaSR7PInSUcaMOpA=
 github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
-github.com/pentops/outbox.pg.go v0.0.0-20231212041111-be5dfe6bec65 h1:4N2cEDQe6OS7T4cTXRto5URVJF8w6Z7KDkFQKI2wAes=
-github.com/pentops/outbox.pg.go v0.0.0-20231212041111-be5dfe6bec65/go.mod h1:yMefMPLP0eBAxdELkAgjTtnhWFfc0Wk2H2kePByDHRo=
+github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7 h1:rBLoeUeI1acxd6GbJjJbK6CeVF/q/Xab+xqQYePvNSw=
+github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7/go.mod h1:yMefMPLP0eBAxdELkAgjTtnhWFfc0Wk2H2kePByDHRo=
 github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb h1:1OIQFqb6RU4OmKXdonwvYHNex0JPQy5gOs0eZTeIwfI=
 github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pentops/sqrlx.go v0.0.0-20231212035131-ba083cf9eeb0 h1:34Tf5f+LsimhIHfvwbhvJXoT0ECKchPvKWFhW+G1Zy8=

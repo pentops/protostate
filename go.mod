@@ -11,7 +11,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb
 	github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576
-	github.com/pentops/outbox.pg.go v0.0.0-20231212041111-be5dfe6bec65
+	github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7
 	github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb
 	github.com/pentops/sqrlx.go v0.0.0-20231212035131-ba083cf9eeb0
 	google.golang.org/genproto/googleapis/api v0.0.0-20231127180814-3a041ad873d4

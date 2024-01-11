@@ -23,7 +23,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.54
+          version: latest
 
       - name: Test
         run: docker compose -f docker.compose.test.yaml up --abort-on-container-exit test
