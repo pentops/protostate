@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
@@ -69,7 +68,6 @@ func NewLister[
 	REQ ListRequest,
 	RES ListResponse,
 ](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
-
 	ll := &Lister[REQ, RES]{
 		pageSize:   uint64(20),
 		tableName:  spec.TableName,
@@ -112,23 +110,10 @@ func NewLister[
 		return nil, fmt.Errorf("no page field in response, must have a psm.list.v1.PageResponse")
 	}
 
-	messageFields := ll.arrayField.Message().Fields()
-	for i := 0; i < messageFields.Len(); i++ {
-		field := messageFields.Get(i)
-		if strings.HasPrefix(string(field.Name()), "created") {
-			ll.defaultSortFields = []sortSpec{{
-				field: field,
-				desc:  true,
-			}}
-			break
-		}
+	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
-		if len(ll.defaultSortFields) == 0 && strings.HasSuffix(string(field.Name()), "_id") {
-			ll.defaultSortFields = append(ll.defaultSortFields, sortSpec{
-				field: field,
-				desc:  false,
-			})
-		}
+	if len(ll.defaultSortFields) == 0 {
+		return nil, fmt.Errorf("no default sort field found, must have at least one field annotated as default sort")
 	}
 
 	requestFields := descriptors.request.Fields()
@@ -166,6 +151,86 @@ func NewLister[
 	}
 
 	return ll, nil
+}
+
+func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
+	var defaultSortFields []sortSpec
+
+	for i := 0; i < messageFields.Len(); i++ {
+		field := messageFields.Get(i)
+		sortOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+
+		if sortOpts != nil {
+			isDefaultSort := false
+
+			switch field.Kind() {
+			case protoreflect.DoubleKind:
+				if sortOpts.GetDouble().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Fixed32Kind:
+				if sortOpts.GetFixed32().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Fixed64Kind:
+				if sortOpts.GetFixed64().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.FloatKind:
+				if sortOpts.GetFloat().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Int32Kind:
+				if sortOpts.GetInt32().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Int64Kind:
+				if sortOpts.GetInt64().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Sfixed32Kind:
+				if sortOpts.GetSfixed32().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Sfixed64Kind:
+				if sortOpts.GetSfixed64().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Sint32Kind:
+				if sortOpts.GetSint32().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Sint64Kind:
+				if sortOpts.GetSint64().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Uint32Kind:
+				if sortOpts.GetUint32().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.Uint64Kind:
+				if sortOpts.GetUint64().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			case protoreflect.MessageKind:
+				if field.Message().FullName() == "google.protobuf.Timestamp" &&
+					sortOpts.GetTimestamp().GetSorting().DefaultSort {
+					isDefaultSort = true
+				}
+			}
+
+			if isDefaultSort {
+				defaultSortFields = append(defaultSortFields, sortSpec{
+					field: field,
+					desc:  true,
+				})
+			}
+		} else if field.Kind() == protoreflect.MessageKind {
+			defaultSortFields = append(defaultSortFields, buildDefaultSorts(field.Message().Fields())...)
+		}
+	}
+
+	return defaultSortFields
 }
 
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {

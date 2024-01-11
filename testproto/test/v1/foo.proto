@@ -5,6 +5,7 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "psm/list/v1/annotations.proto";
 import "psm/list/v1/page.proto";
 import "psm/list/v1/query.proto";
 import "psm/state/v1/annotations.proto";
@@ -46,16 +47,29 @@ message FooState {
   option (psm.state.v1.state).name = "foo";
 
   string foo_id = 1 [(buf.validate.field).string.uuid = true];
-  optional string tenant_id = 2 [(buf.validate.field).string.uuid = true];
+  optional string tenant_id = 2 [
+    (buf.validate.field).string.uuid = true,
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+  ];
 
-  string name = 3;
-  string field = 4;
+  string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 
-  string last_event_id = 6;
+  string last_event_id = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
 
-  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp created_at = 7 [
+    (psm.list.v1.field).timestamp = {
+      filtering: { filterable : true },
+      sorting: { sortable: true, default_sort: true }
+    }
+  ];
 
-  FooStatus status = 5;
+  FooStatus status = 5 [
+    (psm.list.v1.field).enum.filtering = {
+      filterable: true,
+      default_filters: ["FOO_STATUS_ACTIVE"]
+    }
+  ];
 }
 
 enum FooStatus {
@@ -73,13 +87,15 @@ message FooEvent {
   ];
 
   string foo_id = 2 [
+    (buf.validate.field).string.uuid = true,
     (psm.state.v1.event_field).state_key = true,
-    (buf.validate.field).string.uuid = true
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   optional string tenant_id = 4 [
+    (buf.validate.field).string.uuid = true,
     (psm.state.v1.event_field).state_field = true,
-    (buf.validate.field).string.uuid = true
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   FooEventType event = 3 [
@@ -90,16 +106,25 @@ message FooEvent {
 
 message Metadata {
   string event_id = 1;
-  google.protobuf.Timestamp timestamp = 2;
+
+  google.protobuf.Timestamp timestamp = 2 [
+    (psm.list.v1.field).timestamp = {
+      filtering: { filterable : true },
+      sorting: { sortable: true, default_sort: true }
+    }
+  ];
+
   Actor actor = 3;
 }
 
 message Actor {
-  string actor_id = 1;
+  string actor_id = 1[(psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true];
 }
 
 message FooEventType {
   oneof type {
+    option (psm.list.v1.oneof).filtering.filterable = true;
+
     Created created = 1;
     Updated updated = 2;
     Deleted deleted = 3;

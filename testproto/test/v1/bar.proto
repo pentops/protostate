@@ -5,6 +5,7 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "psm/list/v1/annotations.proto";
 import "psm/list/v1/page.proto";
 import "psm/list/v1/query.proto";
 import "psm/state/v1/annotations.proto";
@@ -40,12 +41,20 @@ message BarState {
   option (psm.state.v1.state).name = "bar";
 
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  string tenant_id = 2 [(buf.validate.field).string.uuid = true];
+  string tenant_id = 2 [
+    (buf.validate.field).string.uuid = true,
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+  ];
 
-  string name = 3;
-  string field = 4;
+  string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 
-  BarStatus status = 5;
+  BarStatus status = 5 [
+    (psm.list.v1.field).enum.filtering = {
+      filterable: true,
+      default_filters: ["BAR_STATUS_ACTIVE"]
+    }
+  ];
 }
 
 enum BarStatus {
@@ -63,8 +72,9 @@ message BarEvent {
   ];
 
   string bar_id = 2 [
+    (buf.validate.field).string.uuid = true,
     (psm.state.v1.event_field).state_key = true,
-    (buf.validate.field).string.uuid = true
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   BarEventType event = 3 [
@@ -75,11 +85,18 @@ message BarEvent {
 
 message StrangeMetadata {
   string event_id = 1;
-  google.protobuf.Timestamp timestamp = 2;
+  google.protobuf.Timestamp timestamp = 2 [
+    (psm.list.v1.field).timestamp = {
+      filtering: { filterable : true },
+      sorting: { sortable: true, default_sort: true }
+    }
+  ];
 }
 
 message BarEventType {
   oneof type {
+    option (psm.list.v1.oneof).filtering.filterable = true;
+
     Created created = 1;
     Updated updated = 2;
     Deleted deleted = 3;
