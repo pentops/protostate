@@ -168,6 +168,73 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	return g
 }
 
+func validateListMethod(method *protogen.Method) error {
+
+	hasPageRequest := false
+	hasQueryRequest := false
+
+	requestFields := method.Input.Desc.Fields()
+	for i := 0; i < requestFields.Len(); i++ {
+		field := requestFields.Get(i)
+		msg := field.Message()
+		if msg == nil {
+			continue
+		}
+
+		switch msg.FullName() {
+		case "psm.list.v1.PageRequest":
+			hasPageRequest = true
+		case "psm.list.v1.QueryRequest":
+			hasQueryRequest = true
+		}
+	}
+
+	if !hasPageRequest {
+		return fmt.Errorf("no page field in request, %s must have a psm.list.v1.PageRequest", method.Input.Desc.FullName())
+	}
+
+	if !hasQueryRequest {
+		return fmt.Errorf("no query field in request, %s must have a psm.list.v1.QueryRequest", method.Input.Desc.FullName())
+	}
+
+	hasPageResponse := false
+	hasArray := false
+
+	responseFields := method.Output.Desc.Fields()
+	for i := 0; i < responseFields.Len(); i++ {
+		field := responseFields.Get(i)
+		msg := field.Message()
+		if msg == nil {
+			return fmt.Errorf("unexpected field %s, is a '%s', but should be a message", field.Name(), field.Kind())
+		}
+
+		if msg.FullName() == "psm.list.v1.PageResponse" {
+			hasPageResponse = true
+			continue
+		}
+
+		if field.Cardinality() == protoreflect.Repeated {
+			if hasArray {
+				return fmt.Errorf("multiple array/repeated fields in response, %s should have exactly one repeated field", method.Output.Desc.FullName())
+			}
+
+			hasArray = true
+			continue
+		}
+	}
+
+	if !hasPageResponse {
+		return fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", method.Output.Desc.FullName())
+	}
+
+	if !hasArray {
+		return fmt.Errorf("no array field in response, %s must have a single repeated field", method.Output.Desc.FullName())
+	}
+
+	return nil
+
+}
+
 func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryService) error {
 
 	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
@@ -181,6 +248,16 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 
 	if service.listMethod == nil {
 		return fmt.Errorf("service %s does not have a list method", service.name)
+	}
+
+	if err := validateListMethod(service.listMethod); err != nil {
+		return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listMethod.Desc.FullName(), err)
+	}
+
+	if service.listEventsMethod == nil {
+		if err := validateListMethod(service.listEventsMethod); err != nil {
+			return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listEventsMethod.Desc.FullName(), err)
+		}
 	}
 
 	goServiceName := stateGoName(service.name)
