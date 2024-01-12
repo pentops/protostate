@@ -2,6 +2,8 @@ FROM golang:1.21.4 AS builder
 
 WORKDIR /src
 
+LABEL org.opencontainers.image.source = "https://github.com/pentops/protostate"
+
 ADD . .
 ARG VERSION
 RUN CGO_ENABLED=0 \
