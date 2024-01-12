@@ -254,7 +254,7 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 		return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listMethod.Desc.FullName(), err)
 	}
 
-	if service.listEventsMethod == nil {
+	if service.listEventsMethod != nil {
 		if err := validateListMethod(service.listEventsMethod); err != nil {
 			return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listEventsMethod.Desc.FullName(), err)
 		}
