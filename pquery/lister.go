@@ -107,13 +107,13 @@ func NewLister[
 	}
 
 	if ll.pageResponseField == nil {
-		return nil, fmt.Errorf("no page field in response, must have a psm.list.v1.PageResponse")
+		return nil, fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", descriptors.response.FullName())
 	}
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
 	if len(ll.defaultSortFields) == 0 {
-		return nil, fmt.Errorf("no default sort field found, must have at least one field annotated as default sort")
+		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort", descriptors.response.FullName())
 	}
 
 	requestFields := descriptors.request.Fields()
@@ -135,11 +135,11 @@ func NewLister[
 	}
 
 	if ll.pageRequestField == nil {
-		return nil, fmt.Errorf("no page field in request, must have a psm.list.v1.PageRequest")
+		return nil, fmt.Errorf("no page field in request, %s must have a psm.list.v1.PageRequest", descriptors.request.FullName())
 	}
 
 	if ll.queryRequestField == nil {
-		return nil, fmt.Errorf("no query field in request, must have a psm.list.v1.QueryRequest")
+		return nil, fmt.Errorf("no query field in request, %s must have a psm.list.v1.QueryRequest", descriptors.request.FullName())
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
