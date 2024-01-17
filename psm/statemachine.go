@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -314,6 +315,11 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		Set(sm.spec.StateDataColumn, stateJSON))
 
 	if err != nil {
+		log.WithFields(ctx, map[string]interface{}{
+			"stateKeyMap": stateKeyMap,
+			"stateSetMap": stateSetMap,
+			"error":       err.Error(),
+		}).Error("failed to upsert state")
 		return fmt.Errorf("upsert state: %w", err)
 	}
 

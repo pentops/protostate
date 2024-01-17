@@ -49,6 +49,15 @@ type Lister[
 	REQ ListRequest,
 	RES ListResponse,
 ] struct {
+	listReflection
+
+	tableName  string
+	dataColumn string
+	auth       AuthProvider
+	authJoin   []*LeftJoin
+}
+
+type listReflection struct {
 	pageSize uint64
 
 	arrayField        protoreflect.FieldDescriptor
@@ -57,27 +66,18 @@ type Lister[
 	queryRequestField protoreflect.FieldDescriptor
 
 	defaultSortFields []sortSpec
-
-	tableName  string
-	dataColumn string
-	auth       AuthProvider
-	authJoin   []*LeftJoin
 }
 
-func NewLister[
-	REQ ListRequest,
-	RES ListResponse,
-](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
-	ll := &Lister[REQ, RES]{
-		pageSize:   uint64(20),
-		tableName:  spec.TableName,
-		dataColumn: spec.DataColumn,
-		auth:       spec.Auth,
-		authJoin:   spec.AuthJoin,
-	}
+func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor) error {
+	_, err := buildListReflection(req, res)
+	return err
+}
 
-	descriptors := newMethodDescriptor[REQ, RES]()
-	fields := descriptors.response.Fields()
+func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor) (*listReflection, error) {
+	ll := listReflection{
+		pageSize: uint64(20),
+	}
+	fields := res.Fields()
 
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
@@ -107,16 +107,16 @@ func NewLister[
 	}
 
 	if ll.pageResponseField == nil {
-		return nil, fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", descriptors.response.FullName())
+		return nil, fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", res.FullName())
 	}
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
 	if len(ll.defaultSortFields) == 0 {
-		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort", descriptors.response.FullName())
+		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort", res.FullName())
 	}
 
-	requestFields := descriptors.request.Fields()
+	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
 		field := requestFields.Get(i)
 		msg := field.Message()
@@ -135,11 +135,11 @@ func NewLister[
 	}
 
 	if ll.pageRequestField == nil {
-		return nil, fmt.Errorf("no page field in request, %s must have a psm.list.v1.PageRequest", descriptors.request.FullName())
+		return nil, fmt.Errorf("no page field in request, %s must have a psm.list.v1.PageRequest", req.FullName())
 	}
 
 	if ll.queryRequestField == nil {
-		return nil, fmt.Errorf("no query field in request, %s must have a psm.list.v1.QueryRequest", descriptors.request.FullName())
+		return nil, fmt.Errorf("no query field in request, %s must have a psm.list.v1.QueryRequest", req.FullName())
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
@@ -149,6 +149,28 @@ func NewLister[
 			ll.pageSize = *repeated.MaxItems
 		}
 	}
+
+	return &ll, nil
+}
+
+func NewLister[
+	REQ ListRequest,
+	RES ListResponse,
+](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
+	ll := &Lister[REQ, RES]{
+		tableName:  spec.TableName,
+		dataColumn: spec.DataColumn,
+		auth:       spec.Auth,
+		authJoin:   spec.AuthJoin,
+	}
+
+	descriptors := newMethodDescriptor[REQ, RES]()
+
+	listFields, err := buildListReflection(descriptors.request, descriptors.response)
+	if err != nil {
+		return nil, err
+	}
+	ll.listReflection = *listFields
 
 	return ll, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/bufbuild/protovalidate-go"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/outbox.pg.go/outbox"
 )
@@ -43,6 +44,8 @@ type Eventer[
 	EventLabel  func(IE) string
 
 	Transitions []ITransition[S, ST, E, IE]
+
+	validator *protovalidate.Validator
 }
 
 func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S, ST, E, IE], error) {
@@ -60,12 +63,27 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 	)
 }
 
+func (ee *Eventer[S, ST, E, IE]) ValidateEvent(event E) error {
+	if ee.validator == nil {
+		v, err := protovalidate.New()
+		if err != nil {
+			fmt.Println("failed to initialize validator:", err)
+		}
+		ee.validator = v
+	}
+
+	return ee.validator.Validate(event)
+}
+
 func (ee Eventer[S, ST, E, IE]) Run(
 	ctx context.Context,
 	tx Transaction[S, E],
 	state S,
 	outerEvent E,
 ) error {
+	if err := ee.ValidateEvent(outerEvent); err != nil {
+		return fmt.Errorf("validating event: %w", err)
+	}
 
 	eventQueue := []E{outerEvent}
 
@@ -115,6 +133,11 @@ func (ee Eventer[S, ST, E, IE]) Run(
 			}
 		}
 
+		for _, event := range baton.chainEvents {
+			if err := ee.ValidateEvent(event); err != nil {
+				return fmt.Errorf("validating chained event: %w", err)
+			}
+		}
 		eventQueue = append(eventQueue, baton.chainEvents...)
 	}
 
