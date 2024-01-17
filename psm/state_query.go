@@ -157,7 +157,7 @@ func BuildStateQuerySet[
 
 	lister, err := pquery.NewLister(listSpec)
 	if err != nil {
-		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.EventTable, err)
+		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.StateTable, err)
 	}
 
 	querySet := &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
