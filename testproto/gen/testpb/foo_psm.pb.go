@@ -9,30 +9,6 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
-// State Query Service for %sfoo
-type FooPSMQuerySet = psm.StateQuerySet[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
-]
-
-func NewFooPSMQuerySet(
-	smSpec psm.QuerySpec,
-	options psm.StateQueryOptions,
-) (*FooPSMQuerySet, error) {
-	return psm.BuildStateQuerySet[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
-	](smSpec, options)
-}
-
 // StateObjectOptions: FooPSM
 type FooPSMEventer = psm.Eventer[
 	*FooState,
@@ -207,4 +183,28 @@ func (*FooEventType_Updated) PSMEventKey() FooPSMEventKey {
 }
 func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
 	return FooPSMEventDeleted
+}
+
+// State Query Service for %sfoo
+type FooPSMQuerySet = psm.StateQuerySet[
+	*GetFooRequest,
+	*GetFooResponse,
+	*ListFoosRequest,
+	*ListFoosResponse,
+	*ListFooEventsRequest,
+	*ListFooEventsResponse,
+]
+
+func NewFooPSMQuerySet(
+	smSpec psm.QuerySpec,
+	options psm.StateQueryOptions,
+) (*FooPSMQuerySet, error) {
+	return psm.BuildStateQuerySet[
+		*GetFooRequest,
+		*GetFooResponse,
+		*ListFoosRequest,
+		*ListFoosResponse,
+		*ListFooEventsRequest,
+		*ListFooEventsResponse,
+	](smSpec, options)
 }

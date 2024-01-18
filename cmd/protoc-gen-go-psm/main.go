@@ -41,18 +41,6 @@ func main() {
 	})
 }
 
-type buildingStateSet struct {
-	name         string
-	stateMessage *protogen.Message
-	stateOptions *psm_pb.StateObjectOptions
-	eventMessage *protogen.Message
-	eventOptions *psm_pb.EventObjectOptions
-
-	getMethod        *protogen.Method
-	listMethod       *protogen.Method
-	listEventsMethod *protogen.Method
-}
-
 func stateGoName(specified string) string {
 	// return the exported go name for the string, which is provided as _ case
 	// separated
@@ -62,81 +50,13 @@ func stateGoName(specified string) string {
 // generateFile generates a _psm.pb.go
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
 
-	stateSets := make(map[string]*buildingStateSet)
-	for _, service := range file.Services {
-		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
-
-		for _, method := range service.Methods {
-			methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
-			if methodOpt == nil {
-				continue
-			}
-			if methodOpt.Name == "" {
-				if stateQueryAnnotation == nil || stateQueryAnnotation.Name == "" {
-					gen.Error(fmt.Errorf("service %s method %s does not have a state query name, and no service default", service.GoName, method.GoName))
-					return nil
-				}
-				methodOpt.Name = stateQueryAnnotation.Name
-			}
-
-			methodSet, ok := stateSets[methodOpt.Name]
-			if !ok {
-				methodSet = &buildingStateSet{
-					name: methodOpt.Name,
-				}
-				stateSets[methodOpt.Name] = methodSet
-			}
-
-			if methodOpt.Get {
-				methodSet.getMethod = method
-			} else if methodOpt.List {
-				methodSet.listMethod = method
-			} else if methodOpt.ListEvents {
-				methodSet.listEventsMethod = method
-			} else {
-				gen.Error(fmt.Errorf("service %s method %s does not have a state query type", service.GoName, method.GoName))
-				return nil
-			}
-		}
-
+	sourceMap, err := mapSourceFile(file)
+	if err != nil {
+		gen.Error(err)
+		return nil
 	}
 
-	for _, message := range file.Messages {
-		stateObjectAnnotation, ok := proto.GetExtension(message.Desc.Options(), psm_pb.E_State).(*psm_pb.StateObjectOptions)
-		if ok && stateObjectAnnotation != nil {
-			stateSet, ok := stateSets[stateObjectAnnotation.Name]
-			if !ok {
-				stateSet = &buildingStateSet{
-					name: stateObjectAnnotation.Name,
-				}
-				stateSets[stateObjectAnnotation.Name] = stateSet
-			} else if stateSet.stateMessage != nil || stateSet.stateOptions != nil {
-				gen.Error(fmt.Errorf("duplicate state object name %s", stateObjectAnnotation.Name))
-				continue
-			}
-
-			stateSet.stateMessage = message
-			stateSet.stateOptions = stateObjectAnnotation
-		}
-
-		eventObjectAnnotation, ok := proto.GetExtension(message.Desc.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if ok && eventObjectAnnotation != nil {
-			ss, ok := stateSets[eventObjectAnnotation.Name]
-			if !ok {
-				ss = &buildingStateSet{}
-				stateSets[eventObjectAnnotation.Name] = ss
-			} else if ss.eventMessage != nil || ss.eventOptions != nil {
-				gen.Error(fmt.Errorf("duplicate event object name %s", eventObjectAnnotation.Name))
-				continue
-			}
-
-			ss.eventMessage = message
-			ss.eventOptions = eventObjectAnnotation
-
-		}
-	}
-
-	if len(stateSets) == 0 {
+	if len(sourceMap.stateSets) == 0 && len(sourceMap.querySets) == 0 {
 		return nil
 	}
 
@@ -147,19 +67,55 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	g.P("package ", file.GoPackageName)
 	g.P()
 
-	for _, stateSet := range stateSets {
+	// Build the state sets from the source file
+	convertedStateSets := make(map[string]*queryPkFields)
+	for _, stateSet := range sourceMap.stateSets {
 		converted, err := buildStateSet(stateSet)
 		if err != nil {
 			gen.Error(err)
 			continue
 		}
-		if err := addStateQueryService(g, converted); err != nil {
-			gen.Error(err)
-		}
+		convertedStateSets[stateSet.name] = converted.eventDescriptors.stateDescriptorInfo()
 		if err := addStateSet(g, converted); err != nil {
 			gen.Error(err)
 		}
 	}
+
+	for _, querySrc := range sourceMap.querySets {
+		stateSet, ok := convertedStateSets[querySrc.name]
+		if !ok {
+			// attempt to derive by linking to other files. This state spec
+			// should not be generated here
+			stateSource, err := deriveStateDescriptorFromQueryDescriptor(querySrc.descriptors())
+			if err != nil {
+				gen.Error(err)
+				return nil
+			}
+
+			if stateSource != nil {
+				eventFields, err := buildEventFieldDescriptors(*stateSource)
+				if err != nil {
+					gen.Error(err)
+					return nil
+				}
+
+				stateDescriptor := eventFields.stateDescriptorInfo()
+				stateSet = stateDescriptor
+			}
+		}
+
+		querySet := &querySet{
+			specifiedName:    querySrc.name,
+			getMethod:        querySrc.getMethod,
+			listMethod:       querySrc.listMethod,
+			listEventsMethod: querySrc.listEventsMethod,
+		}
+
+		if err := addStateQueryService(g, querySet, stateSet); err != nil {
+			gen.Error(err)
+		}
+	}
+
 	return g
 }
 
@@ -167,9 +123,9 @@ func validateListMethod(method *protogen.Method, pkFields []string) error {
 	return pquery.ValidateListMethod(method.Input.Desc, method.Output.Desc, pquery.WithTieBreakerFields(pkFields...))
 }
 
-func addStateQueryService(g *protogen.GeneratedFile, ss *stateSet) error {
+func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFields) error {
 
-	if ss.getMethod == nil && ss.listMethod == nil && ss.listEventsMethod == nil {
+	if qs.getMethod == nil && qs.listMethod == nil && qs.listEventsMethod == nil {
 		// if none are set, that's ok, but any of them set requires that at
 		// least get and list are set
 		return nil
@@ -177,40 +133,44 @@ func addStateQueryService(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
 	protoPackage := protogen.GoImportPath("google.golang.org/protobuf/proto")
-	g.P("// State Query Service for %s", ss.specifiedName)
+	g.P("// State Query Service for %s", qs.specifiedName)
 
-	if ss.getMethod == nil {
-		return fmt.Errorf("service %s does not have a get method", ss.specifiedName)
-	}
-
-	if ss.listMethod == nil {
-		return fmt.Errorf("service %s does not have a list method", ss.specifiedName)
-	}
-	statePkFields := make([]string, len(ss.eventStateKeyFields))
-	for i, field := range ss.eventStateKeyFields {
-		statePkFields[i] = string(field.stateField.Desc.Name())
-	}
-	if err := validateListMethod(ss.listMethod, statePkFields); err != nil {
-		return fmt.Errorf("query service %s is not compatible with PSM: %w", ss.listMethod.Desc.FullName(), err)
+	if qs.getMethod == nil {
+		return fmt.Errorf("service %s does not have a get method", qs.specifiedName)
 	}
 
-	if ss.listEventsMethod != nil {
-		pkName := fmt.Sprintf("%s.%s", ss.metadataField.Desc.Name(), ss.eventIDField.Desc.Name())
-		if err := validateListMethod(ss.listEventsMethod, []string{pkName}); err != nil {
-			return fmt.Errorf("query service %s is not compatible with PSM: %w", ss.listEventsMethod.Desc.FullName(), err)
+	if qs.listMethod == nil {
+		return fmt.Errorf("service %s does not have a list method", qs.specifiedName)
+	}
+
+	var statePkFields []string
+	if ss != nil {
+		statePkFields = ss.statePkFields
+	}
+	if err := validateListMethod(qs.listMethod, statePkFields); err != nil {
+		return fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+	}
+
+	if qs.listEventsMethod != nil {
+		var fallbackPkFields []string
+		if ss != nil {
+			fallbackPkFields = ss.eventPkFields
+		}
+		if err := validateListMethod(qs.listEventsMethod, fallbackPkFields); err != nil {
+			return fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listEventsMethod.Desc.FullName(), err)
 		}
 	}
 
-	goServiceName := stateGoName(ss.specifiedName)
+	goServiceName := stateGoName(qs.specifiedName)
 
 	g.P("type ", goServiceName, "PSMQuerySet = ", sm.Ident("StateQuerySet"), "[")
-	g.P("*", ss.getMethod.Input.GoIdent, ",")
-	g.P("*", ss.getMethod.Output.GoIdent, ",")
-	g.P("*", ss.listMethod.Input.GoIdent, ",")
-	g.P("*", ss.listMethod.Output.GoIdent, ",")
-	if ss.listEventsMethod != nil {
-		g.P("*", ss.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", ss.listEventsMethod.Output.GoIdent, ",")
+	g.P("*", qs.getMethod.Input.GoIdent, ",")
+	g.P("*", qs.getMethod.Output.GoIdent, ",")
+	g.P("*", qs.listMethod.Input.GoIdent, ",")
+	g.P("*", qs.listMethod.Output.GoIdent, ",")
+	if qs.listEventsMethod != nil {
+		g.P("*", qs.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", qs.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
@@ -223,13 +183,13 @@ func addStateQueryService(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("options ", sm.Ident("StateQueryOptions"), ",")
 	g.P(") (*", goServiceName, "PSMQuerySet, error) {")
 	g.P("return ", sm.Ident("BuildStateQuerySet"), "[")
-	g.P("*", ss.getMethod.Input.GoIdent, ",")
-	g.P("*", ss.getMethod.Output.GoIdent, ",")
-	g.P("*", ss.listMethod.Input.GoIdent, ",")
-	g.P("*", ss.listMethod.Output.GoIdent, ",")
-	if ss.listEventsMethod != nil {
-		g.P("*", ss.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", ss.listEventsMethod.Output.GoIdent, ",")
+	g.P("*", qs.getMethod.Input.GoIdent, ",")
+	g.P("*", qs.getMethod.Output.GoIdent, ",")
+	g.P("*", qs.listMethod.Input.GoIdent, ",")
+	g.P("*", qs.listMethod.Output.GoIdent, ",")
+	if qs.listEventsMethod != nil {
+		g.P("*", qs.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", qs.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
@@ -256,46 +216,230 @@ type stateSet struct {
 	// is always an Enum
 	statusFieldInState *protogen.Field
 
-	// fields in which are the same in the state and the event, e.g. the PK
-	eventStateKeyFields []eventStateFieldMap
+	eventDescriptors eventFieldDescriptors
+	eventFieldGenerators
+}
 
-	// field in the root of the outer event for the inner event oneof wrapper
-	// is always a Message
-	eventTypeField *protogen.Field
-
-	// field in the root of the outer event for the event metadata
-	metadataField *protogen.Field
-
-	eventActorField     *protogen.Field
-	eventTimestampField *protogen.Field
-	eventIDField        *protogen.Field
-
+type querySet struct {
+	specifiedName    string
 	getMethod        *protogen.Method
 	listMethod       *protogen.Method
 	listEventsMethod *protogen.Method
 }
 
 type eventStateFieldMap struct {
+	eventField protoreflect.FieldDescriptor
+	stateField protoreflect.FieldDescriptor
+	isKey      bool
+}
+
+type eventStateFieldGenMap struct {
 	eventField *protogen.Field
 	stateField *protogen.Field
 	isKey      bool
 }
 
-func buildStateSet(src *buildingStateSet) (*stateSet, error) {
+func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *protogen.Field {
+	for _, f := range parent.Fields {
+		if f.Desc.FullName() == field.FullName() {
+			return f
+		}
+	}
+	panic(fmt.Sprintf("field %s not found in parent %s", field.FullName(), parent.Desc.FullName()))
+}
+
+type queryPkFields struct {
+	statePkFields []string
+	eventPkFields []string
+}
+
+type eventFieldDescriptors struct {
+	// fields in which are the same in the state and the event, e.g. the PK
+	eventStateKeyFields []eventStateFieldMap
+
+	// field in the root of the outer event for the inner event oneof wrapper
+	// is always a Message
+	eventTypeField protoreflect.FieldDescriptor
+
+	// field in the root of the outer event for the event metadata
+	metadataField protoreflect.FieldDescriptor
+
+	eventActorField     protoreflect.FieldDescriptor
+	eventTimestampField protoreflect.FieldDescriptor
+	eventIDField        protoreflect.FieldDescriptor
+}
+
+func (desc eventFieldDescriptors) validate() error {
+
+	if desc.metadataField == nil {
+		return fmt.Errorf("event object missing metadata field")
+	}
+
+	if desc.eventIDField == nil {
+		return fmt.Errorf("event object missing id field")
+	}
+
+	if desc.eventTimestampField == nil {
+		return fmt.Errorf("event object missing timestamp field")
+	}
+
+	// the oneof wrapper
+	if desc.eventTypeField == nil {
+		return fmt.Errorf("event object missing eventType field")
+	}
+
+	if desc.eventTypeField.Kind() != protoreflect.MessageKind {
+		return fmt.Errorf("event object event type field is not a message")
+	}
+
+	return nil
+}
+
+func (ss eventFieldDescriptors) stateDescriptorInfo() *queryPkFields {
+	out := &queryPkFields{}
+	out.statePkFields = make([]string, len(ss.eventStateKeyFields))
+	for i, field := range ss.eventStateKeyFields {
+		out.statePkFields[i] = string(field.stateField.Name())
+	}
+
+	fallbackPkFields := make([]string, 0, 1)
+	pkName := fmt.Sprintf("%s.%s", ss.metadataField.Name(), ss.eventIDField.Name())
+	fallbackPkFields = append(fallbackPkFields, pkName)
+	out.eventPkFields = fallbackPkFields
+
+	return out
+}
+
+type eventFieldGenerators struct {
+	eventStateKeyFields []eventStateFieldGenMap
+	eventTypeField      *protogen.Field
+	metadataField       *protogen.Field
+	eventIDField        *protogen.Field
+	eventTimestampField *protogen.Field
+	eventActorField     *protogen.Field
+}
+
+func mapEventFieldGenMap(in eventFieldDescriptors, stateSrc *stateEntityGenerateSet) eventFieldGenerators {
+	out := eventFieldGenerators{
+		eventStateKeyFields: make([]eventStateFieldGenMap, len(in.eventStateKeyFields)),
+	}
+	for i, field := range in.eventStateKeyFields {
+		eventField := mapGenField(stateSrc.eventMessage, field.eventField)
+		stateField := mapGenField(stateSrc.stateMessage, field.stateField)
+		out.eventStateKeyFields[i] = eventStateFieldGenMap{
+			eventField: eventField,
+			stateField: stateField,
+			isKey:      field.isKey,
+		}
+	}
+	out.metadataField = mapGenField(stateSrc.eventMessage, in.metadataField)
+	out.eventIDField = mapGenField(out.metadataField.Message, in.eventIDField)
+	out.eventTimestampField = mapGenField(out.metadataField.Message, in.eventTimestampField)
+	if in.eventActorField != nil {
+		out.eventActorField = mapGenField(out.metadataField.Message, in.eventActorField)
+	}
+
+	out.eventTypeField = mapGenField(stateSrc.eventMessage, in.eventTypeField)
+	return out
+}
+
+func buildEventFieldDescriptors(src stateEntityDescriptorSet) (*eventFieldDescriptors, error) {
+	out := eventFieldDescriptors{}
+	eventFields := src.eventMessage.Fields()
+	for idx := 0; idx < eventFields.Len(); idx++ {
+		field := eventFields.Get(idx)
+		fieldOpt := proto.GetExtension(field.Options(), psm_pb.E_EventField).(*psm_pb.EventField)
+		if fieldOpt == nil {
+			continue
+		}
+
+		if fieldOpt.EventType {
+			if field.Kind() != protoreflect.MessageKind {
+				return nil, fmt.Errorf("event object event type field is not a message")
+			}
+			out.eventTypeField = field
+		} else if fieldOpt.Metadata {
+			if field.Kind() != protoreflect.MessageKind {
+				return nil, fmt.Errorf("event object %s metadata field is not a message", src.eventOptions.Name)
+			}
+			out.metadataField = field
+		} else if fieldOpt.StateKey || fieldOpt.StateField {
+
+			desc := field
+			if desc.IsList() || desc.IsMap() || desc.Kind() == protoreflect.MessageKind {
+				return nil, fmt.Errorf("event object %s state key field %s is not a scalar", src.eventOptions.Name, field.Name())
+			}
+
+			matchingStateField := src.stateMessage.Fields().ByName(field.Name())
+			if matchingStateField == nil {
+				return nil, fmt.Errorf("event object %s state key field %s does not exist in state object %s", src.eventOptions.Name, field.Name(), src.stateOptions.Name)
+			}
+
+			if matchingStateField.Kind() != field.Kind() {
+				return nil, fmt.Errorf("event object %s state key field %s is not the same type as state object %s", src.eventOptions.Name, field.Name(), src.stateOptions.Name)
+			}
+
+			if matchingStateField.HasOptionalKeyword() {
+				if !field.HasOptionalKeyword() {
+					return nil, fmt.Errorf("event object %s state key field %s is marked optional, but state object %s is not", src.eventOptions.Name, field.Name(), src.stateOptions.Name)
+				}
+			} else if field.HasOptionalKeyword() {
+				return nil, fmt.Errorf("event object %s state key field %s is not marked optional, but state object %s is", src.eventOptions.Name, field.Name(), src.stateOptions.Name)
+			}
+
+			out.eventStateKeyFields = append(out.eventStateKeyFields, eventStateFieldMap{
+				eventField: field,
+				stateField: matchingStateField,
+				isKey:      fieldOpt.StateKey,
+			})
+
+		}
+
+	}
+
+	metadataFields := out.metadataField.Message().Fields()
+	for idx := 0; idx < metadataFields.Len(); idx++ {
+		field := metadataFields.Get(idx)
+		switch field.Name() {
+		case "actor":
+			if field.Kind() != protoreflect.MessageKind {
+				break // This will not match
+			}
+			out.eventActorField = field
+		case "timestamp":
+			if field.Kind() != protoreflect.MessageKind || field.Message().FullName() != protoreflect.FullName("google.protobuf.Timestamp") {
+				break // This will not match
+			}
+			out.eventTimestampField = field
+
+		case "event_id", "message_id", "id":
+			if field.Kind() != protoreflect.StringKind {
+				break // This will not match
+			}
+			out.eventIDField = field
+		}
+	}
+
+	if err := out.validate(); err != nil {
+		return nil, fmt.Errorf("event object %s: %w", src.eventOptions.Name, err)
+	}
+
+	return &out, nil
+}
+
+func buildStateSet(src *stateEntityGenerateSet) (*stateSet, error) {
+
 	ss := &stateSet{
 		stateMessage: src.stateMessage,
 		eventMessage: src.eventMessage,
-
-		getMethod:        src.getMethod,
-		listMethod:       src.listMethod,
-		listEventsMethod: src.listEventsMethod,
 	}
+
 	ss.specifiedName = src.stateOptions.Name
 	ss.namePrefix = stateGoName(ss.specifiedName)
 	ss.machineName = ss.namePrefix + "PSM"
 	ss.eventName = ss.namePrefix + "PSMEvent"
 
-	for _, field := range src.stateMessage.Fields {
+	for _, field := range ss.stateMessage.Fields {
 		fr := field.Desc
 		if fr.Name() == "status" {
 			ss.statusFieldInState = field
@@ -310,105 +454,19 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 		return nil, fmt.Errorf("state object %s state field is not an enum", src.stateOptions.Name)
 	}
 
-	for _, field := range src.eventMessage.Fields {
-		fieldOpt := proto.GetExtension(field.Desc.Options(), psm_pb.E_EventField).(*psm_pb.EventField)
-		if fieldOpt == nil {
-			continue
-		}
-
-		if fieldOpt.EventType {
-			if field.Message == nil {
-				return nil, fmt.Errorf("event object %s event type field is not a message", src.eventOptions.Name)
-			}
-			ss.eventTypeField = field
-		} else if fieldOpt.Metadata {
-			if field.Message == nil {
-				return nil, fmt.Errorf("event object %s metadata field is not a message", src.eventOptions.Name)
-			}
-			ss.metadataField = field
-		} else if fieldOpt.StateKey || fieldOpt.StateField {
-
-			desc := field.Desc
-			if desc.IsList() || desc.IsMap() || desc.Kind() == protoreflect.MessageKind {
-				return nil, fmt.Errorf("event object %s state key field %s is not a scalar", src.eventOptions.Name, field.Desc.Name())
-			}
-
-			var matchingStateField *protogen.Field
-			for _, stateField := range src.stateMessage.Fields {
-				if stateField.Desc.Name() == field.Desc.Name() {
-					matchingStateField = stateField
-					break
-				}
-			}
-			if matchingStateField == nil {
-				return nil, fmt.Errorf("event object %s state key field %s does not exist in state object %s", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
-			}
-
-			if matchingStateField.Desc.Kind() != field.Desc.Kind() {
-				return nil, fmt.Errorf("event object %s state key field %s is not the same type as state object %s", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
-			}
-
-			if matchingStateField.Desc.HasOptionalKeyword() {
-				if !field.Desc.HasOptionalKeyword() {
-					return nil, fmt.Errorf("event object %s state key field %s is marked optional, but state object %s is not", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
-				}
-			} else if field.Desc.HasOptionalKeyword() {
-				return nil, fmt.Errorf("event object %s state key field %s is not marked optional, but state object %s is", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
-			}
-
-			ss.eventStateKeyFields = append(ss.eventStateKeyFields, eventStateFieldMap{
-				eventField: field,
-				stateField: matchingStateField,
-				isKey:      fieldOpt.StateKey,
-			})
-
-		}
-
+	if src.eventMessage == nil {
+		return nil, fmt.Errorf("state object %s does not have an event object", src.stateOptions.Name)
 	}
 
-	if ss.metadataField == nil {
-		return nil, fmt.Errorf("event object %s does not have a metadata field", src.eventOptions.Name)
+	stateDescriptors := src.descriptors()
+
+	eventDescriptors, err := buildEventFieldDescriptors(stateDescriptors)
+	if err != nil {
+		return nil, err
 	}
+	ss.eventDescriptors = *eventDescriptors
 
-	for _, field := range ss.metadataField.Message.Fields {
-		switch field.Desc.Name() {
-		case "actor":
-			if field.Message == nil {
-				break // This will not match
-			}
-			ss.eventActorField = field
-		case "timestamp":
-			if field.Message == nil || field.Message.Desc.FullName() != "google.protobuf.Timestamp" {
-				break // This will not match
-			}
-			ss.eventTimestampField = field
-
-		case "event_id", "message_id", "id":
-			if field.Desc.Kind() != protoreflect.StringKind {
-				break // This will not match
-			}
-			ss.eventIDField = field
-		}
-	}
-
-	// Ignore actor, it's optional here
-
-	if ss.eventIDField == nil {
-		return nil, fmt.Errorf("event object %s does not have an event id field", src.eventOptions.Name)
-	}
-
-	if ss.eventTimestampField == nil {
-		return nil, fmt.Errorf("event object %s does not have an event timestamp field", src.eventOptions.Name)
-	}
-
-	// the oneof wrapper
-	if ss.eventTypeField == nil {
-		return nil, fmt.Errorf("event object %s does not have an event type field", src.eventOptions.Name)
-	}
-
-	if ss.eventTypeField.Message == nil {
-		return nil, fmt.Errorf("event object %s event type field is not a message", src.eventOptions.Name)
-	}
+	ss.eventFieldGenerators = mapEventFieldGenMap(*eventDescriptors, src)
 
 	return ss, nil
 }
@@ -480,11 +538,18 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("](cb)")
 	g.P("}")
 
+	var eventTypeField *protogen.Field
+	for _, field := range ss.eventMessage.Fields {
+		if field.Desc.Name() == ss.eventTypeField.Desc.Name() {
+			eventTypeField = field
+		}
+	}
+
 	g.P()
 	g.P("type ", ss.eventName, "Key string")
 	g.P()
 	g.P("const (")
-	for _, field := range ss.eventTypeField.Message.Fields {
+	for _, field := range eventTypeField.Message.Fields {
 		g.P(ss.namePrefix, "PSMEvent", field.GoName, " ", ss.eventName, "Key = \"", field.Desc.Name(), "\"")
 	}
 	g.P(")")
@@ -499,9 +564,9 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 		return err
 	}
 
-	g.P("func (ee *", ss.eventTypeField.Message.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
+	g.P("func (ee *", eventTypeField.Message.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
 	g.P("	switch v := ee.Type.(type) {")
-	for _, field := range ss.eventTypeField.Message.Fields {
+	for _, field := range eventTypeField.Message.Fields {
 		g.P("	case *", field.GoIdent, ":")
 		g.P("		return v.", field.GoName)
 	}
@@ -510,7 +575,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("	}")
 	g.P("}")
 
-	g.P("func (ee *", ss.eventTypeField.Message.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
+	g.P("func (ee *", eventTypeField.Message.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
 	g.P("	tt := ee.UnwrapPSMEvent()")
 	g.P("   if tt == nil {")
 	g.P("     return \"<nil>\"")
@@ -519,21 +584,21 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
-	g.P("   return ee.", ss.eventTypeField.GoName, ".UnwrapPSMEvent()")
+	g.P("   return ee.", eventTypeField.GoName, ".UnwrapPSMEvent()")
 	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") {")
 	g.P("	switch v := inner.(type) {")
-	for _, field := range ss.eventTypeField.Message.Fields {
+	for _, field := range eventTypeField.Message.Fields {
 		g.P("	case *", field.Message.GoIdent, ":")
-		g.P("		ee.", ss.eventTypeField.GoName, ".Type = &", field.GoIdent, "{", field.GoName, ": v}")
+		g.P("		ee.", eventTypeField.GoName, ".Type = &", field.GoIdent, "{", field.GoName, ": v}")
 	}
 	g.P("	default:")
 	g.P("		panic(\"invalid type\")")
 	g.P("	}")
 	g.P("}")
 
-	for _, field := range ss.eventTypeField.Message.Fields {
+	for _, field := range eventTypeField.Message.Fields {
 		g.P("func (*", field.Message.GoIdent, ") PSMEventKey() ", ss.eventName, "Key  {")
 		g.P("		return ", ss.namePrefix, "PSMEvent", field.GoName)
 		g.P("}")
@@ -561,7 +626,7 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("  EventTable: \"", ss.specifiedName, "_event\",")
 	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
-	for _, field := range ss.eventStateKeyFields {
+	for _, field := range ss.eventFieldGenerators.eventStateKeyFields {
 		if !field.isKey {
 			continue
 		}
@@ -638,19 +703,21 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	g.P("func (c ", ss.machineName, "Converter) CheckStateKeys(s *", ss.stateMessage.GoIdent, ", e *", ss.eventMessage.GoIdent, ") error {")
 	for _, field := range ss.eventStateKeyFields {
-		if field.stateField.Desc.HasOptionalKeyword() {
-			g.P("if s.", field.eventField.GoName, " == nil {")
-			g.P("  if e.", field.eventField.GoName, " != nil {")
-			g.P("    return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' is nil, but event field is not (%q)\", *e.", field.eventField.GoName, ")")
+		stateField := field.stateField
+		eventField := field.eventField
+		if stateField.Desc.HasOptionalKeyword() {
+			g.P("if s.", eventField.GoName, " == nil {")
+			g.P("  if e.", eventField.GoName, " != nil {")
+			g.P("    return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", stateField.GoName, "' is nil, but event field is not (%q)\", *e.", eventField.GoName, ")")
 			g.P("  }")
-			g.P("} else if e.", field.eventField.GoName, " == nil {")
-			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' is not nil (%q), but event field is\", *e.", field.stateField.GoName, ")")
-			g.P("} else if *s.", field.stateField.GoName, " != *e.", field.eventField.GoName, " {")
-			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' %q does not match event field %q\", *s.", field.stateField.GoName, ", *e.", field.eventField.GoName, ")")
+			g.P("} else if e.", eventField.GoName, " == nil {")
+			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", stateField.GoName, "' is not nil (%q), but event field is\", *e.", stateField.GoName, ")")
+			g.P("} else if *s.", stateField.GoName, " != *e.", eventField.GoName, " {")
+			g.P("  return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", stateField.GoName, "' %q does not match event field %q\", *s.", stateField.GoName, ", *e.", eventField.GoName, ")")
 			g.P("}")
 		} else {
-			g.P("if s.", field.stateField.GoName, " != e.", field.eventField.GoName, " {")
-			g.P("return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", field.stateField.GoName, "' %q does not match event field %q\", s.", field.stateField.GoName, ", e.", field.eventField.GoName, ")")
+			g.P("if s.", stateField.GoName, " != e.", eventField.GoName, " {")
+			g.P("return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"state field '", stateField.GoName, "' %q does not match event field %q\", s.", stateField.GoName, ", e.", eventField.GoName, ")")
 			g.P("}")
 		}
 	}

@@ -9,30 +9,6 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
-// State Query Service for %sbar
-type BarPSMQuerySet = psm.StateQuerySet[
-	*GetBarRequest,
-	*GetBarResponse,
-	*ListBarsRequest,
-	*ListBarsResponse,
-	proto.Message,
-	proto.Message,
-]
-
-func NewBarPSMQuerySet(
-	smSpec psm.QuerySpec,
-	options psm.StateQueryOptions,
-) (*BarPSMQuerySet, error) {
-	return psm.BuildStateQuerySet[
-		*GetBarRequest,
-		*GetBarResponse,
-		*ListBarsRequest,
-		*ListBarsResponse,
-		proto.Message,
-		proto.Message,
-	](smSpec, options)
-}
-
 // StateObjectOptions: BarPSM
 type BarPSMEventer = psm.Eventer[
 	*BarState,
@@ -195,4 +171,28 @@ func (*BarEventType_Updated) PSMEventKey() BarPSMEventKey {
 }
 func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 	return BarPSMEventDeleted
+}
+
+// State Query Service for %sbar
+type BarPSMQuerySet = psm.StateQuerySet[
+	*GetBarRequest,
+	*GetBarResponse,
+	*ListBarsRequest,
+	*ListBarsResponse,
+	proto.Message,
+	proto.Message,
+]
+
+func NewBarPSMQuerySet(
+	smSpec psm.QuerySpec,
+	options psm.StateQueryOptions,
+) (*BarPSMQuerySet, error) {
+	return psm.BuildStateQuerySet[
+		*GetBarRequest,
+		*GetBarResponse,
+		*ListBarsRequest,
+		*ListBarsResponse,
+		proto.Message,
+		proto.Message,
+	](smSpec, options)
 }
