@@ -248,67 +248,65 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 
 	for i := 0; i < messageFields.Len(); i++ {
 		field := messageFields.Get(i)
-		sortOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 
-		if sortOpts != nil {
+		if fieldOpts != nil {
 			isDefaultSort := false
 
-			switch field.Kind() {
-			case protoreflect.DoubleKind:
-				if sortOpts.GetDouble().GetSorting().DefaultSort {
+			switch fieldOps := fieldOpts.Type.(type) {
+			case *psml_pb.FieldConstraint_Double:
+				if fieldOps.Double.Sorting != nil && fieldOps.Double.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Fixed32Kind:
-				if sortOpts.GetFixed32().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Fixed32:
+				if fieldOps.Fixed32.Sorting != nil && fieldOps.Fixed32.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Fixed64Kind:
-				if sortOpts.GetFixed64().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Fixed64:
+				if fieldOps.Fixed64.Sorting != nil && fieldOps.Fixed64.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.FloatKind:
-				if sortOpts.GetFloat().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Float:
+				if fieldOps.Float.Sorting != nil && fieldOps.Float.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Int32Kind:
-				if sortOpts.GetInt32().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Int32:
+				if fieldOps.Int32.Sorting != nil && fieldOps.Int32.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Int64Kind:
-				if sortOpts.GetInt64().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Int64:
+				if fieldOps.Int64.Sorting != nil && fieldOps.Int64.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Sfixed32Kind:
-				if sortOpts.GetSfixed32().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Sfixed32:
+				if fieldOps.Sfixed32.Sorting != nil && fieldOps.Sfixed32.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Sfixed64Kind:
-				if sortOpts.GetSfixed64().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Sfixed64:
+				if fieldOps.Sfixed64.Sorting != nil && fieldOps.Sfixed64.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Sint32Kind:
-				if sortOpts.GetSint32().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Sint32:
+				if fieldOps.Sint32.Sorting != nil && fieldOps.Sint32.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Sint64Kind:
-				if sortOpts.GetSint64().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Sint64:
+				if fieldOps.Sint64.Sorting != nil && fieldOps.Sint64.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Uint32Kind:
-				if sortOpts.GetUint32().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Uint32:
+				if fieldOps.Uint32.Sorting != nil && fieldOps.Uint32.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.Uint64Kind:
-				if sortOpts.GetUint64().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Uint64:
+				if fieldOps.Uint64.Sorting != nil && fieldOps.Uint64.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
-			case protoreflect.MessageKind:
-				if field.Message().FullName() == "google.protobuf.Timestamp" &&
-					sortOpts.GetTimestamp().GetSorting().DefaultSort {
+			case *psml_pb.FieldConstraint_Timestamp:
+				if fieldOps.Timestamp.Sorting != nil && fieldOps.Timestamp.Sorting.DefaultSort {
 					isDefaultSort = true
 				}
 			}
-
 			if isDefaultSort {
 				defaultSortFields = append(defaultSortFields, sortSpec{
 					nestedField: nestedField{
