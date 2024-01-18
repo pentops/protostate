@@ -49,12 +49,10 @@ message BarState {
   string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
   string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 
-  BarStatus status = 5 [
-    (psm.list.v1.field).enum.filtering = {
-      filterable: true,
-      default_filters: ["BAR_STATUS_ACTIVE"]
-    }
-  ];
+  BarStatus status = 5 [(psm.list.v1.field).enum.filtering = {
+    filterable: true,
+    default_filters: ["BAR_STATUS_ACTIVE"]
+  }];
 }
 
 enum BarStatus {
@@ -85,12 +83,13 @@ message BarEvent {
 
 message StrangeMetadata {
   string event_id = 1;
-  google.protobuf.Timestamp timestamp = 2 [
-    (psm.list.v1.field).timestamp = {
-      filtering: { filterable : true },
-      sorting: { sortable: true, default_sort: true }
+  google.protobuf.Timestamp timestamp = 2 [(psm.list.v1.field).timestamp = {
+    filtering: {filterable: true},
+    sorting: {
+      sortable: true,
+      default_sort: true
     }
-  ];
+  }];
 }
 
 message BarEventType {
@@ -117,8 +116,11 @@ message BarEventType {
 
 message ListBarsRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest  page = 2;
+  psm.list.v1.PageRequest page = 2;
   psm.list.v1.QueryRequest query = 3;
+  option (psm.list.v1.list_request) = {
+    sort_tiebreaker: ["bar_id"]
+  };
 }
 
 message ListBarsResponse {
@@ -128,7 +130,7 @@ message ListBarsResponse {
 
 message ListBarEventsRequest {
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest  page = 2;
+  psm.list.v1.PageRequest page = 2;
   psm.list.v1.QueryRequest query = 3;
 }
 

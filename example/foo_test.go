@@ -3,10 +3,12 @@ package example
 import (
 	"context"
 	"testing"
+	"time"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
+	"github.com/pentops/log.go/log"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/pentops/protostate/psm"
@@ -207,6 +209,15 @@ func TestFooStateMachine(t *testing.T) {
 	})
 }
 
+func silenceLogger() func() {
+	defaultLogger := log.DefaultLogger
+	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]interface{}) {
+	})
+	return func() {
+		log.DefaultLogger = defaultLogger
+	}
+}
+
 func TestFooPagination(t *testing.T) {
 
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
@@ -231,13 +242,19 @@ func TestFooPagination(t *testing.T) {
 	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
+		restore := silenceLogger()
+		defer restore()
+
+		tt := time.Now()
+
 		for ii := 0; ii < 30; ii++ {
+			tt = tt.Add(time.Second)
 			fooID := uuid.NewString()
 
 			event1 := &testpb.FooEvent{
 				Metadata: &testpb.Metadata{
 					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
+					Timestamp: timestamppb.New(tt),
 					Actor: &testpb.Actor{
 						ActorId: uuid.NewString(),
 					},
