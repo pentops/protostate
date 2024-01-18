@@ -1,9 +1,10 @@
 Proto State
 ===========
 
-[./docs/intro.md](Intro to State Machines)
+[Intro to State Machines](./docs/intro.md)
 
-[./docs/list-annotations.md](List Annotations)
+[List Annotations](./docs/list-annotations.md)
+
 
 ## Flow
 
