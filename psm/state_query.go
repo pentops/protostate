@@ -39,9 +39,9 @@ type StateQuerySet[
 	ListEventsREQ pquery.ListRequest,
 	ListEventsRES pquery.ListResponse,
 ] struct {
-	getter      *pquery.Getter[GetREQ, GetRES]
-	mainLister  *pquery.Lister[ListREQ, ListRES]
-	eventLister *pquery.Lister[ListEventsREQ, ListEventsRES]
+	Getter      *pquery.Getter[GetREQ, GetRES]
+	MainLister  *pquery.Lister[ListREQ, ListRES]
+	EventLister *pquery.Lister[ListEventsREQ, ListEventsRES]
 }
 
 func (gc *StateQuerySet[
@@ -49,7 +49,7 @@ func (gc *StateQuerySet[
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
 ]) Get(ctx context.Context, db Transactor, reqMsg GetREQ, resMsg GetRES) error {
-	return gc.getter.Get(ctx, db, reqMsg, resMsg)
+	return gc.Getter.Get(ctx, db, reqMsg, resMsg)
 }
 
 func (gc *StateQuerySet[
@@ -57,7 +57,7 @@ func (gc *StateQuerySet[
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
 ]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
-	return gc.mainLister.List(ctx, db, reqMsg, resMsg)
+	return gc.MainLister.List(ctx, db, reqMsg, resMsg)
 }
 
 func (gc *StateQuerySet[
@@ -65,7 +65,7 @@ func (gc *StateQuerySet[
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
 ]) ListEvents(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
-	return gc.eventLister.List(ctx, db, reqMsg, resMsg)
+	return gc.EventLister.List(ctx, db, reqMsg, resMsg)
 }
 
 type StateQueryOptions struct {
@@ -169,8 +169,8 @@ func BuildStateQuerySet[
 	}
 
 	querySet := &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
-		getter:     getter,
-		mainLister: lister,
+		Getter:     getter,
+		MainLister: lister,
 	}
 
 	if options.SkipEvents {
@@ -199,7 +199,7 @@ func BuildStateQuerySet[
 		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.EventTable, err)
 	}
 
-	querySet.eventLister = eventLister
+	querySet.EventLister = eventLister
 
 	return querySet, nil
 }

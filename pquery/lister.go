@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
@@ -335,114 +336,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	res := resMsg.ProtoReflect()
 	req := reqMsg.ProtoReflect()
 
+	selectQuery, err := ll.BuildQuery(ctx, req, res)
+	if err != nil {
+		return err
+	}
+
 	var jsonRows = make([][]byte, 0, ll.pageSize)
-
-	as := newAliasSet()
-	tableAlias := as.Next()
-
-	selectQuery := sq.
-		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
-		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
-
-	sortFields := ll.defaultSortFields
-	// TODO: Dynamic Sorts
-
-	sortFields = append(sortFields, ll.tieBreakerFields...)
-
-	for _, sortField := range sortFields {
-		direction := "ASC"
-		if sortField.desc {
-			direction = "DESC"
-		}
-		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
-	}
-
-	if ll.auth != nil {
-		authFilter, err := ll.auth.AuthFilter(ctx)
-		if err != nil {
-			return err
-		}
-		authAlias := tableAlias
-
-		for _, join := range ll.authJoin {
-			priorAlias := authAlias
-			authAlias = as.Next()
-			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
-				"%s AS %s ON %s",
-				join.TableName,
-				authAlias,
-				join.On.SQL(priorAlias, authAlias),
-			))
-		}
-
-		authFilterMapped, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
-		if err != nil {
-			return err
-		}
-
-		selectQuery = selectQuery.Where(authFilterMapped)
-	}
-
-	selectQuery.Limit(ll.pageSize + 1)
-
-	// TODO: Request Filters req := reqMsg.ProtoReflect()
-
-	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
-	if ok && reqPage != nil {
-		if reqPage.GetToken() != "" {
-			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
-
-			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
-			if err != nil {
-				return fmt.Errorf("decode token: %w", err)
-			}
-
-			if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-				return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
-			}
-
-			for _, sortField := range sortFields {
-				equality := ">="
-				if sortField.desc {
-					equality = "<="
-				}
-
-				dbVal := rowMessage.Get(sortField.field).Interface()
-				switch subType := dbVal.(type) {
-				case *dynamicpb.Message:
-					name := subType.Descriptor().FullName()
-					msgBytes, err := proto.Marshal(subType)
-					if err != nil {
-						return fmt.Errorf("marshal %s: %w", name, err)
-					}
-
-					switch name {
-					case "google.protobuf.Timestamp":
-						ts := timestamppb.Timestamp{}
-						if err := proto.Unmarshal(msgBytes, &ts); err != nil {
-							return fmt.Errorf("unmarshal %s: %w", name, err)
-						}
-						dbVal = ts.AsTime().Format(time.RFC3339Nano) // JSON Encoding
-					default:
-						return fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
-					}
-
-				default:
-					return fmt.Errorf("unknown sort field type %T", dbVal)
-				}
-
-				selectQuery = selectQuery.Where(
-					fmt.Sprintf("%s.%s->>'%s' %s ?",
-						tableAlias,
-						ll.dataColumn,
-						sortField.jsonbPath(),
-						equality,
-					), dbVal)
-			}
-		}
-	}
-
-	var nextToken string
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,
 		Retryable: true,
@@ -468,15 +367,10 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		return fmt.Errorf("list query: %w", err)
 	}
 
-	sql, args, _ := selectQuery.ToSql()
-	log.WithFields(ctx, map[string]interface{}{
-		"query": sql,
-		"args":  args,
-	}).Debug("list query")
-
 	list := res.Mutable(ll.arrayField).List()
 	res.Set(ll.arrayField, protoreflect.ValueOf(list))
 
+	var nextToken string
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
 		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
@@ -504,7 +398,118 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
 
 	return nil
+}
 
+func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sqrl.SelectBuilder, error) {
+
+	as := newAliasSet()
+	tableAlias := as.Next()
+
+	selectQuery := sq.
+		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
+		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
+
+	sortFields := ll.defaultSortFields
+	// TODO: Dynamic Sorts
+
+	sortFields = append(sortFields, ll.tieBreakerFields...)
+
+	for _, sortField := range sortFields {
+		direction := "ASC"
+		if sortField.desc {
+			direction = "DESC"
+		}
+		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
+	}
+
+	if ll.auth != nil {
+		authFilter, err := ll.auth.AuthFilter(ctx)
+		if err != nil {
+			return nil, err
+		}
+		authAlias := tableAlias
+
+		for _, join := range ll.authJoin {
+			priorAlias := authAlias
+			authAlias = as.Next()
+			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+				"%s AS %s ON %s",
+				join.TableName,
+				authAlias,
+				join.On.SQL(priorAlias, authAlias),
+			))
+		}
+
+		authFilterMapped, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		selectQuery = selectQuery.Where(authFilterMapped)
+	}
+
+	selectQuery.Limit(ll.pageSize + 1)
+
+	// TODO: Request Filters req := reqMsg.ProtoReflect()
+
+	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
+	if ok && reqPage != nil {
+		if reqPage.GetToken() != "" {
+			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
+
+			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
+			if err != nil {
+				return nil, fmt.Errorf("decode token: %w", err)
+			}
+
+			if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
+				return nil, fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+			}
+
+			for _, sortField := range sortFields {
+				equality := ">="
+				if sortField.desc {
+					equality = "<="
+				}
+
+				dbVal := rowMessage.Get(sortField.field).Interface()
+				switch subType := dbVal.(type) {
+				case *dynamicpb.Message:
+					name := subType.Descriptor().FullName()
+					msgBytes, err := proto.Marshal(subType)
+					if err != nil {
+						return nil, fmt.Errorf("marshal %s: %w", name, err)
+					}
+
+					switch name {
+					case "google.protobuf.Timestamp":
+						ts := timestamppb.Timestamp{}
+						if err := proto.Unmarshal(msgBytes, &ts); err != nil {
+							return nil, fmt.Errorf("unmarshal %s: %w", name, err)
+						}
+						dbVal = ts.AsTime().Format(time.RFC3339Nano) // JSON Encoding
+					default:
+						return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
+					}
+
+				case string:
+					dbVal = subType
+				default:
+					return nil, fmt.Errorf("unknown sort field type %T", dbVal)
+				}
+
+				selectQuery = selectQuery.Where(
+					fmt.Sprintf("%s.%s->>'%s' %s ?",
+						tableAlias,
+						ll.dataColumn,
+						sortField.jsonbPath(),
+						equality,
+					), dbVal)
+			}
+		}
+	}
+
+	return selectQuery, nil
 }
 
 type nestedField struct {

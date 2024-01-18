@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
@@ -315,6 +316,12 @@ func TestFooPagination(t *testing.T) {
 		}
 		res := &testpb.ListFoosResponse{}
 
+		query, err := queryer.MainLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		printQuery(t, query)
+
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -326,6 +333,14 @@ func TestFooPagination(t *testing.T) {
 
 	})
 
+}
+
+func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
+	stmt, args, err := query.ToSql()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	t.Log(stmt, args)
 }
 
 func TestFooStateField(t *testing.T) {
