@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -266,7 +267,7 @@ func TestFooPagination(t *testing.T) {
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
 							Name:  "foo",
-							Field: "event1",
+							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339)),
 						},
 					},
 				},
@@ -294,6 +295,10 @@ func TestFooPagination(t *testing.T) {
 
 		if len(res.Foos) != 20 {
 			t.Fatalf("expected 20 states, got %d", len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
 		}
 
 		pageResp = res.Page
@@ -325,6 +330,10 @@ func TestFooPagination(t *testing.T) {
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
 		}
 
 		if len(res.Foos) != 10 {

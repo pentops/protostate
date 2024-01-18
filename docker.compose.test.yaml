@@ -19,8 +19,10 @@ services:
       - database
     volumes:
       - ".:/src"
+      - "~/.docker-go-cache/mod:/go/pkg/mod"
+      - "~/.docker-go-cache/build:/root/.cache/go-build"
     environment:
       TEST_DB: "postgres://test:test@database/test?sslmode=disable"
       INITIAL_ADMIN_USER: "test@example.com:verysecret"
     working_dir: "/src"
-    command: "go test ./..."
+    command: "go test ./... -v"
