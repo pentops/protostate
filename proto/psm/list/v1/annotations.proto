@@ -8,9 +8,14 @@ option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
 
 extend google.protobuf.MessageOptions {
   optional MessageConstraint message = 86510000;
+  optional ListRequestMessage list_request = 86510001;
 }
 
-message MessageConstraint {
+message MessageConstraint {}
+
+message ListRequestMessage {
+  repeated string default_sort = 1;
+  repeated string sort_tiebreaker = 2;
 }
 
 extend google.protobuf.FieldOptions {
@@ -27,22 +32,22 @@ message OneofConstraint {
 
 message FieldConstraint {
   oneof type {
-    NumericRules   double    =  1;
-    NumericRules   fixed32   =  2;
-    NumericRules   fixed64   =  3;
-    NumericRules   float     =  4;
-    NumericRules   int32     =  5;
-    NumericRules   int64     =  6;
-    NumericRules   sfixed32  =  7;
-    NumericRules   sfixed64  =  8;
-    NumericRules   sint32    =  9;
-    NumericRules   sint64    = 10;
-    NumericRules   uint32    = 11;
-    NumericRules   uint64    = 12;
-    BoolRules      bool      = 13;
-    StringRules    string    = 14;
+    NumericRules double = 1;
+    NumericRules fixed32 = 2;
+    NumericRules fixed64 = 3;
+    NumericRules float = 4;
+    NumericRules int32 = 5;
+    NumericRules int64 = 6;
+    NumericRules sfixed32 = 7;
+    NumericRules sfixed64 = 8;
+    NumericRules sint32 = 9;
+    NumericRules sint64 = 10;
+    NumericRules uint32 = 11;
+    NumericRules uint64 = 12;
+    BoolRules bool = 13;
+    StringRules string = 14;
 
-    EnumRules      enum      = 20;
+    EnumRules enum = 20;
 
     TimestampRules timestamp = 30;
   }
@@ -55,7 +60,7 @@ message FilteringConstraint {
 }
 
 message SortingConstraint {
-  bool sortable     = 1;
+  bool sortable = 1;
   bool default_sort = 2;
 }
 
@@ -65,7 +70,7 @@ message SearchingConstraint {
 
 message NumericRules {
   FilteringConstraint filtering = 10;
-  SortingConstraint   sorting   = 11;
+  SortingConstraint sorting = 11;
 }
 
 message BoolRules {
@@ -74,8 +79,8 @@ message BoolRules {
 
 message StringRules {
   oneof well_known {
-    OpenTextRules   open_text   = 1;
-    DateRules       date        = 2;
+    OpenTextRules open_text = 1;
+    DateRules date = 2;
     ForeignKeyRules foreign_key = 3;
   }
 }
@@ -91,7 +96,7 @@ message DateRules {
 message ForeignKeyRules {
   oneof type {
     UniqueStringRules unique_string = 1;
-    UuidRules         uuid          = 2;
+    UuidRules uuid = 2;
   }
 }
 
@@ -109,6 +114,5 @@ message EnumRules {
 
 message TimestampRules {
   FilteringConstraint filtering = 10;
-  SortingConstraint   sorting   = 11;
+  SortingConstraint sorting = 11;
 }
-

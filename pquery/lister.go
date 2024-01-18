@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
@@ -41,8 +42,8 @@ type ListSpec[
 }
 
 type sortSpec struct {
-	field protoreflect.FieldDescriptor
-	desc  bool
+	nestedField
+	desc bool
 }
 
 type Lister[
@@ -66,6 +67,7 @@ type listReflection struct {
 	queryRequestField protoreflect.FieldDescriptor
 
 	defaultSortFields []sortSpec
+	tieBreakerFields  []sortSpec
 }
 
 func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor) error {
@@ -93,7 +95,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 
 		if field.Cardinality() == protoreflect.Repeated {
 			if ll.arrayField != nil {
-				return nil, fmt.Errorf("multiple array fields")
+				return nil, fmt.Errorf("multiple repeated fields (%s and %s)", ll.arrayField.Name(), field.Name())
 			}
 
 			ll.arrayField = field
@@ -103,7 +105,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	if ll.arrayField == nil {
-		return nil, fmt.Errorf("no array field")
+		return nil, fmt.Errorf("no repeated field in response, %s must have a repeated message", res.FullName())
 	}
 
 	if ll.pageResponseField == nil {
@@ -112,8 +114,23 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
-	if len(ll.defaultSortFields) == 0 {
-		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort", res.FullName())
+	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
+	if ok && listRequestAnnotation != nil {
+		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
+			field, err := findField(ll.arrayField.Message(), tieBreaker)
+			if err != nil {
+				return nil, err
+			}
+			ll.tieBreakerFields = append(ll.tieBreakerFields, sortSpec{
+				nestedField: *field,
+				desc:        false,
+			})
+		}
+
+	}
+
+	if len(ll.defaultSortFields) == 0 && len(ll.tieBreakerFields) == 0 {
+		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
 	requestFields := req.Fields()
@@ -243,12 +260,19 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 
 			if isDefaultSort {
 				defaultSortFields = append(defaultSortFields, sortSpec{
-					field: field,
-					desc:  true,
+					nestedField: nestedField{
+						field:    field,
+						jsonPath: []string{field.JSONName()},
+					},
+					desc: true,
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
-			defaultSortFields = append(defaultSortFields, buildDefaultSorts(field.Message().Fields())...)
+			subSort := buildDefaultSorts(field.Message().Fields())
+			for _, subSortField := range subSort {
+				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
+			}
+			defaultSortFields = append(defaultSortFields, subSort...)
 		}
 	}
 
@@ -269,15 +293,17 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
-	// TODO: Dynamic Sorts
 	sortFields := ll.defaultSortFields
+	// TODO: Dynamic Sorts
+
+	sortFields = append(sortFields, ll.tieBreakerFields...)
 
 	for _, sortField := range sortFields {
 		direction := "ASC"
 		if sortField.desc {
 			direction = "DESC"
 		}
-		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.field.JSONName(), direction))
+		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
 	if ll.auth != nil {
@@ -358,7 +384,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 					fmt.Sprintf("%s.%s->>'%s' %s ?",
 						tableAlias,
 						ll.dataColumn,
-						sortField.field.JSONName(),
+						sortField.jsonbPath(),
 						equality,
 					), dbVal)
 			}
@@ -391,6 +417,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		return fmt.Errorf("list query: %w", err)
 	}
 
+	sql, args, _ := selectQuery.ToSql()
+	log.WithFields(ctx, map[string]interface{}{
+		"query": sql,
+		"args":  args,
+	}).Debug("list query")
+
 	list := res.Mutable(ll.arrayField).List()
 	res.Set(ll.arrayField, protoreflect.ValueOf(list))
 
@@ -421,5 +453,51 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
 
 	return nil
+
+}
+
+type nestedField struct {
+	jsonPath []string
+	field    protoreflect.FieldDescriptor
+}
+
+func (nf nestedField) jsonbPath() string {
+	return strings.Join(nf.jsonPath, "->")
+}
+
+func findField(message protoreflect.MessageDescriptor, path string) (*nestedField, error) {
+	var fieldName protoreflect.Name
+	var furtherPath string
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		fieldName = protoreflect.Name(parts[0])
+		furtherPath = parts[1]
+	} else {
+		fieldName = protoreflect.Name(path)
+	}
+
+	field := message.Fields().ByName(fieldName)
+	if field == nil {
+		return nil, fmt.Errorf("no field named '%s' in %s", fieldName, message.FullName())
+	}
+
+	if furtherPath == "" {
+		return &nestedField{
+			field:    field,
+			jsonPath: []string{field.JSONName()},
+		}, nil
+	}
+
+	if field.Kind() != protoreflect.MessageKind {
+		return nil, fmt.Errorf("field %s is not a message", fieldName)
+	}
+	spec, err := findField(field.Message(), furtherPath)
+	if err != nil {
+		return nil, fmt.Errorf("field %s: %w", parts[0], err)
+	}
+	return &nestedField{
+		field:    spec.field,
+		jsonPath: append([]string{field.JSONName()}, spec.jsonPath...),
+	}, nil
 
 }
