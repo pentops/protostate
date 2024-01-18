@@ -11,9 +11,14 @@ import (
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// TableSpec is the configuration for the state machine's table mapping.
+// The generated code provides a default which is derived from the patterns and
+// annotations on the proto message, however, the proto message is designed to
+// specify the wire data, not the storage mechanism, so consuming code may need
+// to override some of the defaults to map to the database.
+// The generated default is called DefaultFooPSMTableSpec
 type TableSpec[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -29,6 +34,15 @@ type TableSpec[
 	StateDataColumn string // default: state
 	EventDataColumn string // default: data
 	EventColumns    func(E) (map[string]interface{}, error)
+}
+
+func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
+	if spec.StateDataColumn == "" {
+		spec.StateDataColumn = "state"
+	}
+	if spec.EventDataColumn == "" {
+		spec.EventDataColumn = "data"
+	}
 }
 
 func (spec TableSpec[S, ST, E, IE]) Validate() error {
@@ -51,39 +65,9 @@ func (spec TableSpec[S, ST, E, IE]) Validate() error {
 	return nil
 }
 
-type QuerySpec struct {
-	StateTable      string
-	StateDataColumn string
-
-	EventTable      string
-	EventDataColumn string
-
-	EventTypeName protoreflect.FullName
-	StateTypeName protoreflect.FullName
-}
-
-func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
-	spec.setDefaults()
-	return QuerySpec{
-		StateTable:      spec.StateTable,
-		StateDataColumn: spec.StateDataColumn,
-		EventTable:      spec.EventTable,
-		EventDataColumn: spec.EventDataColumn,
-
-		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
-		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
-	}
-}
-
-func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
-	if spec.StateDataColumn == "" {
-		spec.StateDataColumn = "state"
-	}
-	if spec.EventDataColumn == "" {
-		spec.EventDataColumn = "data"
-	}
-}
-
+// EventTypeConverter is implemented by the gnerated code, it could all
+// be derived at runtime from proto reflect but the discovert runs a lot of
+// loops. This is faster.
 type EventTypeConverter[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -95,12 +79,16 @@ type EventTypeConverter[
 	EventLabel(IE) string
 	EmptyState(E) S
 	CheckStateKeys(S, E) error
+	EventPrimaryKeyFieldPaths() []string
+	StatePrimaryKeyFieldPaths() []string
 }
 
 type Transactor interface {
 	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
 }
 
+// StateMachine is a database wrapper around the eventer. Using sane defaults
+// with overrides for table configuration.
 type StateMachine[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -263,7 +251,19 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 }
 
 func (sm *StateMachine[S, ST, E, IE]) GetQuerySpec() QuerySpec {
-	return sm.spec.QuerySpec()
+	sm.spec.setDefaults()
+	return QuerySpec{
+		StateTable:      sm.spec.StateTable,
+		StateDataColumn: sm.spec.StateDataColumn,
+		EventTable:      sm.spec.EventTable,
+		EventDataColumn: sm.spec.EventDataColumn,
+
+		StatePrimaryKeyPaths: sm.conversions.StatePrimaryKeyFieldPaths(),
+		EventPrimaryKeyPaths: sm.conversions.EventPrimaryKeyFieldPaths(),
+
+		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
+		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
+	}
 }
 
 func (sm *StateMachine[S, ST, E, IE]) store(

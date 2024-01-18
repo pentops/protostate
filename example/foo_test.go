@@ -2,9 +2,11 @@ package example
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
@@ -143,7 +145,7 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
+	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -234,7 +236,7 @@ func TestFooPagination(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
 	defer ss.RunSteps(t)
 
-	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
+	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -265,7 +267,7 @@ func TestFooPagination(t *testing.T) {
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
 							Name:  "foo",
-							Field: "event1",
+							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339)),
 						},
 					},
 				},
@@ -295,6 +297,10 @@ func TestFooPagination(t *testing.T) {
 			t.Fatalf("expected 20 states, got %d", len(res.Foos))
 		}
 
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
 		pageResp = res.Page
 
 		if pageResp.GetNextToken() == "" {
@@ -315,9 +321,19 @@ func TestFooPagination(t *testing.T) {
 		}
 		res := &testpb.ListFoosResponse{}
 
+		query, err := queryer.MainLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		printQuery(t, query)
+
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
 		}
 
 		if len(res.Foos) != 10 {
@@ -326,6 +342,14 @@ func TestFooPagination(t *testing.T) {
 
 	})
 
+}
+
+func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
+	stmt, args, err := query.ToSql()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	t.Log(stmt, args)
 }
 
 func TestFooStateField(t *testing.T) {

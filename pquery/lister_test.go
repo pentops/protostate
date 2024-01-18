@@ -34,35 +34,41 @@ func NewTestFoo() *TestFoo {
 				Number:   ptr(int32(1)),
 				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
 				TypeName: ptr(".psm.list.v1.PageRequest"),
+				Options:  &descriptorpb.FieldOptions{},
 			}, {
 				Name:     ptr("query"),
 				Number:   ptr(int32(2)),
 				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
 				TypeName: ptr(".psm.list.v1.QueryRequest"),
+				Options:  &descriptorpb.FieldOptions{},
 			}},
 			Options: &descriptorpb.MessageOptions{},
 		},
 		Foo: &descriptorpb.DescriptorProto{
 			Name: ptr("Foo"),
 			Field: []*descriptorpb.FieldDescriptorProto{{
-				Name:   ptr("id"),
-				Number: ptr(int32(1)),
-				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Name:    ptr("id"),
+				Number:  ptr(int32(1)),
+				Type:    descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Options: &descriptorpb.FieldOptions{},
 			}, {
 				Name:     ptr("bar"),
 				Number:   ptr(int32(2)),
 				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
 				TypeName: ptr(".test.Bar"),
+				Options:  &descriptorpb.FieldOptions{},
 			}},
+			Options: &descriptorpb.MessageOptions{},
 		},
 		Bar: &descriptorpb.DescriptorProto{
 			Name: ptr("Bar"),
 			Field: []*descriptorpb.FieldDescriptorProto{{
-
-				Name:   ptr("id"),
-				Number: ptr(int32(1)),
-				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Name:    ptr("id"),
+				Number:  ptr(int32(1)),
+				Type:    descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Options: &descriptorpb.FieldOptions{},
 			}},
+			Options: &descriptorpb.MessageOptions{},
 		},
 		ListFoosResponse: &descriptorpb.DescriptorProto{
 			Name: ptr("ListFoosResponse"),
@@ -78,7 +84,9 @@ func NewTestFoo() *TestFoo {
 				Number:   ptr(int32(2)),
 				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
 				TypeName: ptr(".psm.list.v1.PageResponse"),
+				Options:  &descriptorpb.FieldOptions{},
 			}},
+			Options: &descriptorpb.MessageOptions{},
 		},
 	}
 
@@ -150,6 +158,7 @@ func TestBuildListReflection(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		mods      func(*TestFoo)
+		options   []ListerOption
 		wantError string
 		assert    func(*testing.T, *listReflection)
 	}{{
@@ -231,6 +240,22 @@ func TestBuildListReflection(t *testing.T) {
 		},
 		wantError: "no default sort field",
 	}, {
+		name: "tie breaker fallback",
+		mods: func(tf *TestFoo) {
+			tf.SetListRequest(&psml_pb.ListRequestMessage{})
+		},
+		options: []ListerOption{
+			WithTieBreakerFields("id"),
+		},
+		assert: func(t *testing.T, lr *listReflection) {
+			if len(lr.tieBreakerFields) != 1 {
+				t.Error("expected one sort tiebreaker")
+			} else {
+				field := lr.tieBreakerFields[0]
+				assert.Equal(t, "id", field.jsonbPath())
+			}
+		},
+	}, {
 		name: "unknown tie breaker",
 		mods: func(tf *TestFoo) {
 			tf.SetListRequest(&psml_pb.ListRequestMessage{
@@ -266,10 +291,13 @@ func TestBuildListReflection(t *testing.T) {
 			responseDesc := pdf.Messages().ByName("ListFoosResponse")
 			requestDesc := pdf.Messages().ByName("ListFoosRequest")
 
-			listReflection, err := buildListReflection(requestDesc, responseDesc)
+			options := resolveListerOptions(tc.options)
+			listReflection, err := buildListReflection(requestDesc, responseDesc, options)
 
 			if tc.wantError == "" {
-				assert.NoError(t, err)
+				if err != nil {
+					t.Fatal(err)
+				}
 			} else {
 				msg := err.Error()
 				if !strings.Contains(msg, tc.wantError) {

@@ -10,7 +10,7 @@ import (
 )
 
 // State Query Service for %sbar
-type BarPSMStateQuerySet = psm.StateQuerySet[
+type BarPSMQuerySet = psm.StateQuerySet[
 	*GetBarRequest,
 	*GetBarResponse,
 	*ListBarsRequest,
@@ -19,14 +19,19 @@ type BarPSMStateQuerySet = psm.StateQuerySet[
 	proto.Message,
 ]
 
-type BarPSMStateQuerySpec = psm.StateQuerySpec[
-	*GetBarRequest,
-	*GetBarResponse,
-	*ListBarsRequest,
-	*ListBarsResponse,
-	proto.Message,
-	proto.Message,
-]
+func NewBarPSMQuerySet(
+	smSpec psm.QuerySpec,
+	options psm.StateQueryOptions,
+) (*BarPSMQuerySet, error) {
+	return psm.BuildStateQuerySet[
+		*GetBarRequest,
+		*GetBarResponse,
+		*ListBarsRequest,
+		*ListBarsResponse,
+		proto.Message,
+		proto.Message,
+	](smSpec, options)
+}
 
 // StateObjectOptions: BarPSM
 type BarPSMEventer = psm.Eventer[
@@ -70,6 +75,14 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
 			"id": event.BarId,
+		}, nil
+	},
+	EventColumns: func(event *BarEvent) (map[string]interface{}, error) {
+		metadata := event.Metadata
+		return map[string]interface{}{
+			"id":        metadata.EventId,
+			"timestamp": metadata.Timestamp,
+			"bar_id":    event.BarId,
 		}, nil
 	},
 }
@@ -121,6 +134,16 @@ func (c BarPSMConverter) EventLabel(e BarPSMEvent) string {
 func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 	return &BarState{
 		BarId: e.BarId,
+	}
+}
+
+func (c BarPSMConverter) EventPrimaryKeyFieldPaths() []string {
+	return []string{"metadata.event_id"}
+}
+
+func (c BarPSMConverter) StatePrimaryKeyFieldPaths() []string {
+	return []string{
+		"bar_id",
 	}
 }
 func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {

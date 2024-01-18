@@ -200,7 +200,7 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 
 	goServiceName := stateGoName(service.name)
 
-	g.P("type ", goServiceName, "PSMStateQuerySet = ", sm.Ident("StateQuerySet"), "[")
+	g.P("type ", goServiceName, "PSMQuerySet = ", sm.Ident("StateQuerySet"), "[")
 	g.P("*", service.getMethod.Input.GoIdent, ",")
 	g.P("*", service.getMethod.Output.GoIdent, ",")
 	g.P("*", service.listMethod.Input.GoIdent, ",")
@@ -214,7 +214,12 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 	}
 	g.P("]")
 	g.P()
-	g.P("type ", goServiceName, "PSMStateQuerySpec = ", sm.Ident("StateQuerySpec"), "[")
+
+	g.P("func New", goServiceName, "PSMQuerySet(")
+	g.P("smSpec ", sm.Ident("QuerySpec"), ",")
+	g.P("options ", sm.Ident("StateQueryOptions"), ",")
+	g.P(") (*", goServiceName, "PSMQuerySet, error) {")
+	g.P("return ", sm.Ident("BuildStateQuerySet"), "[")
 	g.P("*", service.getMethod.Input.GoIdent, ",")
 	g.P("*", service.getMethod.Output.GoIdent, ",")
 	g.P("*", service.listMethod.Input.GoIdent, ",")
@@ -226,8 +231,8 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
 	}
-	g.P("]")
-	g.P()
+	g.P("](smSpec, options)")
+	g.P("}")
 
 	return nil
 }
@@ -257,6 +262,10 @@ type stateSet struct {
 
 	// field in the root of the outer event for the event metadata
 	metadataField *protogen.Field
+
+	eventActorField     *protogen.Field
+	eventTimestampField *protogen.Field
+	eventIDField        *protogen.Field
 }
 
 type eventStateFieldMap struct {
@@ -302,6 +311,9 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 			}
 			ss.eventTypeField = field
 		} else if fieldOpt.Metadata {
+			if field.Message == nil {
+				return nil, fmt.Errorf("event object %s metadata field is not a message", src.eventOptions.Name)
+			}
 			ss.metadataField = field
 		} else if fieldOpt.StateKey || fieldOpt.StateField {
 
@@ -341,6 +353,41 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 
 		}
 
+	}
+
+	if ss.metadataField == nil {
+		return nil, fmt.Errorf("event object %s does not have a metadata field", src.eventOptions.Name)
+	}
+
+	for _, field := range ss.metadataField.Message.Fields {
+		switch field.Desc.Name() {
+		case "actor":
+			if field.Message == nil {
+				break // This will not match
+			}
+			ss.eventActorField = field
+		case "timestamp":
+			if field.Message == nil || field.Message.Desc.FullName() != "google.protobuf.Timestamp" {
+				break // This will not match
+			}
+			ss.eventTimestampField = field
+
+		case "event_id", "message_id", "id":
+			if field.Desc.Kind() != protoreflect.StringKind {
+				break // This will not match
+			}
+			ss.eventIDField = field
+		}
+	}
+
+	// Ignore actor, it's optional here
+
+	if ss.eventIDField == nil {
+		return nil, fmt.Errorf("event object %s does not have an event id field", src.eventOptions.Name)
+	}
+
+	if ss.eventTimestampField == nil {
+		return nil, fmt.Errorf("event object %s does not have an event timestamp field", src.eventOptions.Name)
 	}
 
 	// the oneof wrapper
@@ -492,38 +539,11 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	/* Let's make some assumptions! */
 
-	metadataMessage := ss.metadataField.Message
-
 	// Look for a 'well formed' metadata message which has:
 	// 'actor' as a message
 	// 'timestamp' as google.protobuf.Timestamp
 	// 'event_id', 'message_id' or 'id' as a string
 	// If all the above match, we can automate the ExtractMetadata function
-	var actorField *protogen.Field
-	var timestampField *protogen.Field
-	var eventIDField *protogen.Field
-	for _, field := range metadataMessage.Fields {
-		switch field.Desc.Name() {
-		case "actor":
-			if field.Message == nil {
-				break // This will not match
-			}
-			actorField = field
-		case "timestamp":
-			if field.Message == nil || field.Message.Desc.FullName() != "google.protobuf.Timestamp" {
-				break // This will not match
-			}
-			timestampField = field
-
-		case "event_id", "message_id", "id":
-			if field.Desc.Kind() != protoreflect.StringKind {
-				break // This will not match
-			}
-			eventIDField = field
-		}
-	}
-
-	canAutomateMetadata := actorField != nil && timestampField != nil && eventIDField != nil
 
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
 	g.P("  StateTable: \"", ss.specifiedName, "\",")
@@ -542,24 +562,24 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("    }, nil")
 	g.P("  },")
 
-	if canAutomateMetadata {
-		g.P("  EventColumns: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
-		g.P("    metadata := event.", ss.metadataField.GoName)
-		g.P("    return map[string]interface{}{")
-		g.P("      \"id\": metadata.", eventIDField.GoName, ",")
-		g.P("      \"timestamp\": metadata.", timestampField.GoName, ",")
-		g.P("      \"actor\": metadata.", actorField.GoName, ",")
-		// Assumes that all fields in the event marked as state key should be
-		// directly written to the table. If not, they should not be in the
-		// event, i.e. if they are derivable from the state, rather than
-		// identifying the state, there is no need to copy them to the event.
-		for _, field := range ss.eventStateKeyFields {
-			keyName := string(field.stateField.Desc.Name())
-			g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
-		}
-		g.P("    }, nil")
-		g.P("  },")
+	g.P("  EventColumns: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("    metadata := event.", ss.metadataField.GoName)
+	g.P("    return map[string]interface{}{")
+	g.P("      \"id\": metadata.", ss.eventIDField.GoName, ",")
+	g.P("      \"timestamp\": metadata.", ss.eventTimestampField.GoName, ",")
+	if ss.eventActorField != nil {
+		g.P("      \"actor\": metadata.", ss.eventActorField.GoName, ",")
 	}
+	// Assumes that all fields in the event marked as state key should be
+	// directly written to the table. If not, they should not be in the
+	// event, i.e. if they are derivable from the state, rather than
+	// identifying the state, there is no need to copy them to the event.
+	for _, field := range ss.eventStateKeyFields {
+		keyName := string(field.stateField.Desc.Name())
+		g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
+	}
+	g.P("    }, nil")
+	g.P("  },")
 
 	g.P("}")
 
@@ -589,6 +609,22 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("}")
 	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) EventPrimaryKeyFieldPaths() []string{")
+	g.P("return []string{\"", ss.metadataField.Desc.Name(), ".", ss.eventIDField.Desc.Name(), "\"}")
+	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) StatePrimaryKeyFieldPaths() []string{")
+	g.P("return []string{")
+	for _, field := range ss.eventStateKeyFields {
+		if !field.isKey {
+			continue
+		}
+		g.P("\"", field.stateField.Desc.Name(), "\",")
+	}
+	g.P("}")
+	g.P("}")
+
 	g.P("func (c ", ss.machineName, "Converter) CheckStateKeys(s *", ss.stateMessage.GoIdent, ", e *", ss.eventMessage.GoIdent, ") error {")
 	for _, field := range ss.eventStateKeyFields {
 		if field.stateField.Desc.HasOptionalKeyword() {
