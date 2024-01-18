@@ -23,8 +23,15 @@ message EventObjectOptions {
 message EventTypeObjectOptions {}
 
 extend google.protobuf.FieldOptions {
+  StateField state_field = 90443405;
   EventField event_field = 90443403;
   EventTypeField event_type_field = 90443404;
+}
+
+message StateField {
+  // the field is the primary key, or is one field in a multi-key primary key
+  // for the state object.
+  bool primary_key = 1;
 }
 
 message EventField {
@@ -35,7 +42,8 @@ message EventField {
   bool metadata = 2;
 
   // the field contains a foreign key to the state object. This must be part of
-  // the state's primary key
+  // the state's primary key, i.e. the state's field must be marked as
+  // primary_key = true;
   bool state_key = 3;
 
   // a non-primary key field used to construct initial state. When this is
