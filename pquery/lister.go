@@ -58,6 +58,20 @@ type Lister[
 	authJoin   []*LeftJoin
 }
 
+type ListerOption func(*listerOptions)
+
+type listerOptions struct {
+	tieBreakerFields []string
+}
+
+// TieBreakerFields is a list of fields to use as a tie breaker when the
+// list request message does not specify these fields.
+func WithTieBreakerFields(fields ...string) ListerOption {
+	return func(lo *listerOptions) {
+		lo.tieBreakerFields = fields
+	}
+}
+
 type listReflection struct {
 	pageSize uint64
 
@@ -70,12 +84,21 @@ type listReflection struct {
 	tieBreakerFields  []sortSpec
 }
 
-func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor) error {
-	_, err := buildListReflection(req, res)
+func resolveListerOptions(options []ListerOption) listerOptions {
+	optionsStruct := listerOptions{}
+	for _, option := range options {
+		option(&optionsStruct)
+	}
+	return optionsStruct
+}
+
+func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) error {
+	_, err := buildListReflection(req, res, resolveListerOptions(options))
 	return err
 }
 
-func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor) (*listReflection, error) {
+func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options listerOptions) (*listReflection, error) {
+	var err error
 	ll := listReflection{
 		pageSize: uint64(20),
 	}
@@ -114,19 +137,9 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
-	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
-	if ok && listRequestAnnotation != nil {
-		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
-			field, err := findField(ll.arrayField.Message(), tieBreaker)
-			if err != nil {
-				return nil, err
-			}
-			ll.tieBreakerFields = append(ll.tieBreakerFields, sortSpec{
-				nestedField: *field,
-				desc:        false,
-			})
-		}
-
+	ll.tieBreakerFields, err = buildTieBreakerFields(req, ll.arrayField.Message(), options.tieBreakerFields)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(ll.defaultSortFields) == 0 && len(ll.tieBreakerFields) == 0 {
@@ -173,7 +186,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 func NewLister[
 	REQ ListRequest,
 	RES ListResponse,
-](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
+](spec ListSpec[REQ, RES], options ...ListerOption) (*Lister[REQ, RES], error) {
 	ll := &Lister[REQ, RES]{
 		tableName:  spec.TableName,
 		dataColumn: spec.DataColumn,
@@ -183,13 +196,51 @@ func NewLister[
 
 	descriptors := newMethodDescriptor[REQ, RES]()
 
-	listFields, err := buildListReflection(descriptors.request, descriptors.response)
+	optionsStruct := resolveListerOptions(options)
+
+	listFields, err := buildListReflection(descriptors.request, descriptors.response, optionsStruct)
 	if err != nil {
 		return nil, err
 	}
 	ll.listReflection = *listFields
 
 	return ll, nil
+}
+
+func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []string) ([]sortSpec, error) {
+	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
+	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
+		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
+		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
+			field, err := findField(arrayField, tieBreaker)
+			if err != nil {
+				return nil, err
+			}
+			tieBreakerFields = append(tieBreakerFields, sortSpec{
+				nestedField: *field,
+				desc:        false,
+			})
+		}
+		return tieBreakerFields, nil
+	}
+
+	if len(fallback) == 0 {
+		return []sortSpec{}, nil
+	}
+
+	tieBreakerFields := make([]sortSpec, 0, len(fallback))
+	for _, tieBreaker := range fallback {
+		field, err := findField(arrayField, tieBreaker)
+		if err != nil {
+			return nil, err
+		}
+		tieBreakerFields = append(tieBreakerFields, sortSpec{
+			nestedField: *field,
+			desc:        false,
+		})
+	}
+	return tieBreakerFields, nil
+
 }
 
 func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {

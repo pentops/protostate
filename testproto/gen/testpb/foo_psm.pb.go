@@ -10,7 +10,7 @@ import (
 )
 
 // State Query Service for %sfoo
-type FooPSMStateQuerySet = psm.StateQuerySet[
+type FooPSMQuerySet = psm.StateQuerySet[
 	*GetFooRequest,
 	*GetFooResponse,
 	*ListFoosRequest,
@@ -19,14 +19,19 @@ type FooPSMStateQuerySet = psm.StateQuerySet[
 	*ListFooEventsResponse,
 ]
 
-type FooPSMStateQuerySpec = psm.StateQuerySpec[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
-]
+func NewFooPSMQuerySet(
+	smSpec psm.QuerySpec,
+	options psm.StateQueryOptions,
+) (*FooPSMQuerySet, error) {
+	return psm.BuildStateQuerySet[
+		*GetFooRequest,
+		*GetFooResponse,
+		*ListFoosRequest,
+		*ListFoosResponse,
+		*ListFooEventsRequest,
+		*ListFooEventsResponse,
+	](smSpec, options)
+}
 
 // StateObjectOptions: FooPSM
 type FooPSMEventer = psm.Eventer[
@@ -132,6 +137,16 @@ func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{
 		FooId:    e.FooId,
 		TenantId: e.TenantId,
+	}
+}
+
+func (c FooPSMConverter) EventPrimaryKeyFieldPaths() []string {
+	return []string{"metadata.event_id"}
+}
+
+func (c FooPSMConverter) StatePrimaryKeyFieldPaths() []string {
+	return []string{
+		"foo_id",
 	}
 }
 func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {

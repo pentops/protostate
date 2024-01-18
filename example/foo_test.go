@@ -143,7 +143,7 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
+	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -234,7 +234,7 @@ func TestFooPagination(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
 	defer ss.RunSteps(t)
 
-	queryer, err := psm.BuildStateQuerySet(sm.GetQuerySpec(), testpb.FooPSMStateQuerySpec{})
+	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
