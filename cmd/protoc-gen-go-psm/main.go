@@ -42,14 +42,11 @@ func main() {
 }
 
 type buildingStateSet struct {
+	name         string
 	stateMessage *protogen.Message
 	stateOptions *psm_pb.StateObjectOptions
 	eventMessage *protogen.Message
 	eventOptions *psm_pb.EventObjectOptions
-}
-
-type buildingStateQueryService struct {
-	name string
 
 	getMethod        *protogen.Method
 	listMethod       *protogen.Method
@@ -65,7 +62,7 @@ func stateGoName(specified string) string {
 // generateFile generates a _psm.pb.go
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
 
-	stateServices := map[string]*buildingStateQueryService{}
+	stateSets := make(map[string]*buildingStateSet)
 	for _, service := range file.Services {
 		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
 
@@ -82,12 +79,12 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 				methodOpt.Name = stateQueryAnnotation.Name
 			}
 
-			methodSet, ok := stateServices[methodOpt.Name]
+			methodSet, ok := stateSets[methodOpt.Name]
 			if !ok {
-				methodSet = &buildingStateQueryService{
+				methodSet = &buildingStateSet{
 					name: methodOpt.Name,
 				}
-				stateServices[methodOpt.Name] = methodSet
+				stateSets[methodOpt.Name] = methodSet
 			}
 
 			if methodOpt.Get {
@@ -104,14 +101,14 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 
 	}
 
-	stateSets := make(map[string]*buildingStateSet)
-
 	for _, message := range file.Messages {
 		stateObjectAnnotation, ok := proto.GetExtension(message.Desc.Options(), psm_pb.E_State).(*psm_pb.StateObjectOptions)
 		if ok && stateObjectAnnotation != nil {
 			stateSet, ok := stateSets[stateObjectAnnotation.Name]
 			if !ok {
-				stateSet = &buildingStateSet{}
+				stateSet = &buildingStateSet{
+					name: stateObjectAnnotation.Name,
+				}
 				stateSets[stateObjectAnnotation.Name] = stateSet
 			} else if stateSet.stateMessage != nil || stateSet.stateOptions != nil {
 				gen.Error(fmt.Errorf("duplicate state object name %s", stateObjectAnnotation.Name))
@@ -139,7 +136,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		}
 	}
 
-	if len(stateSets) == 0 && len(stateServices) == 0 {
+	if len(stateSets) == 0 {
 		return nil
 	}
 
@@ -150,17 +147,14 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	g.P("package ", file.GoPackageName)
 	g.P()
 
-	for _, stateService := range stateServices {
-		if err := addStateQueryService(g, *stateService); err != nil {
-			gen.Error(err)
-		}
-	}
-
 	for _, stateSet := range stateSets {
 		converted, err := buildStateSet(stateSet)
 		if err != nil {
 			gen.Error(err)
 			continue
+		}
+		if err := addStateQueryService(g, converted); err != nil {
+			gen.Error(err)
 		}
 		if err := addStateSet(g, converted); err != nil {
 			gen.Error(err)
@@ -169,45 +163,54 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	return g
 }
 
-func validateListMethod(method *protogen.Method) error {
-	return pquery.ValidateListMethod(method.Input.Desc, method.Output.Desc)
+func validateListMethod(method *protogen.Method, pkFields []string) error {
+	return pquery.ValidateListMethod(method.Input.Desc, method.Output.Desc, pquery.WithTieBreakerFields(pkFields...))
 }
 
-func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryService) error {
+func addStateQueryService(g *protogen.GeneratedFile, ss *stateSet) error {
+
+	if ss.getMethod == nil && ss.listMethod == nil && ss.listEventsMethod == nil {
+		// if none are set, that's ok, but any of them set requires that at
+		// least get and list are set
+		return nil
+	}
 
 	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
 	protoPackage := protogen.GoImportPath("google.golang.org/protobuf/proto")
+	g.P("// State Query Service for %s", ss.specifiedName)
 
-	g.P("// State Query Service for %s", service.name)
-
-	if service.getMethod == nil {
-		return fmt.Errorf("service %s does not have a get method", service.name)
+	if ss.getMethod == nil {
+		return fmt.Errorf("service %s does not have a get method", ss.specifiedName)
 	}
 
-	if service.listMethod == nil {
-		return fmt.Errorf("service %s does not have a list method", service.name)
+	if ss.listMethod == nil {
+		return fmt.Errorf("service %s does not have a list method", ss.specifiedName)
+	}
+	statePkFields := make([]string, len(ss.eventStateKeyFields))
+	for i, field := range ss.eventStateKeyFields {
+		statePkFields[i] = string(field.stateField.Desc.Name())
+	}
+	if err := validateListMethod(ss.listMethod, statePkFields); err != nil {
+		return fmt.Errorf("query service %s is not compatible with PSM: %w", ss.listMethod.Desc.FullName(), err)
 	}
 
-	if err := validateListMethod(service.listMethod); err != nil {
-		return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listMethod.Desc.FullName(), err)
-	}
-
-	if service.listEventsMethod != nil {
-		if err := validateListMethod(service.listEventsMethod); err != nil {
-			return fmt.Errorf("query service %s is not compatible with PSM: %w", service.listEventsMethod.Desc.FullName(), err)
+	if ss.listEventsMethod != nil {
+		pkName := fmt.Sprintf("%s.%s", ss.metadataField.Desc.Name(), ss.eventIDField.Desc.Name())
+		if err := validateListMethod(ss.listEventsMethod, []string{pkName}); err != nil {
+			return fmt.Errorf("query service %s is not compatible with PSM: %w", ss.listEventsMethod.Desc.FullName(), err)
 		}
 	}
 
-	goServiceName := stateGoName(service.name)
+	goServiceName := stateGoName(ss.specifiedName)
 
 	g.P("type ", goServiceName, "PSMQuerySet = ", sm.Ident("StateQuerySet"), "[")
-	g.P("*", service.getMethod.Input.GoIdent, ",")
-	g.P("*", service.getMethod.Output.GoIdent, ",")
-	g.P("*", service.listMethod.Input.GoIdent, ",")
-	g.P("*", service.listMethod.Output.GoIdent, ",")
-	if service.listEventsMethod != nil {
-		g.P("*", service.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", service.listEventsMethod.Output.GoIdent, ",")
+	g.P("*", ss.getMethod.Input.GoIdent, ",")
+	g.P("*", ss.getMethod.Output.GoIdent, ",")
+	g.P("*", ss.listMethod.Input.GoIdent, ",")
+	g.P("*", ss.listMethod.Output.GoIdent, ",")
+	if ss.listEventsMethod != nil {
+		g.P("*", ss.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", ss.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
@@ -220,13 +223,13 @@ func addStateQueryService(g *protogen.GeneratedFile, service buildingStateQueryS
 	g.P("options ", sm.Ident("StateQueryOptions"), ",")
 	g.P(") (*", goServiceName, "PSMQuerySet, error) {")
 	g.P("return ", sm.Ident("BuildStateQuerySet"), "[")
-	g.P("*", service.getMethod.Input.GoIdent, ",")
-	g.P("*", service.getMethod.Output.GoIdent, ",")
-	g.P("*", service.listMethod.Input.GoIdent, ",")
-	g.P("*", service.listMethod.Output.GoIdent, ",")
-	if service.listEventsMethod != nil {
-		g.P("*", service.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", service.listEventsMethod.Output.GoIdent, ",")
+	g.P("*", ss.getMethod.Input.GoIdent, ",")
+	g.P("*", ss.getMethod.Output.GoIdent, ",")
+	g.P("*", ss.listMethod.Input.GoIdent, ",")
+	g.P("*", ss.listMethod.Output.GoIdent, ",")
+	if ss.listEventsMethod != nil {
+		g.P("*", ss.listEventsMethod.Input.GoIdent, ",")
+		g.P("*", ss.listEventsMethod.Output.GoIdent, ",")
 	} else {
 		g.P(protoPackage.Ident("Message"), ",")
 		g.P(protoPackage.Ident("Message"), ",")
@@ -266,6 +269,10 @@ type stateSet struct {
 	eventActorField     *protogen.Field
 	eventTimestampField *protogen.Field
 	eventIDField        *protogen.Field
+
+	getMethod        *protogen.Method
+	listMethod       *protogen.Method
+	listEventsMethod *protogen.Method
 }
 
 type eventStateFieldMap struct {
@@ -278,6 +285,10 @@ func buildStateSet(src *buildingStateSet) (*stateSet, error) {
 	ss := &stateSet{
 		stateMessage: src.stateMessage,
 		eventMessage: src.eventMessage,
+
+		getMethod:        src.getMethod,
+		listMethod:       src.listMethod,
+		listEventsMethod: src.listEventsMethod,
 	}
 	ss.specifiedName = src.stateOptions.Name
 	ss.namePrefix = stateGoName(ss.specifiedName)

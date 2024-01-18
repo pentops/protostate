@@ -57,19 +57,15 @@ message FooState {
 
   string last_event_id = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
 
-  google.protobuf.Timestamp created_at = 7 [
-    (psm.list.v1.field).timestamp = {
-      filtering: { filterable : true },
-      sorting: { sortable: true, default_sort: true }
-    }
-  ];
+  google.protobuf.Timestamp created_at = 7 [(psm.list.v1.field).timestamp = {
+    filtering: {filterable: true},
+    sorting: {sortable: true}
+  }];
 
-  FooStatus status = 5 [
-    (psm.list.v1.field).enum.filtering = {
-      filterable: true,
-      default_filters: ["FOO_STATUS_ACTIVE"]
-    }
-  ];
+  FooStatus status = 5 [(psm.list.v1.field).enum.filtering = {
+    filterable: true,
+    default_filters: ["FOO_STATUS_ACTIVE"]
+  }];
 }
 
 enum FooStatus {
@@ -107,18 +103,19 @@ message FooEvent {
 message Metadata {
   string event_id = 1;
 
-  google.protobuf.Timestamp timestamp = 2 [
-    (psm.list.v1.field).timestamp = {
-      filtering: { filterable : true },
-      sorting: { sortable: true, default_sort: true }
+  google.protobuf.Timestamp timestamp = 2 [(psm.list.v1.field).timestamp = {
+    filtering: {filterable: true},
+    sorting: {
+      sortable: true,
+      default_sort: true
     }
-  ];
+  }];
 
   Actor actor = 3;
 }
 
 message Actor {
-  string actor_id = 1[(psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true];
+  string actor_id = 1 [(psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true];
 }
 
 message FooEventType {
@@ -145,7 +142,7 @@ message FooEventType {
 
 message ListFoosRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest  page  = 2;
+  psm.list.v1.PageRequest page = 2;
   psm.list.v1.QueryRequest query = 3;
 }
 
@@ -156,7 +153,7 @@ message ListFoosResponse {
 
 message ListFooEventsRequest {
   string foo_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest  page = 2;
+  psm.list.v1.PageRequest page = 2;
   psm.list.v1.QueryRequest query = 3;
 }
 
