@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
-	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"github.com/elgris/sqrl"
@@ -453,60 +452,108 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 
 	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
-	if ok && reqPage != nil {
-		if reqPage.GetToken() != "" {
-			rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
+	if ok && reqPage != nil && reqPage.GetToken() != "" {
+		rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
 
-			rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
-			if err != nil {
-				return nil, fmt.Errorf("decode token: %w", err)
-			}
-
-			if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-				return nil, fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
-			}
-
-			for _, sortField := range sortFields {
-				equality := ">="
-				if sortField.desc {
-					equality = "<="
-				}
-
-				dbVal := rowMessage.Get(sortField.field).Interface()
-				switch subType := dbVal.(type) {
-				case *dynamicpb.Message:
-					name := subType.Descriptor().FullName()
-					msgBytes, err := proto.Marshal(subType)
-					if err != nil {
-						return nil, fmt.Errorf("marshal %s: %w", name, err)
-					}
-
-					switch name {
-					case "google.protobuf.Timestamp":
-						ts := timestamppb.Timestamp{}
-						if err := proto.Unmarshal(msgBytes, &ts); err != nil {
-							return nil, fmt.Errorf("unmarshal %s: %w", name, err)
-						}
-						dbVal = ts.AsTime().Format(time.RFC3339Nano) // JSON Encoding
-					default:
-						return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
-					}
-
-				case string:
-					dbVal = subType
-				default:
-					return nil, fmt.Errorf("unknown sort field type %T", dbVal)
-				}
-
-				selectQuery = selectQuery.Where(
-					fmt.Sprintf("%s.%s->>'%s' %s ?",
-						tableAlias,
-						ll.dataColumn,
-						sortField.jsonbPath(),
-						equality,
-					), dbVal)
-			}
+		rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
+		if err != nil {
+			return nil, fmt.Errorf("decode token: %w", err)
 		}
+
+		if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
+			return nil, fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+		}
+
+		lhsFields := make([]string, 0, len(sortFields))
+		rhsValues := make([]interface{}, 0, len(sortFields))
+		rhsPlaceholders := make([]string, 0, len(sortFields))
+
+		for _, sortField := range sortFields {
+
+			rowSelecter := fmt.Sprintf("%s.%s->>'%s'",
+				tableAlias,
+				ll.dataColumn,
+				sortField.jsonbPath(),
+			)
+			valuePlaceholder := "?"
+
+			dbVal := rowMessage.Get(sortField.field).Interface()
+			switch subType := dbVal.(type) {
+			case *dynamicpb.Message:
+				name := subType.Descriptor().FullName()
+				msgBytes, err := proto.Marshal(subType)
+				if err != nil {
+					return nil, fmt.Errorf("marshal %s: %w", name, err)
+				}
+
+				switch name {
+				case "google.protobuf.Timestamp":
+					ts := timestamppb.Timestamp{}
+					if err := proto.Unmarshal(msgBytes, &ts); err != nil {
+						return nil, fmt.Errorf("unmarshal %s: %w", name, err)
+					}
+					intVal := ts.AsTime().UnixMicro()
+
+					// This will make quite the index...
+					rowSelecter = fmt.Sprintf("(EXTRACT(epoch FROM (%s)::timestamp) * 1000000)::bigint", rowSelecter)
+					if sortField.desc {
+						intVal = intVal * -1
+						rowSelecter = fmt.Sprintf("-1 * %s", rowSelecter)
+					}
+					dbVal = intVal
+				default:
+					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
+				}
+
+			case string:
+				dbVal = subType
+				if sortField.desc {
+					// String fields aren't valid for sorting in listify, they
+					// can only be used for the tie-breaker so the order itself
+					// is not important, only that it is consistent
+					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
+				}
+
+			default:
+				return nil, fmt.Errorf("unknown sort field type %T", dbVal)
+			}
+
+			lhsFields = append(lhsFields, rowSelecter)
+			rhsValues = append(rhsValues, dbVal)
+			rhsPlaceholders = append(rhsPlaceholders, valuePlaceholder)
+
+		}
+
+		// From https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
+		// >> for the <, <=, > and >= cases, the row elements are compared left-to-right, stopping as soon
+		// >> as an unequal or null pair of elements is found. If either of this pair of elements is null,
+		// >> the result of the row comparison is unknown (null); otherwise comparison of this pair of elements
+		// >> determines the result. For example, ROW(1,2,NULL) < ROW(1,3,0) yields true, not null, because the
+		// >> third pair of elements are not considered.
+		//
+		// This means that we can use the row comparison with the same fields as
+		// the sort fields to exclude the exact record we want, rather than the
+		// filter being applied to all fields equally which takes out valid
+		// records.
+		// `(1, 30) >= (1, 20)` is true, so is `1 >= 1 AND 30 >= 20`
+		// `(2, 10) >= (1, 20)` is also true, but `2 >= 1 AND 10 >= 20` is false
+		// Since the tuple comparrison starts from the left and stops at the first term.
+		//
+		// The downside is that we have to negate the values to sort in reverse
+		// order, as we don't get an operator per term. This gets strange for
+		// some data types and will create some crazy indexes.
+		//
+		// TODO: Optimise the cases when the order is ASC and therefore we don't
+		// need to flip, but also the cases where we can just reverse the whole
+		// comparrison and reverse all flips to simplify, noting again that it
+		// does not actually matter in which order the string field is sorted...
+		// or don't because indexes.
+
+		selectQuery = selectQuery.Where(
+			fmt.Sprintf("(%s) >= (%s)",
+				strings.Join(lhsFields, ","),
+				strings.Join(rhsPlaceholders, ","),
+			), rhsValues...)
 	}
 
 	return selectQuery, nil
