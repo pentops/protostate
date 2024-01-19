@@ -61,6 +61,12 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			"bar_id":    event.BarId,
 		}, nil
 	},
+	EventPrimaryKeyFieldPaths: []string{
+		"metadata.event_id",
+	},
+	StatePrimaryKeyFieldPaths: []string{
+		"bar_id",
+	},
 }
 
 type BarPSMTransitionBaton = psm.TransitionBaton[*BarEvent, BarPSMEvent]
@@ -110,16 +116,6 @@ func (c BarPSMConverter) EventLabel(e BarPSMEvent) string {
 func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 	return &BarState{
 		BarId: e.BarId,
-	}
-}
-
-func (c BarPSMConverter) EventPrimaryKeyFieldPaths() []string {
-	return []string{"metadata.event_id"}
-}
-
-func (c BarPSMConverter) StatePrimaryKeyFieldPaths() []string {
-	return []string{
-		"bar_id",
 	}
 }
 func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
