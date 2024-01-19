@@ -247,10 +247,8 @@ func TestFooPagination(t *testing.T) {
 		restore := silenceLogger()
 		defer restore()
 
-		tt := time.Now()
-
 		for ii := 0; ii < 30; ii++ {
-			tt = tt.Add(time.Second)
+			tt := time.Now()
 			fooID := uuid.NewString()
 
 			event1 := &testpb.FooEvent{
@@ -267,7 +265,7 @@ func TestFooPagination(t *testing.T) {
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
 							Name:  "foo",
-							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339)),
+							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
 						},
 					},
 				},
