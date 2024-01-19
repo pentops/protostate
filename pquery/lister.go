@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"github.com/elgris/sqrl"
@@ -490,9 +491,10 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					if err := proto.Unmarshal(msgBytes, &ts); err != nil {
 						return nil, fmt.Errorf("unmarshal %s: %w", name, err)
 					}
-					intVal := ts.AsTime().UnixMicro()
-
-					// This will make quite the index...
+					intVal := ts.AsTime().Round(time.Microsecond).UnixMicro()
+					// Go rounds half-up.
+					// Postgres is undocumented, but can only handle
+					// microseconds.
 					rowSelecter = fmt.Sprintf("(EXTRACT(epoch FROM (%s)::timestamp) * 1000000)::bigint", rowSelecter)
 					if sortField.desc {
 						intVal = intVal * -1
