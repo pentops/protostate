@@ -48,7 +48,7 @@ func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	}
 }
 
-func (spec *TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
+func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
 	spec.setDefaults()
 	return QuerySpec{
 		StateTable:      spec.StateTable,
