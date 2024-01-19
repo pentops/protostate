@@ -34,6 +34,9 @@ type TableSpec[
 	StateDataColumn string // default: state
 	EventDataColumn string // default: data
 	EventColumns    func(E) (map[string]interface{}, error)
+
+	EventPrimaryKeyFieldPaths []string
+	StatePrimaryKeyFieldPaths []string
 }
 
 func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
@@ -42,6 +45,22 @@ func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	}
 	if spec.EventDataColumn == "" {
 		spec.EventDataColumn = "data"
+	}
+}
+
+func (spec *TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
+	spec.setDefaults()
+	return QuerySpec{
+		StateTable:      spec.StateTable,
+		StateDataColumn: spec.StateDataColumn,
+		EventTable:      spec.EventTable,
+		EventDataColumn: spec.EventDataColumn,
+
+		StatePrimaryKeyPaths: spec.StatePrimaryKeyFieldPaths,
+		EventPrimaryKeyPaths: spec.EventPrimaryKeyFieldPaths,
+
+		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
+		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
 	}
 }
 
@@ -79,8 +98,6 @@ type EventTypeConverter[
 	EventLabel(IE) string
 	EmptyState(E) S
 	CheckStateKeys(S, E) error
-	EventPrimaryKeyFieldPaths() []string
-	StatePrimaryKeyFieldPaths() []string
 }
 
 type Transactor interface {
@@ -251,19 +268,7 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 }
 
 func (sm *StateMachine[S, ST, E, IE]) GetQuerySpec() QuerySpec {
-	sm.spec.setDefaults()
-	return QuerySpec{
-		StateTable:      sm.spec.StateTable,
-		StateDataColumn: sm.spec.StateDataColumn,
-		EventTable:      sm.spec.EventTable,
-		EventDataColumn: sm.spec.EventDataColumn,
-
-		StatePrimaryKeyPaths: sm.conversions.StatePrimaryKeyFieldPaths(),
-		EventPrimaryKeyPaths: sm.conversions.EventPrimaryKeyFieldPaths(),
-
-		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
-		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
-	}
+	return sm.spec.QuerySpec()
 }
 
 func (sm *StateMachine[S, ST, E, IE]) store(

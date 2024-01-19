@@ -63,6 +63,12 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			"tenant_id": event.TenantId,
 		}, nil
 	},
+	EventPrimaryKeyFieldPaths: []string{
+		"metadata.event_id",
+	},
+	StatePrimaryKeyFieldPaths: []string{
+		"foo_id",
+	},
 }
 
 type FooPSMTransitionBaton = psm.TransitionBaton[*FooEvent, FooPSMEvent]
@@ -113,16 +119,6 @@ func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{
 		FooId:    e.FooId,
 		TenantId: e.TenantId,
-	}
-}
-
-func (c FooPSMConverter) EventPrimaryKeyFieldPaths() []string {
-	return []string{"metadata.event_id"}
-}
-
-func (c FooPSMConverter) StatePrimaryKeyFieldPaths() []string {
-	return []string{
-		"foo_id",
 	}
 }
 func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {

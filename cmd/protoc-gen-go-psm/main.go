@@ -656,6 +656,17 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("    }, nil")
 	g.P("  },")
+	g.P("  EventPrimaryKeyFieldPaths: []string{")
+	g.P("    \"", ss.metadataField.Desc.Name(), ".", ss.eventIDField.Desc.Name(), "\",")
+	g.P("  },")
+	g.P("  StatePrimaryKeyFieldPaths: []string{")
+	for _, field := range ss.eventStateKeyFields {
+		if !field.isKey {
+			continue
+		}
+		g.P("\"", field.stateField.Desc.Name(), "\",")
+	}
+	g.P("},")
 
 	g.P("}")
 
@@ -682,21 +693,6 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("return &", ss.stateMessage.GoIdent, "{")
 	for _, field := range ss.eventStateKeyFields {
 		g.P(field.stateField.GoName, ": e.", field.eventField.GoName, ",")
-	}
-	g.P("}")
-	g.P("}")
-	g.P()
-	g.P("func (c ", ss.machineName, "Converter) EventPrimaryKeyFieldPaths() []string{")
-	g.P("return []string{\"", ss.metadataField.Desc.Name(), ".", ss.eventIDField.Desc.Name(), "\"}")
-	g.P("}")
-	g.P()
-	g.P("func (c ", ss.machineName, "Converter) StatePrimaryKeyFieldPaths() []string{")
-	g.P("return []string{")
-	for _, field := range ss.eventStateKeyFields {
-		if !field.isKey {
-			continue
-		}
-		g.P("\"", field.stateField.Desc.Name(), "\",")
 	}
 	g.P("}")
 	g.P("}")
