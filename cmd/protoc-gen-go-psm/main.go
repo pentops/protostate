@@ -119,10 +119,6 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	return g
 }
 
-func validateListMethod(method *protogen.Method, pkFields []string) error {
-	return pquery.ValidateListMethod(method.Input.Desc, method.Output.Desc, pquery.WithTieBreakerFields(pkFields...))
-}
-
 func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFields) error {
 
 	if qs.getMethod == nil && qs.listMethod == nil && qs.listEventsMethod == nil {
@@ -131,8 +127,6 @@ func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFi
 		return nil
 	}
 
-	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
-	protoPackage := protogen.GoImportPath("google.golang.org/protobuf/proto")
 	g.P("// State Query Service for %s", qs.specifiedName)
 
 	if qs.getMethod == nil {
@@ -147,8 +141,29 @@ func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFi
 	if ss != nil {
 		statePkFields = ss.statePkFields
 	}
-	if err := validateListMethod(qs.listMethod, statePkFields); err != nil {
+
+	listReflectionSet, err := pquery.BuildListReflection(qs.listMethod.Input.Desc, qs.listMethod.Output.Desc, pquery.WithTieBreakerFields(statePkFields...))
+	if err != nil {
 		return fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+	}
+
+	goServiceName := stateGoName(qs.specifiedName)
+
+	ww := PSMQuerySet{
+		GoServiceName: goServiceName,
+		GetREQ:        qs.getMethod.Input.GoIdent,
+		GetRES:        qs.getMethod.Output.GoIdent,
+		ListREQ:       qs.listMethod.Input.GoIdent,
+		ListRES:       qs.listMethod.Output.GoIdent,
+	}
+
+	for _, field := range listReflectionSet.RequestFilterFields {
+		genField := mapGenField(qs.listMethod.Input, field)
+		ww.ListRequestFilter = append(ww.ListRequestFilter, ListFilterField{
+			DBName:   string(field.Name()),
+			Getter:   genField.GoName,
+			Optional: field.HasOptionalKeyword(),
+		})
 	}
 
 	if qs.listEventsMethod != nil {
@@ -156,46 +171,25 @@ func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFi
 		if ss != nil {
 			fallbackPkFields = ss.eventPkFields
 		}
-		if err := validateListMethod(qs.listEventsMethod, fallbackPkFields); err != nil {
-			return fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listEventsMethod.Desc.FullName(), err)
+		listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.WithTieBreakerFields(fallbackPkFields...))
+		if err != nil {
+			return fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+		}
+		ww.ListEventsREQ = &qs.listEventsMethod.Input.GoIdent
+		ww.ListEventsRES = &qs.listEventsMethod.Output.GoIdent
+		for _, field := range listEventsReflectionSet.RequestFilterFields {
+			genField := mapGenField(qs.listEventsMethod.Input, field)
+			ww.ListEventsRequestFilter = append(ww.ListEventsRequestFilter, ListFilterField{
+				DBName:   string(field.Name()),
+				Getter:   genField.GoName,
+				Optional: field.HasOptionalKeyword(),
+			})
 		}
 	}
 
-	goServiceName := stateGoName(qs.specifiedName)
-
-	g.P("type ", goServiceName, "PSMQuerySet = ", sm.Ident("StateQuerySet"), "[")
-	g.P("*", qs.getMethod.Input.GoIdent, ",")
-	g.P("*", qs.getMethod.Output.GoIdent, ",")
-	g.P("*", qs.listMethod.Input.GoIdent, ",")
-	g.P("*", qs.listMethod.Output.GoIdent, ",")
-	if qs.listEventsMethod != nil {
-		g.P("*", qs.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", qs.listEventsMethod.Output.GoIdent, ",")
-	} else {
-		g.P(protoPackage.Ident("Message"), ",")
-		g.P(protoPackage.Ident("Message"), ",")
+	if err := ww.Write(g); err != nil {
+		return err
 	}
-	g.P("]")
-	g.P()
-
-	g.P("func New", goServiceName, "PSMQuerySet(")
-	g.P("smSpec ", sm.Ident("QuerySpec"), ",")
-	g.P("options ", sm.Ident("StateQueryOptions"), ",")
-	g.P(") (*", goServiceName, "PSMQuerySet, error) {")
-	g.P("return ", sm.Ident("BuildStateQuerySet"), "[")
-	g.P("*", qs.getMethod.Input.GoIdent, ",")
-	g.P("*", qs.getMethod.Output.GoIdent, ",")
-	g.P("*", qs.listMethod.Input.GoIdent, ",")
-	g.P("*", qs.listMethod.Output.GoIdent, ",")
-	if qs.listEventsMethod != nil {
-		g.P("*", qs.listEventsMethod.Input.GoIdent, ",")
-		g.P("*", qs.listEventsMethod.Output.GoIdent, ",")
-	} else {
-		g.P(protoPackage.Ident("Message"), ",")
-		g.P(protoPackage.Ident("Message"), ",")
-	}
-	g.P("](smSpec, options)")
-	g.P("}")
 
 	return nil
 }

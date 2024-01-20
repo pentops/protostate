@@ -82,7 +82,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 	outerEvent E,
 ) error {
 	if err := ee.ValidateEvent(outerEvent); err != nil {
-		return fmt.Errorf("validating event: %w", err)
+		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
 	}
 
 	eventQueue := []E{outerEvent}
