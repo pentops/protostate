@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	"github.com/bufbuild/protovalidate-go"
 	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/log.go/log"
@@ -40,23 +41,13 @@ type ListSpec[
 
 	Auth     AuthProvider
 	AuthJoin []*LeftJoin
+
+	RequestFilter func(REQ) (map[string]interface{}, error)
 }
 
 type sortSpec struct {
 	nestedField
 	desc bool
-}
-
-type Lister[
-	REQ ListRequest,
-	RES ListResponse,
-] struct {
-	listReflection
-
-	tableName  string
-	dataColumn string
-	auth       AuthProvider
-	authJoin   []*LeftJoin
 }
 
 type ListerOption func(*listerOptions)
@@ -73,7 +64,7 @@ func WithTieBreakerFields(fields ...string) ListerOption {
 	}
 }
 
-type listReflection struct {
+type ListReflectionSet struct {
 	pageSize uint64
 
 	arrayField        protoreflect.FieldDescriptor
@@ -83,6 +74,9 @@ type listReflection struct {
 
 	defaultSortFields []sortSpec
 	tieBreakerFields  []sortSpec
+
+	// fields in the list request object which become mandatory filters
+	RequestFilterFields []protoreflect.FieldDescriptor
 }
 
 func resolveListerOptions(options []ListerOption) listerOptions {
@@ -98,9 +92,13 @@ func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.Mes
 	return err
 }
 
-func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options listerOptions) (*listReflection, error) {
+func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) (*ListReflectionSet, error) {
+	return buildListReflection(req, res, resolveListerOptions(options))
+}
+
+func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options listerOptions) (*ListReflectionSet, error) {
 	var err error
-	ll := listReflection{
+	ll := ListReflectionSet{
 		pageSize: uint64(20),
 	}
 	fields := res.Fields()
@@ -151,18 +149,27 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	for i := 0; i < requestFields.Len(); i++ {
 		field := requestFields.Get(i)
 		msg := field.Message()
-		if msg == nil {
-			continue
+		if msg != nil {
+			switch msg.FullName() {
+			case "psm.list.v1.PageRequest":
+				ll.pageRequestField = field
+				continue
+			case "psm.list.v1.QueryRequest":
+				ll.queryRequestField = field
+				continue
+			default:
+				return nil, fmt.Errorf("unknown field in request: '%s' of type %s", field.Name(), field.Kind())
+			}
 		}
 
-		switch msg.FullName() {
-		case "psm.list.v1.PageRequest":
-			ll.pageRequestField = field
-			continue
-		case "psm.list.v1.QueryRequest":
-			ll.queryRequestField = field
-			continue
+		// Assume this is a filter field
+		switch field.Kind() {
+		case protoreflect.StringKind:
+			ll.RequestFilterFields = append(ll.RequestFilterFields, field)
+		default:
+			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.Name(), field.Kind())
 		}
+
 	}
 
 	if ll.pageRequestField == nil {
@@ -184,6 +191,22 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	return &ll, nil
 }
 
+type Lister[
+	REQ ListRequest,
+	RES ListResponse,
+] struct {
+	ListReflectionSet
+
+	tableName  string
+	dataColumn string
+	auth       AuthProvider
+	authJoin   []*LeftJoin
+
+	requestFilter func(REQ) (map[string]interface{}, error)
+
+	validator *protovalidate.Validator
+}
+
 func NewLister[
 	REQ ListRequest,
 	RES ListResponse,
@@ -203,7 +226,13 @@ func NewLister[
 	if err != nil {
 		return nil, err
 	}
-	ll.listReflection = *listFields
+	ll.ListReflectionSet = *listFields
+	ll.requestFilter = spec.RequestFilter
+
+	ll.validator, err = protovalidate.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize validator: %w", err)
+	}
 
 	return ll, nil
 }
@@ -330,6 +359,9 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 }
 
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+	if err := ll.validator.Validate(reqMsg); err != nil {
+		return fmt.Errorf("validating request %s: %w", reqMsg.ProtoReflect().Descriptor().FullName(), err)
+	}
 
 	res := resMsg.ProtoReflect()
 	req := reqMsg.ProtoReflect()
@@ -418,6 +450,23 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			direction = "DESC"
 		}
 		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
+	}
+
+	if ll.requestFilter != nil {
+		filter, err := ll.requestFilter(req.Interface().(REQ))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(filter) > 0 {
+
+			filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filter)
+			if err != nil {
+				return nil, err
+			}
+
+			selectQuery.Where(filterMapped)
+		}
 	}
 
 	if ll.auth != nil {

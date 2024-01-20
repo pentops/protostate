@@ -160,11 +160,11 @@ func TestBuildListReflection(t *testing.T) {
 		mods      func(*TestFoo)
 		options   []ListerOption
 		wantError string
-		assert    func(*testing.T, *listReflection)
+		assert    func(*testing.T, *ListReflectionSet)
 	}{{
 		name: "full success",
 		mods: func(tf *TestFoo) {},
-		assert: func(t *testing.T, lr *listReflection) {
+		assert: func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {
@@ -184,7 +184,7 @@ func TestBuildListReflection(t *testing.T) {
 				},
 			})
 		},
-		assert: func(t *testing.T, lr *listReflection) {
+		assert: func(t *testing.T, lr *ListReflectionSet) {
 			assert.EqualValues(t, 10, lr.pageSize)
 		},
 	}, {
@@ -247,7 +247,7 @@ func TestBuildListReflection(t *testing.T) {
 		options: []ListerOption{
 			WithTieBreakerFields("id"),
 		},
-		assert: func(t *testing.T, lr *listReflection) {
+		assert: func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {
@@ -270,7 +270,7 @@ func TestBuildListReflection(t *testing.T) {
 				SortTiebreaker: []string{"bar.id"},
 			})
 		},
-		assert: func(t *testing.T, lr *listReflection) {
+		assert: func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {

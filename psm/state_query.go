@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// QuerySpec is the configuration for the query service side of the state
-// machine, derived from the state machine table spec and type conversions
-type QuerySpec struct {
+// StateTableSpec is the subset of TableSpec which does not relate to the
+// specific event and state types of the state machine.
+type StateTableSpec struct {
 	StateTable      string
 	StateDataColumn string
 
@@ -24,6 +24,23 @@ type QuerySpec struct {
 
 	EventTypeName protoreflect.FullName
 	StateTypeName protoreflect.FullName
+}
+
+// QuerySpec is the configuration for the query service side of the state
+// machine. Can be partially derived from the state machine table spec, but
+// contains types relating to the query service so cannot be fully derived.
+type QuerySpec[
+	GetREQ pquery.GetRequest,
+	GetRES pquery.GetResponse,
+	ListREQ pquery.ListRequest,
+	ListRES pquery.ListResponse,
+	ListEventsREQ pquery.ListRequest,
+	ListEventsRES pquery.ListResponse,
+] struct {
+	StateTableSpec
+
+	ListRequestFilter       func(ListREQ) (map[string]interface{}, error)
+	ListEventsRequestFilter func(ListEventsREQ) (map[string]interface{}, error)
 }
 
 // StateQuerySet is a shortcut for manually specifying three different query
@@ -82,7 +99,7 @@ func BuildStateQuerySet[
 	ListEventsREQ pquery.ListRequest,
 	ListEventsRES pquery.ListResponse,
 ](
-	smSpec QuerySpec,
+	smSpec QuerySpec[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES],
 	options StateQueryOptions,
 ) (*StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES], error) {
 
@@ -155,9 +172,10 @@ func BuildStateQuerySet[
 	}
 
 	listSpec := pquery.ListSpec[ListREQ, ListRES]{
-		TableName:  smSpec.StateTable,
-		DataColumn: smSpec.StateDataColumn,
-		Auth:       options.Auth,
+		TableName:     smSpec.StateTable,
+		DataColumn:    smSpec.StateDataColumn,
+		Auth:          options.Auth,
+		RequestFilter: smSpec.ListRequestFilter,
 	}
 	if options.AuthJoin != nil {
 		listSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
@@ -188,10 +206,11 @@ func BuildStateQuerySet[
 	}
 
 	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
-		TableName:  smSpec.EventTable,
-		DataColumn: smSpec.EventDataColumn,
-		Auth:       options.Auth,
-		AuthJoin:   eventsAuthJoin,
+		TableName:     smSpec.EventTable,
+		DataColumn:    smSpec.EventDataColumn,
+		Auth:          options.Auth,
+		AuthJoin:      eventsAuthJoin,
+		RequestFilter: smSpec.ListEventsRequestFilter,
 	}
 
 	eventLister, err := pquery.NewLister(eventListSpec, pquery.WithTieBreakerFields(smSpec.EventPrimaryKeyPaths...))

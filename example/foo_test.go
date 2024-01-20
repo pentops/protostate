@@ -145,12 +145,29 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 	}
 
-	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	t.Run("Get", func(t *testing.T) {
+	t.Run("List", func(t *testing.T) {
+
+		req := &testpb.ListFoosRequest{}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Foos) != 2 {
+			t.Fatalf("expected 2 states, got %d", len(res.Foos))
+		}
+
+	})
+
+	t.Run("Get1", func(t *testing.T) {
 
 		req := &testpb.GetFooRequest{
 			FooId: fooID,
@@ -177,26 +194,10 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(res.Events)
 	})
 
-	t.Run("List", func(t *testing.T) {
-
-		req := &testpb.ListFoosRequest{}
-		res := &testpb.ListFoosResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
+	t.Run("ListEvents1", func(t *testing.T) {
+		req := &testpb.ListFooEventsRequest{
+			FooId: fooID,
 		}
-
-		t.Log(protojson.Format(res))
-		if len(res.Foos) != 2 {
-			t.Fatalf("expected 2 states, got %d", len(res.Foos))
-		}
-
-	})
-
-	t.Run("ListEvents", func(t *testing.T) {
-
-		req := &testpb.ListFooEventsRequest{}
 		res := &testpb.ListFooEventsResponse{}
 
 		err = queryer.ListEvents(ctx, db, req, res)
@@ -205,8 +206,8 @@ func TestFooStateMachine(t *testing.T) {
 		}
 
 		t.Log(protojson.Format(res))
-		if len(res.Events) != 3 {
-			t.Fatalf("expected 3 events, got %d", len(res.Events))
+		if len(res.Events) != 2 {
+			t.Fatalf("expected 2 events for foo 1, got %d", len(res.Events))
 		}
 	})
 }
@@ -236,7 +237,7 @@ func TestFooPagination(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
 	defer ss.RunSteps(t)
 
-	queryer, err := testpb.NewFooPSMQuerySet(sm.GetQuerySpec(), psm.StateQueryOptions{})
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

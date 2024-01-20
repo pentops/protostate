@@ -48,9 +48,9 @@ func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	}
 }
 
-func (spec TableSpec[S, ST, E, IE]) QuerySpec() QuerySpec {
+func (spec TableSpec[S, ST, E, IE]) StateTableSpec() StateTableSpec {
 	spec.setDefaults()
-	return QuerySpec{
+	return StateTableSpec{
 		StateTable:      spec.StateTable,
 		StateDataColumn: spec.StateDataColumn,
 		EventTable:      spec.EventTable,
@@ -118,6 +118,10 @@ type StateMachine[
 	*Eventer[S, ST, E, IE]
 
 	hooks []StateHook[S, ST, E, IE]
+}
+
+func (sm StateMachine[S, ST, E, IE]) StateTableSpec() StateTableSpec {
+	return sm.spec.StateTableSpec()
 }
 
 type StateHook[
@@ -265,10 +269,6 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	}
 
 	return state, nil
-}
-
-func (sm *StateMachine[S, ST, E, IE]) GetQuerySpec() QuerySpec {
-	return sm.spec.QuerySpec()
 }
 
 func (sm *StateMachine[S, ST, E, IE]) store(

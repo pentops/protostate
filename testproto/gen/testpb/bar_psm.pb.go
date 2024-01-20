@@ -170,6 +170,8 @@ func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 }
 
 // State Query Service for %sbar
+// QuerySet is the query set for the Bar service.
+
 type BarPSMQuerySet = psm.StateQuerySet[
 	*GetBarRequest,
 	*GetBarResponse,
@@ -180,7 +182,14 @@ type BarPSMQuerySet = psm.StateQuerySet[
 ]
 
 func NewBarPSMQuerySet(
-	smSpec psm.QuerySpec,
+	smSpec psm.QuerySpec[
+		*GetBarRequest,
+		*GetBarResponse,
+		*ListBarsRequest,
+		*ListBarsResponse,
+		proto.Message,
+		proto.Message,
+	],
 	options psm.StateQueryOptions,
 ) (*BarPSMQuerySet, error) {
 	return psm.BuildStateQuerySet[
@@ -191,4 +200,33 @@ func NewBarPSMQuerySet(
 		proto.Message,
 		proto.Message,
 	](smSpec, options)
+}
+
+type BarPSMQuerySpec = psm.QuerySpec[
+	*GetBarRequest,
+	*GetBarResponse,
+	*ListBarsRequest,
+	*ListBarsResponse,
+	proto.Message,
+	proto.Message,
+]
+
+func DefaultBarPSMQuerySpec(tableSpec psm.StateTableSpec) BarPSMQuerySpec {
+	return psm.QuerySpec[
+		*GetBarRequest,
+		*GetBarResponse,
+		*ListBarsRequest,
+		*ListBarsResponse,
+		proto.Message,
+		proto.Message,
+	]{
+		StateTableSpec: tableSpec,
+		ListRequestFilter: func(req *ListBarsRequest) (map[string]interface{}, error) {
+			filter := map[string]interface{}{}
+			if req.TenantId != nil {
+				filter["tenant_id"] = *req.TenantId
+			}
+			return filter, nil
+		},
+	}
 }
