@@ -166,6 +166,8 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		switch field.Kind() {
 		case protoreflect.StringKind:
 			ll.RequestFilterFields = append(ll.RequestFilterFields, field)
+		case protoreflect.BoolKind:
+			ll.RequestFilterFields = append(ll.RequestFilterFields, field)
 		default:
 			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.Name(), field.Kind())
 		}
