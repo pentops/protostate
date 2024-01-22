@@ -342,16 +342,19 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 			if isDefaultSort {
 				defaultSortFields = append(defaultSortFields, sortSpec{
 					nestedField: nestedField{
-						field:    field,
-						jsonPath: []string{field.JSONName()},
+						field:     field,
+						fieldPath: []protoreflect.FieldDescriptor{field},
+						jsonPath:  []string{field.JSONName()},
 					},
 					desc: true,
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
 			subSort := buildDefaultSorts(field.Message().Fields())
-			for _, subSortField := range subSort {
+			for idx, subSortField := range subSort {
 				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
+				subSortField.fieldPath = append([]protoreflect.FieldDescriptor{field}, subSortField.fieldPath...)
+				subSort[idx] = subSortField
 			}
 			defaultSortFields = append(defaultSortFields, subSort...)
 		}
@@ -409,9 +412,10 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
 		if idx >= int(ll.pageSize) {
-			// This is just pretend. The eventual solution will need to look at
-			// the actual sorting and filtering of the query to determine the
-			// next token.
+			// TODO: This works but the token is huge.
+			// The eventual solution will need to look at
+			// the sorting and filtering of the query and either encode them
+			// directly, or encode a subset of the message as required.
 			lastBytes, err := proto.Marshal(rowMessage.Interface())
 			if err != nil {
 				return fmt.Errorf("marshalling final row: %w", err)
@@ -451,7 +455,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if sortField.desc {
 			direction = "DESC"
 		}
-		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
+		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
 	if ll.requestFilter != nil {
@@ -520,14 +524,18 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		for _, sortField := range sortFields {
 
-			rowSelecter := fmt.Sprintf("%s.%s->>'%s'",
+			rowSelecter := fmt.Sprintf("%s.%s%s",
 				tableAlias,
 				ll.dataColumn,
 				sortField.jsonbPath(),
 			)
 			valuePlaceholder := "?"
 
-			dbVal := rowMessage.Get(sortField.field).Interface()
+			fieldVal, err := walkProtoValue(rowMessage, sortField.fieldPath)
+			if err != nil {
+				return nil, fmt.Errorf("sort field %s: %w", strings.Join(sortField.jsonPath, "."), err)
+			}
+			dbVal := fieldVal.Interface()
 			switch subType := dbVal.(type) {
 			case *dynamicpb.Message:
 				name := subType.Descriptor().FullName()
@@ -566,7 +574,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 				}
 
 			default:
-				return nil, fmt.Errorf("unknown sort field type %T", dbVal)
+				return nil, fmt.Errorf("unknown sort field %s, type %T", strings.Join(sortField.jsonPath, "."), dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
@@ -611,12 +619,46 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 }
 
 type nestedField struct {
-	jsonPath []string
-	field    protoreflect.FieldDescriptor
+	jsonPath  []string
+	fieldPath []protoreflect.FieldDescriptor
+	field     protoreflect.FieldDescriptor
+}
+
+func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescriptor) (protoreflect.Value, error) {
+	if len(path) == 0 {
+		return protoreflect.Value{}, fmt.Errorf("empty path")
+	}
+	var val protoreflect.Value
+	field := path[0]
+
+	if !msg.Has(field) {
+		return protoreflect.Value{}, fmt.Errorf("field %s not found in %s", field.Name(), msg.Descriptor().FullName())
+	}
+	val = msg.Get(field)
+	if len(path) == 1 {
+		return val, nil
+	}
+	if field.Kind() != protoreflect.MessageKind {
+		return protoreflect.Value{}, fmt.Errorf("field %s is not a message", field.Name())
+	}
+
+	return walkProtoValue(val.Message(), path[1:])
 }
 
 func (nf nestedField) jsonbPath() string {
-	return strings.Join(nf.jsonPath, "->")
+	out := strings.Builder{}
+	last := len(nf.jsonPath) - 1
+	for idx, part := range nf.jsonPath {
+		// last part gets a double >
+		if idx == last {
+			out.WriteString("->>")
+		} else {
+			out.WriteString("->")
+		}
+		out.WriteString(fmt.Sprintf("'%s'", part))
+	}
+
+	return out.String()
 }
 
 func findField(message protoreflect.MessageDescriptor, path string) (*nestedField, error) {
@@ -637,8 +679,9 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 
 	if furtherPath == "" {
 		return &nestedField{
-			field:    field,
-			jsonPath: []string{field.JSONName()},
+			field:     field,
+			fieldPath: []protoreflect.FieldDescriptor{field},
+			jsonPath:  []string{field.JSONName()},
 		}, nil
 	}
 
@@ -650,8 +693,9 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 		return nil, fmt.Errorf("field %s: %w", parts[0], err)
 	}
 	return &nestedField{
-		field:    spec.field,
-		jsonPath: append([]string{field.JSONName()}, spec.jsonPath...),
+		field:     spec.field,
+		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
+		jsonPath:  append([]string{field.JSONName()}, spec.jsonPath...),
 	}, nil
 
 }
