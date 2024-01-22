@@ -113,29 +113,6 @@ func TestFieldPath(t *testing.T) {
 
 }
 
-/*message ListFoosRequest {
-	psm.list.v1.PageRequest page = 1;
-	psm.list.v1.QueryRequest query = 2;
-
-	option (psm.list.v1.list_request) = {
-		sort_tiebreaker: ["id"]
-	};
-}
-
-message Foo {
-	string id = 1;
-	Bar bar = 2;
-}
-
-message Bar {
-	string id = 1;
-}
-
-message ListFoosResponse {
-	repeated Foo foos = 1;
-	psm.list.v1.PageResponse page = 2;
-}*/
-
 type composed struct {
 	ListFoosRequest  string
 	ListFoosResponse string
@@ -204,6 +181,7 @@ func TestBuildListReflection(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Helper()
 			set, err := build(t, input, options)
+
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -222,7 +200,9 @@ func TestBuildListReflection(t *testing.T) {
 		})
 	}
 
-	runHappy("simple", `
+	// Successes
+
+	runHappy("full success", `
 		message ListFoosRequest {
 			psm.list.v1.PageRequest page = 1;
 			psm.list.v1.QueryRequest query = 2;
@@ -252,7 +232,7 @@ func TestBuildListReflection(t *testing.T) {
 			assert.Equal(t, uint64(20), lr.pageSize)
 		})
 
-	runHappy("override page size", `
+	runHappy("override page size by validation", `
 		message ListFoosRequest {
 			psm.list.v1.PageRequest page = 1;
 			psm.list.v1.QueryRequest query = 2;
@@ -278,66 +258,7 @@ func TestBuildListReflection(t *testing.T) {
 			assert.EqualValues(t, int(10), int(lr.pageSize))
 		})
 
-	runSad("non message field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			Foo dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"unknown field")
-
-	runSad("non message in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			string dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"should be a message",
-	)
-
-	runSad("extra array field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			repeated Foo dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"multiple repeated fields")
-
-	runSad("no array field in response", composed{
-		ListFoosResponse: `
-			psm.list.v1.PageResponse page = 2;
-			`,
-	}.toString(),
-		listerOptions{},
-		"no repeated field in response",
-	)
-
-	runSad("no page field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			`,
-	}.toString(),
-		listerOptions{},
-		"no page field in response",
-	)
-
-	runSad("no fallback sort field", composed{
-		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-		`,
-	}.toString(),
-		listerOptions{},
-		"no default sort field",
-	)
-
-	runHappy("external tie breaker", composed{
+	runHappy("tie breaker fallback", composed{
 		ListFoosRequest: `
 			psm.list.v1.PageRequest page = 1;
 			psm.list.v1.QueryRequest query = 2;
@@ -354,20 +275,6 @@ func TestBuildListReflection(t *testing.T) {
 				assert.Equal(t, "->>'id'", field.jsonbPath())
 			}
 		})
-
-	runSad("tie breaker not in response", composed{
-
-		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-			option (psm.list.v1.list_request) = {
-				sort_tiebreaker: ["missing"]
-			};
-			`,
-	}.toString(),
-		listerOptions{},
-		"no field named 'missing'",
-	)
 
 	runHappy("sort by bar", `
 		message ListFoosRequest {
@@ -458,5 +365,82 @@ func TestBuildListReflection(t *testing.T) {
 				assert.Equal(t, []string{"bar", "timestamp"}, fieldPath)
 			}
 		})
+
+	// Reponse Errors
+
+	runSad("non message field in response", composed{
+		ListFoosResponse: `
+			repeated Foo foos = 1;
+			psm.list.v1.PageResponse page = 2;
+			Foo dangling = 3;
+		`,
+	}.toString(),
+		listerOptions{},
+		"unknown field")
+
+	runSad("non message in response", composed{
+		ListFoosResponse: `
+			repeated Foo foos = 1;
+			psm.list.v1.PageResponse page = 2;
+			string dangling = 3;
+		`,
+	}.toString(),
+		listerOptions{},
+		"should be a message",
+	)
+
+	runSad("extra array field in response", composed{
+		ListFoosResponse: `
+			repeated Foo foos = 1;
+			psm.list.v1.PageResponse page = 2;
+			repeated Foo dangling = 3;
+		`,
+	}.toString(),
+		listerOptions{},
+		"multiple repeated fields")
+
+	runSad("no array field in response", composed{
+		ListFoosResponse: `
+			psm.list.v1.PageResponse page = 2;
+			`,
+	}.toString(),
+		listerOptions{},
+		"no repeated field in response",
+	)
+
+	runSad("no page field in response", composed{
+		ListFoosResponse: `
+			repeated Foo foos = 1;
+			`,
+	}.toString(),
+		listerOptions{},
+		"no page field in response",
+	)
+
+	// Request Errors
+
+	runSad("no fallback sort field", composed{
+		ListFoosRequest: `
+			psm.list.v1.PageRequest page = 1;
+			psm.list.v1.QueryRequest query = 2;
+		`,
+	}.toString(),
+		listerOptions{},
+		"no default sort field",
+	)
+
+	runSad("tie breaker not in response", composed{
+
+		ListFoosRequest: `
+			psm.list.v1.PageRequest page = 1;
+			psm.list.v1.QueryRequest query = 2;
+			option (psm.list.v1.list_request) = {
+				sort_tiebreaker: ["missing"]
+			};
+			`,
+	}.toString(),
+		listerOptions{},
+		"no field named 'missing'",
+	)
 
 }
