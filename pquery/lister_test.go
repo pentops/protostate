@@ -2,85 +2,130 @@ package pquery
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 
-	"github.com/jhump/protoreflect/desc"
-	"github.com/jhump/protoreflect/desc/protoparse"
+	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-type ResultSet struct {
-	*protoregistry.Files
+func ptr[T any](s T) *T {
+	return &s
 }
 
-func (rs ResultSet) MessageByName(t testing.TB, name protoreflect.FullName) protoreflect.MessageDescriptor {
-	t.Helper()
-	md, err := rs.FindDescriptorByName(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return md.(protoreflect.MessageDescriptor)
+type TestFoo struct {
+	ListFoosRequest  *descriptorpb.DescriptorProto
+	Foo              *descriptorpb.DescriptorProto
+	Bar              *descriptorpb.DescriptorProto
+	ListFoosResponse *descriptorpb.DescriptorProto
 }
-func DescriptorsFromSource(t testing.TB, sourceFiles map[string]string) ResultSet {
-	t.Helper()
 
-	parser := protoparse.Parser{
-		ImportPaths:           []string{""},
-		IncludeSourceCodeInfo: false,
-		// Load everything which the runtime has already leaded, includes all
-		// the google, buf, psm etc packages, so long as something which uses
-		// them has already beein imported
-		LookupImport: desc.LoadFileDescriptor,
-		Accessor: func(filename string) (io.ReadCloser, error) {
-			if content, ok := sourceFiles[filename]; ok {
-				return io.NopCloser(strings.NewReader(content)), nil
-			}
-			return nil, fmt.Errorf("file not found: %s", filename)
+func NewTestFoo() *TestFoo {
+	tf := &TestFoo{
+		ListFoosRequest: &descriptorpb.DescriptorProto{
+			Name: ptr("ListFoosRequest"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:     ptr("page"),
+				Number:   ptr(int32(1)),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: ptr(".psm.list.v1.PageRequest"),
+				Options:  &descriptorpb.FieldOptions{},
+			}, {
+				Name:     ptr("query"),
+				Number:   ptr(int32(2)),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: ptr(".psm.list.v1.QueryRequest"),
+				Options:  &descriptorpb.FieldOptions{},
+			}},
+			Options: &descriptorpb.MessageOptions{},
+		},
+		Foo: &descriptorpb.DescriptorProto{
+			Name: ptr("Foo"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:    ptr("id"),
+				Number:  ptr(int32(1)),
+				Type:    descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Options: &descriptorpb.FieldOptions{},
+			}, {
+				Name:     ptr("bar"),
+				Number:   ptr(int32(2)),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: ptr(".test.Bar"),
+				Options:  &descriptorpb.FieldOptions{},
+			}},
+			Options: &descriptorpb.MessageOptions{},
+		},
+		Bar: &descriptorpb.DescriptorProto{
+			Name: ptr("Bar"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:    ptr("id"),
+				Number:  ptr(int32(1)),
+				Type:    descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Options: &descriptorpb.FieldOptions{},
+			}},
+			Options: &descriptorpb.MessageOptions{},
+		},
+		ListFoosResponse: &descriptorpb.DescriptorProto{
+			Name: ptr("ListFoosResponse"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:     ptr("foos"),
+				Number:   ptr(int32(1)),
+				Label:    descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: ptr(".test.Foo"),
+				Options:  &descriptorpb.FieldOptions{},
+			}, {
+				Name:     ptr("page"),
+				Number:   ptr(int32(2)),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: ptr(".psm.list.v1.PageResponse"),
+				Options:  &descriptorpb.FieldOptions{},
+			}},
+			Options: &descriptorpb.MessageOptions{},
 		},
 	}
 
-	customDesc, err := parser.ParseFiles("test.proto")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tf.SetListRequest(&psml_pb.ListRequestMessage{
+		SortTiebreaker: []string{"id"},
+	})
 
-	realDesc := desc.ToFileDescriptorSet(customDesc...)
-	descFiles, err := protodesc.NewFiles(realDesc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	return tf
+}
 
-	return ResultSet{
-		Files: descFiles,
+func (tf *TestFoo) FileDescriptor() *descriptorpb.FileDescriptorProto {
+	return &descriptorpb.FileDescriptorProto{
+		Name:    ptr("test.proto"),
+		Package: ptr("test"),
+		Dependency: []string{
+			"psm/list/v1/page.proto",
+			"psm/list/v1/query.proto",
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			tf.ListFoosRequest,
+			tf.Foo,
+			tf.Bar,
+			tf.ListFoosResponse,
+		},
 	}
 }
 
+func (tf *TestFoo) SetListRequest(listRequest *psml_pb.ListRequestMessage) {
+	proto.SetExtension(tf.ListFoosRequest.Options, psml_pb.E_ListRequest, listRequest)
+}
+
 func TestFieldPath(t *testing.T) {
-	descFiles := DescriptorsFromSource(t, map[string]string{
-		"test.proto": `
-		syntax = "proto3";
+	tf := NewTestFoo()
+	pdf, err := protodesc.NewFile(tf.FileDescriptor(), protoregistry.GlobalFiles)
+	if err != nil {
+		t.Fatal(fmt.Errorf("converting to descriptor: %w", err))
+	}
 
-		import "psm/list/v1/page.proto";
-		import "psm/list/v1/query.proto";
-
-		package test;
-
-		message Foo {
-			string id = 1;
-			Bar bar = 2;
-		}
-
-		message Bar {
-			string id = 1;
-		}
-	`})
-
-	fooDesc := descFiles.MessageByName(t, "test.Foo")
+	fooDesc := pdf.Messages().ByName("Foo")
 
 	for _, tc := range []struct {
 		name string
@@ -102,345 +147,171 @@ func TestFieldPath(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.path, field.jsonPath)
-			namedFieldPath := make([]string, len(field.fieldPath))
-			for i, field := range field.fieldPath {
-				namedFieldPath[i] = string(field.Name())
-			}
-			assert.Equal(t, tc.path, namedFieldPath)
-
 		})
 	}
 
-}
-
-type composed struct {
-	ListFoosRequest  string
-	ListFoosResponse string
-	Foo              string
-}
-
-func (c composed) toString() string {
-	out := ""
-	if c.ListFoosRequest != "" {
-		out += "message ListFoosRequest {\n" + c.ListFoosRequest + "\n}\n"
-	} else {
-		out += `message ListFoosRequest {
-				psm.list.v1.PageRequest page = 1;
-				psm.list.v1.QueryRequest query = 2;
-
-				option (psm.list.v1.list_request) = {
-					sort_tiebreaker: ["id"]
-				};
-			}`
-	}
-
-	if c.ListFoosResponse != "" {
-		out += "message ListFoosResponse {\n" + c.ListFoosResponse + "\n}\n"
-	} else {
-		out += `message ListFoosResponse {
-				repeated Foo foos = 1;
-				psm.list.v1.PageResponse page = 2;
-			}`
-	}
-
-	if c.Foo != "" {
-		out += "message Foo {\n" + c.Foo + "\n}\n"
-	} else {
-		out += `message Foo {
-				string id = 1;
-			}`
-	}
-	return out
 }
 
 func TestBuildListReflection(t *testing.T) {
 
-	build := func(t testing.TB, input string, options listerOptions) (*ListReflectionSet, error) {
-		pdf := DescriptorsFromSource(t, map[string]string{
-			"test.proto": `
-				syntax = "proto3";
-
-				package test;
-
-				// Import everything which may be used
-				import "psm/list/v1/page.proto";
-				import "psm/list/v1/query.proto";
-				import "psm/list/v1/annotations.proto";
-				import "buf/validate/validate.proto";
-				import "google/protobuf/timestamp.proto";
-				` + input,
-		})
-
-		responseDesc := pdf.MessageByName(t, "test.ListFoosResponse")
-		requestDesc := pdf.MessageByName(t, "test.ListFoosRequest")
-
-		return buildListReflection(requestDesc, responseDesc, options)
-	}
-
-	runHappy := func(name string, input string, options listerOptions, callback func(*testing.T, *ListReflectionSet)) {
-		t.Run(name, func(t *testing.T) {
-			t.Helper()
-			set, err := build(t, input, options)
-
-			if err != nil {
-				t.Fatal(err)
-			}
-			callback(t, set)
-		})
-	}
-	runSad := func(name string, input string, options listerOptions, wantError string) {
-		t.Run(name, func(t *testing.T) {
-			_, err := build(t, input, options)
-			if err == nil {
-				t.Fatal("expected error")
-			}
-			if !strings.Contains(err.Error(), wantError) {
-				t.Errorf("expected error to contain '%s', got '%s'", wantError, err.Error())
-			}
-		})
-	}
-
-	// Successes
-
-	runHappy("full success", `
-		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-
-			option (psm.list.v1.list_request) = {
-				sort_tiebreaker: ["id"]
-			};
-		}
-
-		message ListFoosResponse {
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-		}
-
-		message Foo {
-			string id = 1;
-		}
-		`,
-		listerOptions{},
-		func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->>'id'", field.jsonbPath())
-			}
-			assert.Equal(t, uint64(20), lr.pageSize)
-		})
-
-	runHappy("override page size by validation", `
-		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-
-			option (psm.list.v1.list_request) = {
-				sort_tiebreaker: ["id"]
-			};
-		}
-
-		message ListFoosResponse {
-			repeated Foo foos = 1 [
-				(buf.validate.field).repeated.max_items = 10
-			];
-			psm.list.v1.PageResponse page = 2;
-		}
-
-		message Foo {
-			string id = 1;
-		}
-		`,
-		listerOptions{},
-		func(t *testing.T, lr *ListReflectionSet) {
-			assert.EqualValues(t, int(10), int(lr.pageSize))
-		})
-
-	runHappy("tie breaker fallback", composed{
-		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-		`,
-	}.toString(),
-		listerOptions{
-			tieBreakerFields: []string{"id"},
+	for _, tc := range []struct {
+		name      string
+		mods      func(*TestFoo)
+		options   []ListerOption
+		wantError string
+		assert    func(*testing.T, *ListReflectionSet)
+	}{
+		// Successes
+		{
+			name: "full success",
+			mods: func(tf *TestFoo) {},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "id", field.jsonbPath())
+				}
+				assert.Equal(t, uint64(20), lr.pageSize)
+			},
+		}, {
+			name: "override page size by validation",
+			mods: func(tf *TestFoo) {
+				proto.SetExtension(tf.ListFoosResponse.Field[0].Options, validate.E_Field, &validate.FieldConstraints{
+					Type: &validate.FieldConstraints_Repeated{
+						Repeated: &validate.RepeatedRules{
+							MaxItems: ptr(uint64(10)),
+						},
+					},
+				})
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				assert.EqualValues(t, 10, lr.pageSize)
+			},
+		}, {
+			name: "tie breaker fallback",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{})
+			},
+			options: []ListerOption{
+				WithTieBreakerFields("id"),
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "id", field.jsonbPath())
+				}
+			},
+		}, {
+			name: "sort by bar",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{
+					SortTiebreaker: []string{"bar.id"},
+				})
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "bar->id", field.jsonbPath())
+				}
+			},
 		},
-		func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->>'id'", field.jsonbPath())
+
+		// Response Errors
+		{
+			name: "non message field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:     ptr("dangling"),
+					Number:   ptr(int32(3)),
+					Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+					TypeName: ptr(".test.Foo"),
+				})
+			},
+			wantError: "unknown field",
+		}, {
+			name: "non repeated field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:   ptr("dangling"),
+					Number: ptr(int32(3)),
+					Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				})
+			},
+			wantError: "should be a message",
+		}, {
+			name: "extra array field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:     ptr("double"),
+					Number:   ptr(int32(3)),
+					Label:    descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
+					Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+					TypeName: ptr(".test.Foo"),
+				})
+			},
+			wantError: "multiple repeated fields",
+		}, {
+			name: "no array field",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[1:]
+			},
+			wantError: "no repeated field in response",
+		}, {
+			name: "no page field",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[0:1]
+			},
+			wantError: "no page field in response",
+		},
+
+		// Request Errors
+		{
+			name: "no sort or tie breaker",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{})
+			},
+			wantError: "no default sort field",
+		}, {
+			name: "unknown tie breaker",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{
+					SortTiebreaker: []string{"unknown"},
+				})
+			},
+			wantError: "no field named 'unknown'",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tf := NewTestFoo()
+			tc.mods(tf)
+			pdf, err := protodesc.NewFile(tf.FileDescriptor(), protoregistry.GlobalFiles)
+			if err != nil {
+				t.Fatal(fmt.Errorf("converting to descriptor: %w", err))
 			}
-		})
+			responseDesc := pdf.Messages().ByName("ListFoosResponse")
+			requestDesc := pdf.Messages().ByName("ListFoosRequest")
 
-	runHappy("sort by bar", `
-		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			options := resolveListerOptions(tc.options)
+			listReflection, err := buildListReflection(requestDesc, responseDesc, options)
 
-			option (psm.list.v1.list_request) = {
-				sort_tiebreaker: ["bar.id"]
-			};
-		}
-
-		message ListFoosResponse {
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-		}
-
-		message Foo {
-			string id = 1;
-			Bar bar = 2;
-		}
-
-		message Bar {
-			string id = 1;
-		}
-		`,
-		listerOptions{},
-		func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->'bar'->>'id'", field.jsonbPath())
-
-				fieldPath := make([]string, len(field.fieldPath))
-				for i, field := range field.fieldPath {
-					fieldPath[i] = string(field.Name())
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
 				}
-				assert.Equal(t, []string{"bar", "id"}, fieldPath)
-			}
-		})
-
-	runHappy("sort by bar by walking", `
-		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-
-			option (psm.list.v1.list_request) = {
-			};
-		}
-
-		message ListFoosResponse {
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-		}
-
-		message Foo {
-			string id = 1;
-			Bar bar = 2;
-		}
-
-		message Bar {
-			string id = 1;
-			google.protobuf.Timestamp timestamp = 2 [
-				(psm.list.v1.field).timestamp = {
-					sorting: {
-						default_sort: true
-					}
-				}
-			];
-		}
-		`,
-		listerOptions{},
-		func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 0 {
-				t.Error("expected no sort tiebreaker")
-			}
-
-			if len(lr.defaultSortFields) != 1 {
-				t.Error("expected one sort tiebreaker, got", len(lr.tieBreakerFields))
 			} else {
-				field := lr.defaultSortFields[0]
-				assert.Equal(t, "->'bar'->>'timestamp'", field.jsonbPath())
-
-				fieldPath := make([]string, len(field.fieldPath))
-				for i, field := range field.fieldPath {
-					fieldPath[i] = string(field.Name())
+				msg := err.Error()
+				if !strings.Contains(msg, tc.wantError) {
+					t.Errorf("expected error to contain '%s', got '%s'", tc.wantError, msg)
 				}
-				assert.Equal(t, []string{"bar", "timestamp"}, fieldPath)
+				return
 			}
+
+			tc.assert(t, listReflection)
 		})
-
-	// Response Errors
-
-	runSad("non message field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			Foo dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"unknown field")
-
-	runSad("non message in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			string dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"should be a message",
-	)
-
-	runSad("extra array field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
-			repeated Foo dangling = 3;
-		`,
-	}.toString(),
-		listerOptions{},
-		"multiple repeated fields")
-
-	runSad("no array field in response", composed{
-		ListFoosResponse: `
-			psm.list.v1.PageResponse page = 2;
-			`,
-	}.toString(),
-		listerOptions{},
-		"no repeated field in response",
-	)
-
-	runSad("no page field in response", composed{
-		ListFoosResponse: `
-			repeated Foo foos = 1;
-			`,
-	}.toString(),
-		listerOptions{},
-		"no page field in response",
-	)
-
-	// Request Errors
-
-	runSad("no fallback sort field", composed{
-		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-		`,
-	}.toString(),
-		listerOptions{},
-		"no default sort field",
-	)
-
-	runSad("tie breaker not in response", composed{
-
-		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-			option (psm.list.v1.list_request) = {
-				sort_tiebreaker: ["missing"]
-			};
-			`,
-	}.toString(),
-		listerOptions{},
-		"no field named 'missing'",
-	)
-
+	}
 }
