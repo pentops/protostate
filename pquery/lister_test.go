@@ -202,6 +202,7 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy := func(name string, input string, options listerOptions, callback func(*testing.T, *ListReflectionSet)) {
 		t.Run(name, func(t *testing.T) {
+			t.Helper()
 			set, err := build(t, input, options)
 			if err != nil {
 				t.Fatal(err)
@@ -246,7 +247,7 @@ func TestBuildListReflection(t *testing.T) {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "id", field.jsonbPath())
+				assert.Equal(t, "->>'id'", field.jsonbPath())
 			}
 			assert.Equal(t, uint64(20), lr.pageSize)
 		})
@@ -350,7 +351,7 @@ func TestBuildListReflection(t *testing.T) {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "id", field.jsonbPath())
+				assert.Equal(t, "->>'id'", field.jsonbPath())
 			}
 		})
 
@@ -398,7 +399,7 @@ func TestBuildListReflection(t *testing.T) {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "bar->id", field.jsonbPath())
+				assert.Equal(t, "->'bar'->>'id'", field.jsonbPath())
 
 				fieldPath := make([]string, len(field.fieldPath))
 				for i, field := range field.fieldPath {
@@ -448,7 +449,7 @@ func TestBuildListReflection(t *testing.T) {
 				t.Error("expected one sort tiebreaker, got", len(lr.tieBreakerFields))
 			} else {
 				field := lr.defaultSortFields[0]
-				assert.Equal(t, "bar->timestamp", field.jsonbPath())
+				assert.Equal(t, "->'bar'->>'timestamp'", field.jsonbPath())
 
 				fieldPath := make([]string, len(field.fieldPath))
 				for i, field := range field.fieldPath {

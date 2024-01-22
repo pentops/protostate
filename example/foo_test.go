@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -417,6 +418,7 @@ func TestFooEventPagination(t *testing.T) {
 					},
 				},
 			}
+			t.Logf("Entering foo %d TS: %d, ID: %s", ii, event.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro(), event.Metadata.EventId)
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -443,11 +445,12 @@ func TestFooEventPagination(t *testing.T) {
 		}
 
 		for ii, evt := range res.Events {
+			tsv := evt.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro()
 			switch et := evt.Event.Type.(type) {
 			case *testpb.FooEventType_Created_:
-				t.Logf("%d: Create %s", ii, et.Created.Field)
+				t.Logf("%03d: Create %s - %d", ii, et.Created.Field, tsv)
 			case *testpb.FooEventType_Updated_:
-				t.Logf("%d: Update %s", ii, et.Updated.Field)
+				t.Logf("%03d: Update %s - %d", ii, et.Updated.Field, tsv)
 			default:
 				t.Fatalf("unexpected event type %T", et)
 			}
@@ -461,6 +464,19 @@ func TestFooEventPagination(t *testing.T) {
 		if pageResp.NextToken == nil {
 			t.Fatalf("Should not be the final page")
 		}
+
+		rowBytes, err := base64.StdEncoding.DecodeString(*pageResp.NextToken)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		msg := &testpb.FooEvent{}
+		if err := proto.Unmarshal(rowBytes, msg); err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(msg))
+		t.Logf("Token entry, TS: %d, ID: %s", msg.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro(), msg.Metadata.EventId)
 
 	})
 

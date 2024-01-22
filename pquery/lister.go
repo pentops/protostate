@@ -135,9 +135,6 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
-	for _, sortField := range ll.defaultSortFields {
-		fmt.Printf("default sort field %s %#v\n", ll.arrayField.Message().FullName(), sortField.jsonPath)
-	}
 
 	ll.tieBreakerFields, err = buildTieBreakerFields(req, ll.arrayField.Message(), options.tieBreakerFields)
 	if err != nil {
@@ -269,7 +266,6 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("tiebreaker for %s %#v\n", arrayField.FullName(), field.jsonPath)
 		tieBreakerFields = append(tieBreakerFields, sortSpec{
 			nestedField: *field,
 			desc:        false,
@@ -459,7 +455,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if sortField.desc {
 			direction = "DESC"
 		}
-		selectQuery.OrderBy(fmt.Sprintf("%s.%s->>'%s' %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
+		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
 	if ll.requestFilter != nil {
@@ -528,14 +524,13 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		for _, sortField := range sortFields {
 
-			rowSelecter := fmt.Sprintf("%s.%s->>'%s'",
+			rowSelecter := fmt.Sprintf("%s.%s%s",
 				tableAlias,
 				ll.dataColumn,
 				sortField.jsonbPath(),
 			)
 			valuePlaceholder := "?"
 
-			fmt.Printf("walk sort field %s\n", strings.Join(sortField.jsonPath, "."))
 			fieldVal, err := walkProtoValue(rowMessage, sortField.fieldPath)
 			if err != nil {
 				return nil, fmt.Errorf("sort field %s: %w", strings.Join(sortField.jsonPath, "."), err)
@@ -651,7 +646,19 @@ func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescripto
 }
 
 func (nf nestedField) jsonbPath() string {
-	return strings.Join(nf.jsonPath, "->")
+	out := strings.Builder{}
+	last := len(nf.jsonPath) - 1
+	for idx, part := range nf.jsonPath {
+		// last part gets a double >
+		if idx == last {
+			out.WriteString("->>")
+		} else {
+			out.WriteString("->")
+		}
+		out.WriteString(fmt.Sprintf("'%s'", part))
+	}
+
+	return out.String()
 }
 
 func findField(message protoreflect.MessageDescriptor, path string) (*nestedField, error) {
