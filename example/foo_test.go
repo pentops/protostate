@@ -340,6 +340,167 @@ func TestFooPagination(t *testing.T) {
 		}
 
 	})
+}
+
+func TestFooEventPagination(t *testing.T) {
+	// Foo event default sort is deeply nested. This tests that the nested filter
+	// works on pagination
+
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss := flowtest.NewStepper[*testing.T](t.Name())
+	defer ss.RunSteps(t)
+
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	fooID := uuid.NewString()
+	ss.StepC("CreateEvents", func(ctx context.Context, a flowtest.Asserter) {
+		tenantID := uuid.NewString()
+
+		restore := silenceLogger()
+		defer restore()
+
+		foo1Create := &testpb.FooEvent{
+			Metadata: &testpb.Metadata{
+				EventId:   uuid.NewString(),
+				Timestamp: timestamppb.Now(),
+				Actor: &testpb.Actor{
+					ActorId: uuid.NewString(),
+				},
+			},
+			TenantId: &tenantID,
+			FooId:    fooID,
+			Event: &testpb.FooEventType{
+				Type: &testpb.FooEventType_Created_{
+					Created: &testpb.FooEventType_Created{
+						Name: "foo",
+					},
+				},
+			},
+		}
+
+		_, err := sm.Transition(ctx, foo1Create)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		for ii := 0; ii < 30; ii++ {
+			tt := time.Now()
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.New(tt),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				TenantId: &tenantID,
+				FooId:    fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Updated_{
+						Updated: &testpb.FooEventType_Updated{
+							Name:  "foo",
+							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+						},
+					},
+				},
+			}
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+		}
+	})
+
+	var pageResp *psml_pb.PageResponse
+
+	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+
+		req := &testpb.ListFooEventsRequest{
+			FooId: fooID,
+		}
+		res := &testpb.ListFooEventsResponse{}
+
+		err = queryer.ListEvents(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Events) != 20 {
+			t.Fatalf("expected 20 states, got %d", len(res.Events))
+		}
+
+		for ii, evt := range res.Events {
+			switch et := evt.Event.Type.(type) {
+			case *testpb.FooEventType_Created_:
+				t.Logf("%d: Create %s", ii, et.Created.Field)
+			case *testpb.FooEventType_Updated_:
+				t.Logf("%d: Update %s", ii, et.Updated.Field)
+			default:
+				t.Fatalf("unexpected event type %T", et)
+			}
+		}
+
+		pageResp = res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
+		}
+
+	})
+
+	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+
+		req := &testpb.ListFooEventsRequest{
+			Page: &psml_pb.PageRequest{
+				Token: pageResp.NextToken,
+			},
+			FooId: fooID,
+		}
+		res := &testpb.ListFooEventsResponse{}
+
+		query, err := queryer.EventLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		printQuery(t, query)
+
+		err = queryer.ListEvents(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		for ii, evt := range res.Events {
+			switch et := evt.Event.Type.(type) {
+			case *testpb.FooEventType_Created_:
+				t.Logf("%d: Create %s", ii, et.Created.Field)
+			case *testpb.FooEventType_Updated_:
+				t.Logf("%d: Update %s", ii, et.Updated.Field)
+			default:
+				t.Fatalf("unexpected event type %T", et)
+			}
+		}
+
+		if len(res.Events) != 11 {
+			t.Fatalf("expected 10 states, got %d", len(res.Events))
+		}
+
+	})
 
 }
 
