@@ -119,7 +119,6 @@ func (tf *TestFoo) SetListRequest(listRequest *psml_pb.ListRequestMessage) {
 }
 
 func TestFieldPath(t *testing.T) {
-
 	tf := NewTestFoo()
 	pdf, err := protodesc.NewFile(tf.FileDescriptor(), protoregistry.GlobalFiles)
 	if err != nil {
@@ -161,127 +160,133 @@ func TestBuildListReflection(t *testing.T) {
 		options   []ListerOption
 		wantError string
 		assert    func(*testing.T, *ListReflectionSet)
-	}{{
-		name: "full success",
-		mods: func(tf *TestFoo) {},
-		assert: func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "id", field.jsonbPath())
-			}
-			assert.Equal(t, uint64(20), lr.pageSize)
-		},
-	}, {
-		name: "override page size by validation",
-		mods: func(tf *TestFoo) {
-			proto.SetExtension(tf.ListFoosResponse.Field[0].Options, validate.E_Field, &validate.FieldConstraints{
-				Type: &validate.FieldConstraints_Repeated{
-					Repeated: &validate.RepeatedRules{
-						MaxItems: ptr(uint64(10)),
+	}{
+		// Successes
+		{
+			name: "full success",
+			mods: func(tf *TestFoo) {},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "id", field.jsonbPath())
+				}
+				assert.Equal(t, uint64(20), lr.pageSize)
+			},
+		}, {
+			name: "override page size by validation",
+			mods: func(tf *TestFoo) {
+				proto.SetExtension(tf.ListFoosResponse.Field[0].Options, validate.E_Field, &validate.FieldConstraints{
+					Type: &validate.FieldConstraints_Repeated{
+						Repeated: &validate.RepeatedRules{
+							MaxItems: ptr(uint64(10)),
+						},
 					},
-				},
-			})
+				})
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				assert.EqualValues(t, 10, lr.pageSize)
+			},
+		}, {
+			name: "tie breaker fallback",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{})
+			},
+			options: []ListerOption{
+				WithTieBreakerFields("id"),
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "id", field.jsonbPath())
+				}
+			},
+		}, {
+			name: "sort by bar",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{
+					SortTiebreaker: []string{"bar.id"},
+				})
+			},
+			assert: func(t *testing.T, lr *ListReflectionSet) {
+				if len(lr.tieBreakerFields) != 1 {
+					t.Error("expected one sort tiebreaker")
+				} else {
+					field := lr.tieBreakerFields[0]
+					assert.Equal(t, "bar->id", field.jsonbPath())
+				}
+			},
 		},
-		assert: func(t *testing.T, lr *ListReflectionSet) {
-			assert.EqualValues(t, 10, lr.pageSize)
-		},
-	}, {
-		name: "non message field in response",
-		mods: func(tf *TestFoo) {
-			tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
-				Name:     ptr("dangling"),
-				Number:   ptr(int32(3)),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-				TypeName: ptr(".test.Foo"),
-			})
-		},
-		wantError: "unknown field",
-	}, {
-		name: "non repeated field in response",
-		mods: func(tf *TestFoo) {
-			tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
-				Name:   ptr("dangling"),
-				Number: ptr(int32(3)),
-				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-			})
-		},
-		wantError: "should be a message",
-	}, {
-		name: "extra array field in response",
-		mods: func(tf *TestFoo) {
 
-			tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
-				Name:     ptr("double"),
-				Number:   ptr(int32(3)),
-				Label:    descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-				TypeName: ptr(".test.Foo"),
-			})
+		// Response Errors
+		{
+			name: "non message field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:     ptr("dangling"),
+					Number:   ptr(int32(3)),
+					Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+					TypeName: ptr(".test.Foo"),
+				})
+			},
+			wantError: "unknown field",
+		}, {
+			name: "non repeated field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:   ptr("dangling"),
+					Number: ptr(int32(3)),
+					Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				})
+			},
+			wantError: "should be a message",
+		}, {
+			name: "extra array field in response",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = append(tf.ListFoosResponse.Field, &descriptorpb.FieldDescriptorProto{
+					Name:     ptr("double"),
+					Number:   ptr(int32(3)),
+					Label:    descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
+					Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+					TypeName: ptr(".test.Foo"),
+				})
+			},
+			wantError: "multiple repeated fields",
+		}, {
+			name: "no array field",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[1:]
+			},
+			wantError: "no repeated field in response",
+		}, {
+			name: "no page field",
+			mods: func(tf *TestFoo) {
+				tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[0:1]
+			},
+			wantError: "no page field in response",
 		},
-		wantError: "multiple repeated fields",
-	}, {
-		name: "no array field",
-		mods: func(tf *TestFoo) {
-			tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[1:]
-		},
-		wantError: "no repeated field in response",
-	}, {
-		name: "no page field",
-		mods: func(tf *TestFoo) {
-			tf.ListFoosResponse.Field = tf.ListFoosResponse.Field[0:1]
-		},
-		wantError: "no page field in response",
-	}, {
-		name: "no sort or tie breaker",
-		mods: func(tf *TestFoo) {
-			tf.SetListRequest(&psml_pb.ListRequestMessage{})
-		},
-		wantError: "no default sort field",
-	}, {
-		name: "tie breaker fallback",
-		mods: func(tf *TestFoo) {
-			tf.SetListRequest(&psml_pb.ListRequestMessage{})
-		},
-		options: []ListerOption{
-			WithTieBreakerFields("id"),
-		},
-		assert: func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "id", field.jsonbPath())
-			}
-		},
-	}, {
-		name: "unknown tie breaker",
-		mods: func(tf *TestFoo) {
-			tf.SetListRequest(&psml_pb.ListRequestMessage{
-				SortTiebreaker: []string{"unknown"},
-			})
-		},
-		wantError: "no field named 'unknown'",
-	}, {
-		name: "sort by bar",
-		mods: func(tf *TestFoo) {
-			tf.SetListRequest(&psml_pb.ListRequestMessage{
-				SortTiebreaker: []string{"bar.id"},
-			})
-		},
-		assert: func(t *testing.T, lr *ListReflectionSet) {
-			if len(lr.tieBreakerFields) != 1 {
-				t.Error("expected one sort tiebreaker")
-			} else {
-				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "bar->id", field.jsonbPath())
-			}
-		},
-	}} {
 
+		// Request Errors
+		{
+			name: "no sort or tie breaker",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{})
+			},
+			wantError: "no default sort field",
+		}, {
+			name: "unknown tie breaker",
+			mods: func(tf *TestFoo) {
+				tf.SetListRequest(&psml_pb.ListRequestMessage{
+					SortTiebreaker: []string{"unknown"},
+				})
+			},
+			wantError: "no field named 'unknown'",
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-
 			tf := NewTestFoo()
 			tc.mods(tf)
 			pdf, err := protodesc.NewFile(tf.FileDescriptor(), protoregistry.GlobalFiles)
@@ -307,8 +312,6 @@ func TestBuildListReflection(t *testing.T) {
 			}
 
 			tc.assert(t, listReflection)
-
 		})
 	}
-
 }
