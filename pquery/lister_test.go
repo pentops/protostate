@@ -366,7 +366,7 @@ func TestBuildListReflection(t *testing.T) {
 			}
 		})
 
-	// Reponse Errors
+	// Response Errors
 
 	runSad("non message field in response", composed{
 		ListFoosResponse: `
