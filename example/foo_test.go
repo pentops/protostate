@@ -23,7 +23,6 @@ import (
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
-
 	sm, err := testpb.NewFooPSM(db)
 	if err != nil {
 		return nil, err
@@ -213,17 +212,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 }
 
-func silenceLogger() func() {
-	defaultLogger := log.DefaultLogger
-	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]interface{}) {
-	})
-	return func() {
-		log.DefaultLogger = defaultLogger
-	}
-}
-
 func TestFooPagination(t *testing.T) {
-
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
@@ -517,19 +506,9 @@ func TestFooEventPagination(t *testing.T) {
 		}
 
 	})
-
-}
-
-func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
-	stmt, args, err := query.ToSql()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	t.Log(stmt, args)
 }
 
 func TestFooStateField(t *testing.T) {
-
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
@@ -630,5 +609,114 @@ func TestFooStateField(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
 
+func TestFooRequestPageSize(t *testing.T) {
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss := flowtest.NewStepper[*testing.T]("TestFooRequestPageSize")
+	defer ss.RunSteps(t)
+
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+		tenantID := uuid.NewString()
+
+		restore := silenceLogger()
+		defer restore()
+
+		for ii := 0; ii < 30; ii++ {
+			tt := time.Now()
+			fooID := uuid.NewString()
+
+			event1 := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.New(tt),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				TenantId: &tenantID,
+				FooId:    fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Created_{
+						Created: &testpb.FooEventType_Created{
+							Name:  "foo",
+							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+						},
+					},
+				},
+			}
+			stateOut, err := sm.Transition(ctx, event1)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+			a.Equal(tenantID, *stateOut.TenantId)
+		}
+	})
+
+	var pageResp *psml_pb.PageResponse
+
+	ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		pageSize := int64(5)
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: &pageSize,
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != int(pageSize) {
+			t.Fatalf("expected %d states, got %d", pageSize, len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
+		pageResp = res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
+		}
+	})
+}
+
+func silenceLogger() func() {
+	defaultLogger := log.DefaultLogger
+	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]interface{}) {
+	})
+	return func() {
+		log.DefaultLogger = defaultLogger
+	}
+}
+
+func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
+	stmt, args, err := query.ToSql()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	t.Log(stmt, args)
 }

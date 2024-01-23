@@ -65,7 +65,7 @@ func WithTieBreakerFields(fields ...string) ListerOption {
 }
 
 type ListReflectionSet struct {
-	pageSize uint64
+	defaultPageSize uint64
 
 	arrayField        protoreflect.FieldDescriptor
 	pageResponseField protoreflect.FieldDescriptor
@@ -99,7 +99,7 @@ func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options listerOptions) (*ListReflectionSet, error) {
 	var err error
 	ll := ListReflectionSet{
-		pageSize: uint64(20),
+		defaultPageSize: uint64(20),
 	}
 	fields := res.Fields()
 
@@ -186,7 +186,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	validateOpt := proto.GetExtension(arrayFieldOpt, validate.E_Field).(*validate.FieldConstraints)
 	if repeated := validateOpt.GetRepeated(); repeated != nil {
 		if repeated.MaxItems != nil {
-			ll.pageSize = *repeated.MaxItems
+			ll.defaultPageSize = *repeated.MaxItems
 		}
 	}
 
@@ -363,6 +363,17 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 	return defaultSortFields
 }
 
+func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) uint64 {
+	pageSize := ll.defaultPageSize
+
+	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
+	if ok && pageReq != nil && pageReq.PageSize != nil && *pageReq.PageSize < int64(pageSize) {
+		pageSize = uint64(*pageReq.PageSize)
+	}
+
+	return pageSize
+}
+
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 	if err := ll.validator.Validate(reqMsg); err != nil {
 		return fmt.Errorf("validating request %s: %w", reqMsg.ProtoReflect().Descriptor().FullName(), err)
@@ -370,13 +381,14 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	res := resMsg.ProtoReflect()
 	req := reqMsg.ProtoReflect()
+	pageSize := ll.getPageSize(req)
 
 	selectQuery, err := ll.BuildQuery(ctx, req, res)
 	if err != nil {
 		return err
 	}
 
-	var jsonRows = make([][]byte, 0, ll.pageSize)
+	var jsonRows = make([][]byte, 0, pageSize)
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,
 		Retryable: true,
@@ -411,7 +423,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
 			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
-		if idx >= int(ll.pageSize) {
+		if idx >= int(pageSize) {
 			// TODO: This works but the token is huge.
 			// The eventual solution will need to look at
 			// the sorting and filtering of the query and either encode them
@@ -437,7 +449,6 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 }
 
 func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sqrl.SelectBuilder, error) {
-
 	as := newAliasSet()
 	tableAlias := as.Next()
 
@@ -501,7 +512,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		selectQuery = selectQuery.Where(authFilterMapped)
 	}
 
-	selectQuery.Limit(ll.pageSize + 1)
+	selectQuery.Limit(ll.getPageSize(req) + 1)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 

@@ -229,10 +229,10 @@ func TestBuildListReflection(t *testing.T) {
 				field := lr.tieBreakerFields[0]
 				assert.Equal(t, "->>'id'", field.jsonbPath())
 			}
-			assert.Equal(t, uint64(20), lr.pageSize)
+			assert.Equal(t, uint64(20), lr.defaultPageSize)
 		})
 
-	runHappy("override page size by validation", `
+	runHappy("override default page size by validation", `
 		message ListFoosRequest {
 			psm.list.v1.PageRequest page = 1;
 			psm.list.v1.QueryRequest query = 2;
@@ -255,7 +255,7 @@ func TestBuildListReflection(t *testing.T) {
 		`,
 		listerOptions{},
 		func(t *testing.T, lr *ListReflectionSet) {
-			assert.EqualValues(t, int(10), int(lr.pageSize))
+			assert.EqualValues(t, int(10), int(lr.defaultPageSize))
 		})
 
 	runHappy("tie breaker fallback", composed{
@@ -430,7 +430,6 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("tie breaker not in response", composed{
-
 		ListFoosRequest: `
 			psm.list.v1.PageRequest page = 1;
 			psm.list.v1.QueryRequest query = 2;
@@ -443,4 +442,29 @@ func TestBuildListReflection(t *testing.T) {
 		"no field named 'missing'",
 	)
 
+	runSad("no page field", composed{
+		ListFoosRequest: `
+			psm.list.v1.QueryRequest query = 2;
+
+			option (psm.list.v1.list_request) = {
+				sort_tiebreaker: ["id"]
+			};
+			`,
+	}.toString(),
+		listerOptions{},
+		"no page field in request",
+	)
+
+	runSad("no query field", composed{
+		ListFoosRequest: `
+			psm.list.v1.PageRequest page = 1;
+
+			option (psm.list.v1.list_request) = {
+				sort_tiebreaker: ["id"]
+			};
+			`,
+	}.toString(),
+		listerOptions{},
+		"no query field in request",
+	)
 }
