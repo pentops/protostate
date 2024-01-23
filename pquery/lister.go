@@ -363,15 +363,19 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 	return defaultSortFields
 }
 
-func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) uint64 {
+func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
 	pageSize := ll.defaultPageSize
 
 	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
-	if ok && pageReq != nil && pageReq.PageSize != nil && *pageReq.PageSize < int64(pageSize) {
+	if ok && pageReq != nil && pageReq.PageSize != nil {
 		pageSize = uint64(*pageReq.PageSize)
+
+		if pageSize > ll.defaultPageSize {
+			return 0, fmt.Errorf("page size exceeds the maximum allowed size of %d", ll.defaultPageSize)
+		}
 	}
 
-	return pageSize
+	return pageSize, nil
 }
 
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
@@ -381,7 +385,11 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	res := resMsg.ProtoReflect()
 	req := reqMsg.ProtoReflect()
-	pageSize := ll.getPageSize(req)
+
+	pageSize, err := ll.getPageSize(req)
+	if err != nil {
+		return err
+	}
 
 	selectQuery, err := ll.BuildQuery(ctx, req, res)
 	if err != nil {
@@ -512,7 +520,12 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		selectQuery = selectQuery.Where(authFilterMapped)
 	}
 
-	selectQuery.Limit(ll.getPageSize(req) + 1)
+	pageSize, err := ll.getPageSize(req)
+	if err != nil {
+		return nil, err
+	}
+
+	selectQuery.Limit(pageSize + 1)
 
 	// TODO: Request Filters req := reqMsg.ProtoReflect()
 

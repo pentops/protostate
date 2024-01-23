@@ -671,6 +671,33 @@ func TestFooRequestPageSize(t *testing.T) {
 
 	var pageResp *psml_pb.PageResponse
 
+	ss.StepC("List Page (default)", func(ctx context.Context, t flowtest.Asserter) {
+		req := &testpb.ListFoosRequest{}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != int(20) {
+			t.Fatalf("expected %d states, got %d", 20, len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
+		pageResp = res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
+		}
+	})
+
 	ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(5)
 		req := &testpb.ListFoosRequest{
@@ -700,6 +727,21 @@ func TestFooRequestPageSize(t *testing.T) {
 		}
 		if pageResp.NextToken == nil {
 			t.Fatalf("Should not be the final page")
+		}
+	})
+
+	ss.StepC("List Page (exceeding)", func(ctx context.Context, t flowtest.Asserter) {
+		pageSize := int64(50)
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: &pageSize,
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err == nil {
+			t.Fatal("expected error")
 		}
 	})
 }
