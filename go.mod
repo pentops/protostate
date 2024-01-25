@@ -8,10 +8,10 @@ require (
 	github.com/elgris/sqrl v0.0.0-20210727210741-7e0198b30236
 	github.com/google/uuid v1.4.0
 	github.com/iancoleman/strcase v0.3.0
-	github.com/jhump/protoreflect v1.15.5
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb
-	github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576
+	github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311
+	github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4
 	github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7
 	github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb
 	github.com/pentops/sqrlx.go v0.0.0-20231212035131-ba083cf9eeb0
@@ -29,13 +29,14 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/cel-go v0.18.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
+	github.com/jhump/protoreflect v1.15.5 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pressly/goose v2.7.0+incompatible // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
-	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb // indirect
+	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
