@@ -72,8 +72,10 @@ github.com/mattn/go-isatty v0.0.17/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb h1:GpLLtwdg/538OHhPmt7WeuiFNrXplen/KH5V1vJHh2w=
 github.com/pentops/flowtest v0.0.0-20231213175137-ac050902e7fb/go.mod h1:FNquTq/mafLEDD+w/yiiQKIuAuQycFD9zhZ+pbAivc0=
-github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576 h1:A/vY7Qiv1S/1mUtacZQVoXicaYiiaSR7PInSUcaMOpA=
-github.com/pentops/log.go v0.0.0-20230815045424-6ebbd9ef2576/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
+github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311 h1:JeqazO7kfp3xmggSxJHat3CWY1eMLMtZZV9gwNmcfvI=
+github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311/go.mod h1:+G29pelqimEuvqxtzUS3or1tZKssK8Mc0+JBInSR5k0=
+github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4 h1:7kPDmBAQxMxcFIYt1rEco/AipZmm1CUoND3wSDmIOeI=
+github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
 github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7 h1:rBLoeUeI1acxd6GbJjJbK6CeVF/q/Xab+xqQYePvNSw=
 github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7/go.mod h1:yMefMPLP0eBAxdELkAgjTtnhWFfc0Wk2H2kePByDHRo=
 github.com/pentops/pgtest.go v0.0.0-20230712031943-dd86c8524dcb h1:1OIQFqb6RU4OmKXdonwvYHNex0JPQy5gOs0eZTeIwfI=
@@ -114,8 +116,8 @@ golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACk
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
-golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb h1:c0vyKkb6yr3KR7jEfJaOSv4lG7xPkbN6r52aJz1d8a8=
-golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb/go.mod h1:iRJReGqOEeBhDZGkGbynYwcHlctCvnjTYIamk7uXpHI=
+golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc h1:ao2WRsKSzW6KuUY9IWPwWahcHCgR0s52IfwutMfEbdM=
+golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc/go.mod h1:iRJReGqOEeBhDZGkGbynYwcHlctCvnjTYIamk7uXpHI=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
 golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvxsM5YxQ5yQlVC4a0KAMCusXpPoU=
 golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3/go.mod h1:6SW0HCj/g11FgYtHlgUYUwCkIfeOF89ocIRzGO/8vkc=
