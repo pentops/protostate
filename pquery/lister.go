@@ -465,7 +465,16 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields
-	// TODO: Dynamic Sorts
+
+	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
+	if ok && reqQuery != nil {
+		dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSort())
+		if err != nil {
+			return nil, fmt.Errorf("sort validation: %w", err)
+		}
+
+		sortFields = dynSorts
+	}
 
 	sortFields = append(sortFields, ll.tieBreakerFields...)
 
@@ -547,7 +556,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		rhsPlaceholders := make([]string, 0, len(sortFields))
 
 		for _, sortField := range sortFields {
-
 			rowSelecter := fmt.Sprintf("%s.%s%s",
 				tableAlias,
 				ll.dataColumn,
@@ -596,9 +604,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					// is not important, only that it is consistent
 					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
 				}
-
-			default:
-				return nil, fmt.Errorf("unknown sort field %s, type %T", strings.Join(sortField.jsonPath, "."), dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
@@ -722,4 +727,79 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 		jsonPath:  append([]string{field.JSONName()}, spec.jsonPath...),
 	}, nil
 
+}
+
+func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortSpec, error) {
+	results := []sortSpec{}
+	direction := ""
+	for _, sort := range sorts {
+		// validate the fields requested exist
+		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
+		if err != nil {
+			return nil, fmt.Errorf("requested sort: %w", err)
+		}
+
+		// validate the fields requested are marked as sortable
+		sortOpts, ok := proto.GetExtension(nestedField.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return nil, fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
+		}
+
+		sortable := false
+		if sortOpts != nil {
+			switch nestedField.field.Kind() {
+			case protoreflect.DoubleKind:
+				sortable = sortOpts.GetDouble().GetSorting().Sortable
+			case protoreflect.Fixed32Kind:
+				sortable = sortOpts.GetFixed32().GetSorting().Sortable
+			case protoreflect.Fixed64Kind:
+				sortable = sortOpts.GetFixed64().GetSorting().Sortable
+			case protoreflect.FloatKind:
+				sortable = sortOpts.GetFloat().GetSorting().Sortable
+			case protoreflect.Int32Kind:
+				sortable = sortOpts.GetInt32().GetSorting().Sortable
+			case protoreflect.Int64Kind:
+				sortable = sortOpts.GetInt64().GetSorting().Sortable
+			case protoreflect.Sfixed32Kind:
+				sortable = sortOpts.GetSfixed32().GetSorting().Sortable
+			case protoreflect.Sfixed64Kind:
+				sortable = sortOpts.GetSfixed64().GetSorting().Sortable
+			case protoreflect.Sint32Kind:
+				sortable = sortOpts.GetSint32().GetSorting().Sortable
+			case protoreflect.Sint64Kind:
+				sortable = sortOpts.GetSint64().GetSorting().Sortable
+			case protoreflect.Uint32Kind:
+				sortable = sortOpts.GetUint32().GetSorting().Sortable
+			case protoreflect.Uint64Kind:
+				sortable = sortOpts.GetUint64().GetSorting().Sortable
+			case protoreflect.MessageKind:
+				if nestedField.field.Message().FullName() == "google.protobuf.Timestamp" {
+					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
+				}
+			}
+		}
+
+		if !sortable {
+			return nil, fmt.Errorf("requested sort field '%s' is not sortable", sort.Field)
+		}
+
+		results = append(results, sortSpec{
+			nestedField: *nestedField,
+			desc:        sort.Descending,
+		})
+
+		// validate direction of all the fields is the same
+		if direction == "" {
+			direction = "ASC"
+			if sort.Descending {
+				direction = "DESC"
+			}
+		} else {
+			if (direction == "DESC" && !sort.Descending) || (direction == "ASC" && sort.Descending) {
+				return nil, fmt.Errorf("requested sorts have conflicting directions, they must all be the same")
+			}
+		}
+	}
+
+	return results, nil
 }
