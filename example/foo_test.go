@@ -41,6 +41,11 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Name = event.Name
 			state.Field = event.Field
 			state.Description = event.Description
+			state.Characteristics = &testpb.FooCharacteristics{
+				Weight: *event.Weight,
+				Height: *event.Height,
+				Length: *event.Length,
+			}
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			return nil
@@ -56,6 +61,11 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Field = event.Field
 			state.Name = event.Name
 			state.Description = event.Description
+			state.Characteristics = &testpb.FooCharacteristics{
+				Weight: *event.Weight,
+				Height: *event.Height,
+				Length: *event.Length,
+			}
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
@@ -93,6 +103,7 @@ func TestFooStateMachine(t *testing.T) {
 					Name:        "foo",
 					Field:       "event1",
 					Description: ptr.To("event1"),
+					Weight:      ptr.To(int64(10)),
 				},
 			},
 		},
@@ -113,6 +124,7 @@ func TestFooStateMachine(t *testing.T) {
 					Name:        "foo",
 					Field:       "event2",
 					Description: ptr.To("event2"),
+					Weight:      ptr.To(int64(10)),
 				},
 			},
 		},
@@ -134,6 +146,7 @@ func TestFooStateMachine(t *testing.T) {
 					Name:        "foo2",
 					Field:       "event3",
 					Description: ptr.To("event3"),
+					Weight:      ptr.To(int64(10)),
 				},
 			},
 		},
@@ -595,8 +608,9 @@ func TestFooPagination(t *testing.T) {
 				Event: &testpb.FooEventType{
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
-							Name:  "foo",
-							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Name:   "foo",
+							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Weight: ptr.To(10 + int64(ii)),
 						},
 					},
 				},
@@ -741,8 +755,9 @@ func TestFooEventPagination(t *testing.T) {
 				Event: &testpb.FooEventType{
 					Type: &testpb.FooEventType_Updated_{
 						Updated: &testpb.FooEventType_Updated{
-							Name:  "foo",
-							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Name:   "foo",
+							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Weight: ptr.To(11 + int64(ii)),
 						},
 					},
 				},
@@ -879,8 +894,9 @@ func TestFooStateField(t *testing.T) {
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Created_{
 				Created: &testpb.FooEventType_Created{
-					Name:  "foo",
-					Field: "event1",
+					Name:   "foo",
+					Field:  "event1",
+					Weight: ptr.To(int64(10)),
 				},
 			},
 		},
@@ -909,8 +925,9 @@ func TestFooStateField(t *testing.T) {
 			Event: &testpb.FooEventType{
 				Type: &testpb.FooEventType_Updated_{
 					Updated: &testpb.FooEventType_Updated{
-						Name:  "foo",
-						Field: "event2",
+						Name:   "foo",
+						Field:  "event2",
+						Weight: ptr.To(int64(11)),
 					},
 				},
 			},
@@ -938,8 +955,9 @@ func TestFooStateField(t *testing.T) {
 			Event: &testpb.FooEventType{
 				Type: &testpb.FooEventType_Updated_{
 					Updated: &testpb.FooEventType_Updated{
-						Name:  "foo",
-						Field: "event3",
+						Name:   "foo",
+						Field:  "event3",
+						Weight: ptr.To(int64(11)),
 					},
 				},
 			},
@@ -994,8 +1012,9 @@ func TestFooRequestPageSize(t *testing.T) {
 				Event: &testpb.FooEventType{
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
-							Name:  "foo",
-							Field: fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Name:   "foo",
+							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+							Weight: ptr.To(10 + int64(ii)),
 						},
 					},
 				},
@@ -1082,6 +1101,211 @@ func TestFooRequestPageSize(t *testing.T) {
 		err = queryer.List(ctx, db, req, res)
 		if err == nil {
 			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestFooDynamicSorting(t *testing.T) {
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss := flowtest.NewStepper[*testing.T]("TestFooDynamicSorting")
+	defer ss.RunSteps(t)
+
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+		tenantID := uuid.NewString()
+
+		restore := silenceLogger()
+		defer restore()
+
+		for ii := 0; ii < 30; ii++ {
+			tt := time.Now()
+			fooID := uuid.NewString()
+
+			event1 := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.New(tt),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				TenantId: &tenantID,
+				FooId:    fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Created_{
+						Created: &testpb.FooEventType_Created{
+							Name:   "foo",
+							Field:  fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), 10+ii, 50-ii, ii%2),
+							Weight: ptr.To(10 + int64(ii)),
+							Height: ptr.To(50 - int64(ii)),
+							Length: ptr.To(int64(ii % 2)),
+						},
+					},
+				},
+			}
+			stateOut, err := sm.Transition(ctx, event1)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+			a.Equal(tenantID, *stateOut.TenantId)
+		}
+	})
+
+	nextToken := ""
+	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: proto.Int64(5),
+			},
+			Query: &psml_pb.QueryRequest{
+				Sort: []*psml_pb.Sort{
+					{
+						Field: "characteristics.weight",
+					},
+				},
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
+		for ii, state := range res.Foos {
+			if state.Characteristics.Weight != int64(10+ii) {
+				t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+			}
+		}
+
+		pageResp := res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
+		}
+
+		nextToken = pageResp.GetNextToken()
+	})
+
+	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: proto.Int64(5),
+				Token:    &nextToken,
+			},
+			Query: &psml_pb.QueryRequest{
+				Sort: []*psml_pb.Sort{
+					{
+						Field: "characteristics.weight",
+					},
+				},
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
+		for ii, state := range res.Foos {
+			if state.Characteristics.Weight != int64(15+ii) {
+				t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+			}
+		}
+
+		pageResp := res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
+		}
+	})
+
+	ss.StepC("List Page (multisort)", func(ctx context.Context, t flowtest.Asserter) {
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: proto.Int64(5),
+			},
+			Query: &psml_pb.QueryRequest{
+				Sort: []*psml_pb.Sort{
+					{
+						Field: "characteristics.length",
+					},
+					{
+						Field: "characteristics.weight",
+					},
+				},
+			},
+		}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if len(res.Foos) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		}
+
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Field)
+		}
+
+		if res.Foos[0].Characteristics.Weight != int64(10) {
+			t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Characteristics.Length)
+		}
+
+		for _, state := range res.Foos {
+			if state.Characteristics.Weight%2 != 0 {
+				t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+			}
+		}
+
+		pageResp := res.Page
+
+		if pageResp.GetNextToken() == "" {
+			t.Fatalf("NextToken should not be empty")
+		}
+		if pageResp.NextToken == nil {
+			t.Fatalf("Should not be the final page")
 		}
 	})
 }
