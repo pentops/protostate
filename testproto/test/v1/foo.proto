@@ -70,6 +70,25 @@ message FooState {
     filterable: true,
     default_filters: ["FOO_STATUS_ACTIVE"]
   }];
+
+  FooCharacteristics characteristics = 9;
+}
+
+message FooCharacteristics {
+  int64 weight = 1 [(psm.list.v1.field).int64 = {
+    filtering: {filterable: true},
+    sorting: {sortable: true}
+  }];
+
+  int64 height = 2 [(psm.list.v1.field).int64 = {
+    filtering: {filterable: true},
+    sorting: {sortable: true}
+  }];
+
+  int64 length = 3 [(psm.list.v1.field).int64 = {
+    filtering: {filterable: true},
+    sorting: {sortable: true}
+  }];
 }
 
 enum FooStatus {
@@ -135,12 +154,18 @@ message FooEventType {
     string name = 1;
     string field = 2;
     optional string description = 3;
+    optional int64 weight = 4;
+    optional int64 height = 5;
+    optional int64 length = 6;
   }
 
   message Updated {
     string name = 1;
     string field = 2;
     optional string description = 3;
+    optional int64 weight = 4;
+    optional int64 height = 5;
+    optional int64 length = 6;
   }
 
   message Deleted {}
