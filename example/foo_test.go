@@ -218,6 +218,249 @@ func TestFooStateMachine(t *testing.T) {
 	})
 }
 
+func TestFooStateMachineMarshaling(t *testing.T) {
+	ctx := context.Background()
+
+	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	db, err := sqrlx.New(conn, sq.Dollar)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sm, err := NewFooStateMachine(db)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	t.Run("Optional field", func(t *testing.T) {
+		fooID := uuid.NewString()
+
+		t.Run("Get with empty", func(t *testing.T) {
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				FooId: fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Created_{
+						Created: &testpb.FooEventType_Created{
+							Name:        "foo",
+							Field:       "event1",
+							Description: ptr.To(""),
+						},
+					},
+				},
+			}
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.GetFooRequest{
+				FooId: fooID,
+			}
+
+			res := &testpb.GetFooResponse{}
+
+			err = queryer.Get(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if res.State.Description == nil {
+				t.Fatalf("expected description to be non nil")
+			}
+
+			if *res.State.Description != "" {
+				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
+			}
+		})
+
+		t.Run("Get with non empty", func(t *testing.T) {
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				FooId: fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Updated_{
+						Updated: &testpb.FooEventType_Updated{
+							Name:        "foo",
+							Field:       "event2",
+							Description: ptr.To("non blank description"),
+						},
+					},
+				},
+			}
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.GetFooRequest{
+				FooId: fooID,
+			}
+
+			res := &testpb.GetFooResponse{}
+
+			err = queryer.Get(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if res.State.Description == nil {
+				t.Fatalf("expected description to be non nil")
+			}
+
+			if *res.State.Description == "" {
+				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
+			}
+		})
+
+		t.Run("Get with missing", func(t *testing.T) {
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				FooId: fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Updated_{
+						Updated: &testpb.FooEventType_Updated{
+							Name:  "foo",
+							Field: "event3",
+						},
+					},
+				},
+			}
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.GetFooRequest{
+				FooId: fooID,
+			}
+
+			res := &testpb.GetFooResponse{}
+
+			err = queryer.Get(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if res.State.Description != nil {
+				t.Fatalf("expected description to be nil")
+			}
+		})
+	})
+
+	t.Run("Non optional field", func(t *testing.T) {
+		fooID := uuid.NewString()
+
+		t.Run("Get with empty", func(t *testing.T) {
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				FooId: fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Created_{
+						Created: &testpb.FooEventType_Created{
+							Name:  "foo",
+							Field: "",
+						},
+					},
+				},
+			}
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.GetFooRequest{
+				FooId: fooID,
+			}
+
+			res := &testpb.GetFooResponse{}
+
+			err = queryer.Get(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if res.State.Field != "" {
+				t.Fatalf("expected description to be empty")
+			}
+		})
+
+		t.Run("Get with non empty", func(t *testing.T) {
+			event := &testpb.FooEvent{
+				Metadata: &testpb.Metadata{
+					EventId:   uuid.NewString(),
+					Timestamp: timestamppb.Now(),
+					Actor: &testpb.Actor{
+						ActorId: uuid.NewString(),
+					},
+				},
+				FooId: fooID,
+				Event: &testpb.FooEventType{
+					Type: &testpb.FooEventType_Updated_{
+						Updated: &testpb.FooEventType_Updated{
+							Name:  "foo",
+							Field: "non empty",
+						},
+					},
+				},
+			}
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.GetFooRequest{
+				FooId: fooID,
+			}
+
+			res := &testpb.GetFooResponse{}
+
+			err = queryer.Get(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if res.State.Field == "" {
+				t.Fatalf("expected description to be non empty")
+			}
+		})
+	})
+}
+
 func TestFooPagination(t *testing.T) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
