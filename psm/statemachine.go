@@ -11,6 +11,7 @@ import (
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // TableSpec is the configuration for the state machine's table mapping.
@@ -299,7 +300,7 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		}
 	}
 
-	stateJSON, err := protojson.Marshal(state)
+	stateJSON, err := MarshalStateJSON(state)
 	if err != nil {
 		return err
 	}
@@ -345,6 +346,12 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	}
 	return nil
 
+}
+
+func MarshalStateJSON(state protoreflect.ProtoMessage) ([]byte, error) {
+	// EmitDefaultValues behaves similarly to EmitUnpopulated, but does not emit "null"-value fields,
+	// i.e. presence-sensing fields that are omitted will remain omitted to preserve presence-sensing.
+	return protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(state)
 }
 
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
