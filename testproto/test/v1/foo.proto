@@ -54,6 +54,7 @@ message FooState {
 
   string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
   string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  optional string description = 8 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 
   string last_event_id = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
 
@@ -133,11 +134,13 @@ message FooEventType {
   message Created {
     string name = 1;
     string field = 2;
+    optional string description = 3;
   }
 
   message Updated {
     string name = 1;
     string field = 2;
+    optional string description = 3;
   }
 
   message Deleted {}
