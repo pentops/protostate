@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/utils/ptr"
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
@@ -38,6 +39,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Status = testpb.FooStatus_ACTIVE
 			state.Name = event.Name
 			state.Field = event.Field
+			state.Description = event.Description
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			return nil
@@ -52,6 +54,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 		) error {
 			state.Field = event.Field
 			state.Name = event.Name
+			state.Description = event.Description
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
@@ -86,8 +89,9 @@ func TestFooStateMachine(t *testing.T) {
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Created_{
 				Created: &testpb.FooEventType_Created{
-					Name:  "foo",
-					Field: "event1",
+					Name:        "foo",
+					Field:       "event1",
+					Description: ptr.To("event1"),
 				},
 			},
 		},
@@ -105,8 +109,9 @@ func TestFooStateMachine(t *testing.T) {
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Updated_{
 				Updated: &testpb.FooEventType_Updated{
-					Name:  "foo",
-					Field: "event2",
+					Name:        "foo",
+					Field:       "event2",
+					Description: ptr.To("event2"),
 				},
 			},
 		},
@@ -125,8 +130,9 @@ func TestFooStateMachine(t *testing.T) {
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Created_{
 				Created: &testpb.FooEventType_Created{
-					Name:  "foo2",
-					Field: "event3",
+					Name:        "foo2",
+					Field:       "event3",
+					Description: ptr.To("event3"),
 				},
 			},
 		},
