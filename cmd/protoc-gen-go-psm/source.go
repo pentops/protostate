@@ -49,9 +49,23 @@ type queryServiceDescriptorSet struct {
 // generateSet contains the protogen wrapper around the descriptors
 type queryServiceGenerateSet struct {
 	name             string
+	fullName         string
 	getMethod        *protogen.Method
 	listMethod       *protogen.Method
 	listEventsMethod *protogen.Method
+}
+
+func (qs queryServiceGenerateSet) validate() error {
+	if qs.getMethod == nil {
+		return fmt.Errorf("PSM Query '%s' does not have a get method", qs.fullName)
+	}
+
+	if qs.listMethod == nil {
+		return fmt.Errorf("PSM Qurey '%s' does not have a list method", qs.fullName)
+	}
+
+	return nil
+
 }
 
 func (gs queryServiceGenerateSet) descriptors() queryServiceDescriptorSet {
@@ -95,7 +109,8 @@ func mapSourceFile(file *protogen.File) (*mappedSourceFile, error) {
 			methodSet, ok := source.querySets[methodOpt.Name]
 			if !ok {
 				methodSet = &queryServiceGenerateSet{
-					name: methodOpt.Name,
+					name:     methodOpt.Name,
+					fullName: fmt.Sprintf("%s/%s", service.Desc.FullName(), methodOpt.Name),
 				}
 				source.querySets[methodOpt.Name] = methodSet
 			}
