@@ -427,6 +427,14 @@ func buildEventFieldDescriptors(src stateEntityDescriptorSet) (*eventFieldDescri
 
 func buildStateSet(src *stateEntityGenerateSet) (*stateSet, error) {
 
+	if src.stateMessage == nil || src.stateOptions == nil {
+		return nil, fmt.Errorf("state object '%s' does not have a State message (message with (psm.state.v1.state).name = '%s')", src.fullName, src.name)
+	}
+
+	if src.eventMessage == nil || src.eventOptions == nil {
+		return nil, fmt.Errorf("state object '%s' does not have an Event message (message with (psm.state.v1.event).name = '%s')", src.fullName, src.name)
+	}
+
 	ss := &stateSet{
 		stateMessage: src.stateMessage,
 		eventMessage: src.eventMessage,

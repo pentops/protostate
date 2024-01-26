@@ -21,7 +21,11 @@ type stateEntityDescriptorSet struct {
 }
 
 type stateEntityGenerateSet struct {
-	name         string
+	// name of the state machine
+	name string
+	// for errors / debugging, includes the proto source name
+	fullName string
+
 	stateMessage *protogen.Message
 	stateOptions *psm_pb.StateObjectOptions
 	eventMessage *protogen.Message
@@ -48,8 +52,12 @@ type queryServiceDescriptorSet struct {
 
 // generateSet contains the protogen wrapper around the descriptors
 type queryServiceGenerateSet struct {
-	name             string
-	fullName         string
+
+	// name of the state machine
+	name string
+	// for errors / debugging, includes the proto source name
+	fullName string
+
 	getMethod        *protogen.Method
 	listMethod       *protogen.Method
 	listEventsMethod *protogen.Method
@@ -134,7 +142,8 @@ func mapSourceFile(file *protogen.File) (*mappedSourceFile, error) {
 			stateSet, ok := source.stateSets[stateObjectAnnotation.Name]
 			if !ok {
 				stateSet = &stateEntityGenerateSet{
-					name: stateObjectAnnotation.Name,
+					name:     stateObjectAnnotation.Name,
+					fullName: fmt.Sprintf("%s/%s", message.Desc.ParentFile().FullName(), stateObjectAnnotation.Name),
 				}
 				source.stateSets[stateObjectAnnotation.Name] = stateSet
 			} else if stateSet.stateMessage != nil || stateSet.stateOptions != nil {
@@ -150,7 +159,8 @@ func mapSourceFile(file *protogen.File) (*mappedSourceFile, error) {
 			ss, ok := source.stateSets[eventObjectAnnotation.Name]
 			if !ok {
 				ss = &stateEntityGenerateSet{
-					name: eventObjectAnnotation.Name,
+					name:     eventObjectAnnotation.Name,
+					fullName: fmt.Sprintf("%s/%s", message.Desc.ParentFile().FullName(), eventObjectAnnotation.Name),
 				}
 				source.stateSets[eventObjectAnnotation.Name] = ss
 			} else if ss.eventMessage != nil || ss.eventOptions != nil {
