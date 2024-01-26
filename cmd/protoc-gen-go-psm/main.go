@@ -82,6 +82,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	}
 
 	for _, querySrc := range sourceMap.querySets {
+		if err := querySrc.validate(); err != nil {
+			gen.Error(err)
+			continue
+		}
 		stateSet, ok := convertedStateSets[querySrc.name]
 		if !ok {
 			// attempt to derive by linking to other files. This state spec
