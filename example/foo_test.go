@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,6 +285,24 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 			if *res.State.Description != "" {
 				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
 			}
+
+			stateJSON, err := getRawState(db, fooID)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(stateJSON, `"description": ""`) {
+				t.Fatalf("expected description to be present, but empty: %s", stateJSON)
+			}
+
+			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(eventJSON, `"description": ""`) {
+				t.Fatalf("expected description to be present, but empty: %s", eventJSON)
+			}
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
@@ -330,6 +349,24 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 			if *res.State.Description == "" {
 				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
 			}
+
+			stateJSON, err := getRawState(db, fooID)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(stateJSON, `"description": "non blank description"`) {
+				t.Fatalf("expected description to be present, and not empty: %s", stateJSON)
+			}
+
+			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(eventJSON, `"description":`) {
+				t.Fatalf("expected description to be present: %s", eventJSON)
+			}
 		})
 
 		t.Run("Get with missing", func(t *testing.T) {
@@ -370,6 +407,24 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 
 			if res.State.Description != nil {
 				t.Fatalf("expected description to be nil")
+			}
+
+			stateJSON, err := getRawState(db, fooID)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if strings.Contains(stateJSON, `"description":`) {
+				t.Fatalf("expected description to not be present: %s", stateJSON)
+			}
+
+			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if strings.Contains(eventJSON, `"description":`) {
+				t.Fatalf("expected description to not be present: %s", eventJSON)
 			}
 		})
 	})
@@ -416,6 +471,24 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 			if res.State.Field != "" {
 				t.Fatalf("expected description to be empty")
 			}
+
+			stateJSON, err := getRawState(db, fooID)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(stateJSON, `"field": ""`) {
+				t.Fatalf("expected field to be present, but empty: %s", stateJSON)
+			}
+
+			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(eventJSON, `"field": ""`) {
+				t.Fatalf("expected field to be present, but empty: %s", eventJSON)
+			}
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
@@ -456,6 +529,24 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 
 			if res.State.Field == "" {
 				t.Fatalf("expected description to be non empty")
+			}
+
+			stateJSON, err := getRawState(db, fooID)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(stateJSON, `"field":`) {
+				t.Fatalf("expected field to be present: %s", stateJSON)
+			}
+
+			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if !strings.Contains(eventJSON, `"field":`) {
+				t.Fatalf("expected field to be present: %s", eventJSON)
 			}
 		})
 	})
@@ -1010,4 +1101,42 @@ func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
 		t.Fatal(err.Error())
 	}
 	t.Log(stmt, args)
+}
+
+func getRawState(db *sqrlx.Wrapper, id string) (string, error) {
+	var state []byte
+	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
+		q := sqrl.Select("state").From("foo").Where("id = ?", id)
+		err := tx.QueryRow(ctx, q).Scan(&state)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(state), nil
+}
+
+func getRawEvent(db *sqrlx.Wrapper, id string) (string, error) {
+	var data []byte
+	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
+		q := sqrl.Select("data").From("foo_event").Where("id = ?", id)
+		err := tx.QueryRow(ctx, q).Scan(&data)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }
