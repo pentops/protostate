@@ -64,5 +64,6 @@ func interfaceToDBValue(i interface{}) (interface{}, error) {
 func MarshalProto(state protoreflect.ProtoMessage) ([]byte, error) {
 	// EmitDefaultValues behaves similarly to EmitUnpopulated, but does not emit "null"-value fields,
 	// i.e. presence-sensing fields that are omitted will remain omitted to preserve presence-sensing.
-	return protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(state)
+	//return protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(state)
+	return protojson.Marshal(state)
 }
