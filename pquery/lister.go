@@ -600,11 +600,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			case string:
 				dbVal = subType
 				if sortField.desc {
-					// String fields aren't valid for sorting in listify, they
-					// can only be used for the tie-breaker so the order itself
-					// is not important, only that it is consistent
+					// String fields aren't valid for sorting, they can only be used
+					// for the tie-breaker so the order itself is not important, only
+					// that it is consistent
 					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
 				}
+
+			default:
+				// Noop, validation will have caught any problem types from the request
+				// and any other custom overrides are handled above.
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
