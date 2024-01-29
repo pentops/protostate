@@ -42,9 +42,9 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Field = event.Field
 			state.Description = event.Description
 			state.Characteristics = &testpb.FooCharacteristics{
-				Weight: *event.Weight,
-				Height: *event.Height,
-				Length: *event.Length,
+				Weight: event.GetWeight(),
+				Height: event.GetHeight(),
+				Length: event.GetLength(),
 			}
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			state.CreatedAt = tb.FullCause().Metadata.Timestamp
@@ -62,9 +62,9 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			state.Name = event.Name
 			state.Description = event.Description
 			state.Characteristics = &testpb.FooCharacteristics{
-				Weight: *event.Weight,
-				Height: *event.Height,
-				Length: *event.Length,
+				Weight: event.GetWeight(),
+				Height: event.GetHeight(),
+				Length: event.GetLength(),
 			}
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
@@ -1166,148 +1166,207 @@ func TestFooDynamicSorting(t *testing.T) {
 		}
 	})
 
-	nextToken := ""
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
-				PageSize: proto.Int64(5),
-			},
-			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
+	{
+		nextToken := ""
+		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Sort: []*psml_pb.Sort{
+						{
+							Field: "characteristics.weight",
+						},
 					},
 				},
-			},
-		}
-		res := &testpb.ListFoosResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
-		}
-
-		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
-		}
-
-		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(10+ii) {
-				t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
 			}
-		}
+			res := &testpb.ListFoosResponse{}
 
-		pageResp := res.Page
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
 
-		if pageResp.GetNextToken() == "" {
-			t.Fatalf("NextToken should not be empty")
-		}
-		if pageResp.NextToken == nil {
-			t.Fatalf("Should not be the final page")
-		}
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
 
-		nextToken = pageResp.GetNextToken()
-	})
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
 
-	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
-				PageSize: proto.Int64(5),
-				Token:    &nextToken,
-			},
-			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(10+ii) {
+					t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+
+			nextToken = pageResp.GetNextToken()
+		})
+
+		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+					Token:    &nextToken,
+				},
+				Query: &psml_pb.QueryRequest{
+					Sort: []*psml_pb.Sort{
+						{
+							Field: "characteristics.weight",
+						},
 					},
 				},
-			},
-		}
-		res := &testpb.ListFoosResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
-		}
-
-		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
-		}
-
-		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(15+ii) {
-				t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
 			}
-		}
+			res := &testpb.ListFoosResponse{}
 
-		pageResp := res.Page
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
 
-		if pageResp.GetNextToken() == "" {
-			t.Fatalf("NextToken should not be empty")
-		}
-		if pageResp.NextToken == nil {
-			t.Fatalf("Should not be the final page")
-		}
-	})
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
 
-	ss.StepC("List Page (multisort)", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
-				PageSize: proto.Int64(5),
-			},
-			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
-					{
-						Field: "characteristics.length",
-					},
-					{
-						Field: "characteristics.weight",
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(15+ii) {
+					t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+		})
+	}
+
+	{
+		nextToken := ""
+		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Sort: []*psml_pb.Sort{
+						{
+							Field: "characteristics.length",
+						},
+						{
+							Field: "characteristics.weight",
+						},
 					},
 				},
-			},
-		}
-		res := &testpb.ListFoosResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
-		}
-
-		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
-		}
-
-		if res.Foos[0].Characteristics.Weight != int64(10) {
-			t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Characteristics.Length)
-		}
-
-		for _, state := range res.Foos {
-			if state.Characteristics.Weight%2 != 0 {
-				t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
 			}
-		}
+			res := &testpb.ListFoosResponse{}
 
-		pageResp := res.Page
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
 
-		if pageResp.GetNextToken() == "" {
-			t.Fatalf("NextToken should not be empty")
-		}
-		if pageResp.NextToken == nil {
-			t.Fatalf("Should not be the final page")
-		}
-	})
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			if res.Foos[0].Characteristics.Weight != int64(10) {
+				t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Characteristics.Weight)
+			}
+
+			for _, state := range res.Foos {
+				if state.Characteristics.Weight%2 != 0 {
+					t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+
+			nextToken = pageResp.GetNextToken()
+		})
+
+		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+					Token:    &nextToken,
+				},
+				Query: &psml_pb.QueryRequest{
+					Sort: []*psml_pb.Sort{
+						{
+							Field: "characteristics.length",
+						},
+						{
+							Field: "characteristics.weight",
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			if res.Foos[0].Characteristics.Weight != int64(20) {
+				t.Fatalf("expected list to start with weight %d, got %d", 20, res.Foos[0].Characteristics.Weight)
+			}
+
+			for _, state := range res.Foos {
+				if state.Characteristics.Weight%2 != 0 {
+					t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+		})
+	}
 }
 
 func silenceLogger() func() {
