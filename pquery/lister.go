@@ -567,6 +567,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			if err != nil {
 				return nil, fmt.Errorf("sort field %s: %w", strings.Join(sortField.jsonPath, "."), err)
 			}
+
 			dbVal := fieldVal.Interface()
 			switch subType := dbVal.(type) {
 			case *dynamicpb.Message:
@@ -668,9 +669,6 @@ func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescripto
 	var val protoreflect.Value
 	field := path[0]
 
-	if !msg.Has(field) {
-		return protoreflect.Value{}, fmt.Errorf("field %s not found in %s", field.Name(), msg.Descriptor().FullName())
-	}
 	val = msg.Get(field)
 	if len(path) == 1 {
 		return val, nil
