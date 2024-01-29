@@ -669,6 +669,10 @@ func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescripto
 	var val protoreflect.Value
 	field := path[0]
 
+	// Has vs Get, Has returns false if the field is set to the default value for
+	// scalar types. We still want the fields if they are set to the default value,
+	// and can use validation of a field's existence before this point to ensure
+	// that the field is available.
 	val = msg.Get(field)
 	if len(path) == 1 {
 		return val, nil
