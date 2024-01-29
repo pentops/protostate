@@ -649,15 +649,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			), rhsValues...)
 	}
 
-	printQuery(selectQuery)
-
 	return selectQuery, nil
-}
-
-func printQuery(query sqrl.Sqlizer) {
-	stmt, args, _ := query.ToSql()
-	fmt.Println("Query:", stmt)
-	fmt.Println("Args:", args)
 }
 
 type nestedField struct {
