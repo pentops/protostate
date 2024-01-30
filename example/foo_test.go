@@ -15,6 +15,7 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -25,7 +26,14 @@ import (
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
-	sm, err := testpb.NewFooPSM(db)
+	customTableSpec := testpb.DefaultFooPSMTableSpec
+	customTableSpec.ExtraStateColumns = func(state *testpb.FooState) (map[string]interface{}, error) {
+		return map[string]interface{}{
+			"tenant_id": state.TenantId,
+		}, nil
+	}
+
+	sm, err := testpb.NewFooPSM(db, psm.WithTableSpec(customTableSpec))
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +690,6 @@ func TestFooPagination(t *testing.T) {
 		if len(res.Foos) != 10 {
 			t.Fatalf("expected 10 states, got %d", len(res.Foos))
 		}
-
 	})
 }
 
@@ -859,7 +866,6 @@ func TestFooEventPagination(t *testing.T) {
 		if len(res.Events) != 11 {
 			t.Fatalf("expected 10 states, got %d", len(res.Events))
 		}
-
 	})
 }
 
