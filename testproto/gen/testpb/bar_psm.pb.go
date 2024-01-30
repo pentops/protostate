@@ -90,6 +90,7 @@ func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, 
 type BarPSMEventKey string
 
 const (
+	BarPSMEventNil     BarPSMEventKey = "<nil>"
 	BarPSMEventCreated BarPSMEventKey = "created"
 	BarPSMEventUpdated BarPSMEventKey = "updated"
 	BarPSMEventDeleted BarPSMEventKey = "deleted"
@@ -126,6 +127,9 @@ func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
 }
 
 func (ee *BarEventType) UnwrapPSMEvent() BarPSMEvent {
+	if ee == nil {
+		return nil
+	}
 	switch v := ee.Type.(type) {
 	case *BarEventType_Created_:
 		return v.Created
@@ -140,14 +144,20 @@ func (ee *BarEventType) UnwrapPSMEvent() BarPSMEvent {
 func (ee *BarEventType) PSMEventKey() BarPSMEventKey {
 	tt := ee.UnwrapPSMEvent()
 	if tt == nil {
-		return "<nil>"
+		return BarPSMEventNil
 	}
 	return tt.PSMEventKey()
+}
+func (ee *BarEvent) PSMEventKey() BarPSMEventKey {
+	return ee.Event.PSMEventKey()
 }
 func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
 	return ee.Event.UnwrapPSMEvent()
 }
 func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) {
+	if ee.Event == nil {
+		ee.Event = &BarEventType{}
+	}
 	switch v := inner.(type) {
 	case *BarEventType_Created:
 		ee.Event.Type = &BarEventType_Created_{Created: v}
