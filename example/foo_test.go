@@ -19,11 +19,20 @@ import (
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
 )
+
+func TestStateEntityExtensions(t *testing.T) {
+	event := &testpb.FooEvent{}
+	assert.Equal(t, testpb.FooPSMEventNil, event.PSMEventKey())
+	event.SetPSMEvent(&testpb.FooEventType_Created{})
+	assert.Equal(t, testpb.FooPSMEventCreated, event.Event.PSMEventKey())
+	assert.Equal(t, testpb.FooPSMEventCreated, event.PSMEventKey())
+}
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 	customTableSpec := testpb.DefaultFooPSMTableSpec

@@ -555,6 +555,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("type ", ss.eventName, "Key string")
 	g.P()
 	g.P("const (")
+	g.P(ss.namePrefix, "PSMEventNil ", ss.eventName, "Key = \"<nil>\"")
 	for _, field := range eventTypeField.Message.Fields {
 		g.P(ss.namePrefix, "PSMEvent", field.GoName, " ", ss.eventName, "Key = \"", field.Desc.Name(), "\"")
 	}
@@ -571,6 +572,9 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 
 	g.P("func (ee *", eventTypeField.Message.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
+	g.P("   if ee == nil {")
+	g.P("     return nil")
+	g.P("   }")
 	g.P("	switch v := ee.Type.(type) {")
 	for _, field := range eventTypeField.Message.Fields {
 		g.P("	case *", field.GoIdent, ":")
@@ -582,11 +586,15 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 
 	g.P("func (ee *", eventTypeField.Message.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
-	g.P("	tt := ee.UnwrapPSMEvent()")
+	g.P("   tt := ee.UnwrapPSMEvent()")
 	g.P("   if tt == nil {")
-	g.P("     return \"<nil>\"")
+	g.P("     return ", ss.namePrefix, "PSMEventNil")
 	g.P("   }")
 	g.P("	return tt.PSMEventKey()")
+	g.P("}")
+
+	g.P("func (ee *", ss.eventMessage.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
+	g.P("	return ee.", eventTypeField.GoName, ".PSMEventKey()")
 	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
@@ -594,7 +602,10 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 
 	g.P("func (ee *", ss.eventMessage.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") {")
-	g.P("	switch v := inner.(type) {")
+	g.P("  if ee.", eventTypeField.GoName, " == nil {")
+	g.P("    ee.", eventTypeField.GoName, " = &", eventTypeField.Message.GoIdent, "{}")
+	g.P("  }")
+	g.P("  switch v := inner.(type) {")
 	for _, field := range eventTypeField.Message.Fields {
 		g.P("	case *", field.Message.GoIdent, ":")
 		g.P("		ee.", eventTypeField.GoName, ".Type = &", field.GoIdent, "{", field.GoName, ": v}")

@@ -92,6 +92,7 @@ func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, 
 type FooPSMEventKey string
 
 const (
+	FooPSMEventNil     FooPSMEventKey = "<nil>"
 	FooPSMEventCreated FooPSMEventKey = "created"
 	FooPSMEventUpdated FooPSMEventKey = "updated"
 	FooPSMEventDeleted FooPSMEventKey = "deleted"
@@ -138,6 +139,9 @@ func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
 }
 
 func (ee *FooEventType) UnwrapPSMEvent() FooPSMEvent {
+	if ee == nil {
+		return nil
+	}
 	switch v := ee.Type.(type) {
 	case *FooEventType_Created_:
 		return v.Created
@@ -152,14 +156,20 @@ func (ee *FooEventType) UnwrapPSMEvent() FooPSMEvent {
 func (ee *FooEventType) PSMEventKey() FooPSMEventKey {
 	tt := ee.UnwrapPSMEvent()
 	if tt == nil {
-		return "<nil>"
+		return FooPSMEventNil
 	}
 	return tt.PSMEventKey()
+}
+func (ee *FooEvent) PSMEventKey() FooPSMEventKey {
+	return ee.Event.PSMEventKey()
 }
 func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
 	return ee.Event.UnwrapPSMEvent()
 }
 func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) {
+	if ee.Event == nil {
+		ee.Event = &FooEventType{}
+	}
 	switch v := inner.(type) {
 	case *FooEventType_Created:
 		ee.Event.Type = &FooEventType_Created_{Created: v}
