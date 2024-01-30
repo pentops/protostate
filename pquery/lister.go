@@ -526,7 +526,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			return nil, err
 		}
 
-		selectQuery = selectQuery.Where(authFilterMapped)
+		if len(authFilterMapped) > 0 {
+			selectQuery = selectQuery.Where(authFilterMapped)
+		}
 	}
 
 	pageSize, err := ll.getPageSize(req)
