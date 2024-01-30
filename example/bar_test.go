@@ -16,8 +16,8 @@ import (
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 
 	sm, err := testpb.NewBarPSM(db, psm.WithTableSpec(testpb.BarPSMTableSpec{
-		StateTable: "foo",
-		EventTable: "foo_event",
+		StateTable: "bar",
+		EventTable: "bar_event",
 		PrimaryKey: func(event *testpb.BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
 				"id": event.BarId,
@@ -25,7 +25,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 		},
 		EventColumns: func(event *testpb.BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"foo_id":    event.BarId,
+				"bar_id":    event.BarId,
 				"id":        event.Metadata.EventId,
 				"timestamp": event.Metadata.Timestamp,
 				"data":      event,

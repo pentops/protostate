@@ -36,11 +36,6 @@ func TestStateEntityExtensions(t *testing.T) {
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 	customTableSpec := testpb.DefaultFooPSMTableSpec
-	customTableSpec.ExtraStateColumns = func(state *testpb.FooState) (map[string]interface{}, error) {
-		return map[string]interface{}{
-			"tenant_id": state.TenantId,
-		}, nil
-	}
 
 	sm, err := testpb.NewFooPSM(db, psm.WithTableSpec(customTableSpec))
 	if err != nil {

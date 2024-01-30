@@ -25,8 +25,12 @@ type TableSpec[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	PrimaryKey        func(E) (map[string]interface{}, error)
-	ExtraStateColumns func(S) (map[string]interface{}, error)
+	// Primary Key derives the *State* primary key from the event.
+	PrimaryKey func(E) (map[string]interface{}, error)
+
+	// StateColumns stores non-primary-key columns from the state into the
+	// database
+	StateColumns func(S) (map[string]interface{}, error)
 
 	StateTable string
 	EventTable string
@@ -182,7 +186,7 @@ func WithExtraStateColumns[
 	extraStateColumns func(S) (map[string]interface{}, error),
 ) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
 	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
-		cb.spec.ExtraStateColumns = extraStateColumns
+		cb.spec.StateColumns = extraStateColumns
 	}
 }
 
@@ -292,8 +296,8 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	}
 
 	additionalColumns := map[string]interface{}{}
-	if stateSpec.ExtraStateColumns != nil {
-		additionalColumns, err = stateSpec.ExtraStateColumns(state)
+	if stateSpec.StateColumns != nil {
+		additionalColumns, err = stateSpec.StateColumns(state)
 		if err != nil {
 			return fmt.Errorf("extra state columns: %w", err)
 		}

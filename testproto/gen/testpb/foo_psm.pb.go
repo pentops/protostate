@@ -53,6 +53,11 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			"id": event.FooId,
 		}, nil
 	},
+	StateColumns: func(state *FooState) (map[string]interface{}, error) {
+		return map[string]interface{}{
+			"tenant_id": state.TenantId,
+		}, nil
+	},
 	EventColumns: func(event *FooEvent) (map[string]interface{}, error) {
 		metadata := event.Metadata
 		return map[string]interface{}{

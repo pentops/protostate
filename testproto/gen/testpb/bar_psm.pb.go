@@ -53,6 +53,9 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			"id": event.BarId,
 		}, nil
 	},
+	StateColumns: func(state *BarState) (map[string]interface{}, error) {
+		return map[string]interface{}{}, nil
+	},
 	EventColumns: func(event *BarEvent) (map[string]interface{}, error) {
 		metadata := event.Metadata
 		return map[string]interface{}{
