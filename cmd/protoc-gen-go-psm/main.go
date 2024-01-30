@@ -654,6 +654,20 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("    }, nil")
 	g.P("  },")
+	g.P("  StateColumns: func(state *", ss.stateMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("    return map[string]interface{}{")
+
+	for _, field := range ss.eventFieldGenerators.eventStateKeyFields {
+		if field.isKey {
+			continue
+		}
+		// stripping the prefix foo_ from the name in the event. In the DB, we
+		// expect the primary key to be called just id, so foo_id -> id
+		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
+		g.P("      \"", keyName, "\": state.", field.eventField.GoName, ",")
+	}
+	g.P("    }, nil")
+	g.P("  },")
 
 	g.P("  EventColumns: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    metadata := event.", ss.metadataField.GoName)
