@@ -12,6 +12,7 @@ import (
 type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
 	SideEffect(outbox.OutboxMessage)
 	ChainEvent(E)
+	ChainDerived(IE)
 	FullCause() E
 }
 
@@ -19,6 +20,11 @@ type TransitionData[E IEvent[IE], IE IInnerEvent] struct {
 	sideEffects []outbox.OutboxMessage
 	chainEvents []E
 	causedBy    E
+	err         error
+
+	// returns a new event with metadata derived from the causing event and
+	// metadata from the system actor
+	deriveEvent func(E, IE) (E, error)
 }
 
 func (td *TransitionData[E, IE]) ChainEvent(event E) {
@@ -33,17 +39,32 @@ func (td *TransitionData[E, IE]) FullCause() E {
 	return td.causedBy
 }
 
+func (td *TransitionData[E, IE]) ChainDerived(inner IE) {
+	derived, err := td.deriveEvent(td.causedBy, inner)
+	if err != nil {
+		td.err = err
+		return
+	}
+
+	td.ChainEvent(derived)
+}
+
+// Eventer is the inner state machine, independent of storage.
 type Eventer[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
-	UnwrapEvent func(E) IE
-	StateLabel  func(S) string
-	EventLabel  func(IE) string
+	// from conversions, TODO: group in a struct
+	UnwrapEvent      func(E) IE
+	StateLabel       func(S) string
+	EventLabel       func(IE) string
+	DeriveChainEvent func(E, SystemActor, string) E
 
 	Transitions []ITransition[S, ST, E, IE]
+
+	SystemActor *SystemActor
 
 	validator *protovalidate.Validator
 }
@@ -92,7 +113,9 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		eventQueue = eventQueue[1:]
 
 		baton := &TransitionData[E, IE]{
-			causedBy: innerEvent,
+			causedBy:    innerEvent,
+			deriveEvent: ee.deriveEvent,
+			err:         nil,
 		}
 
 		unwrapped := ee.UnwrapEvent(innerEvent)
@@ -115,6 +138,10 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		if err := transition.RunTransition(ctx, baton, state, unwrapped); err != nil {
 			log.WithError(ctx, err).Error("Running Transition")
 			return err
+		}
+
+		if baton.err != nil {
+			return baton.err
 		}
 
 		ctx = log.WithFields(ctx, map[string]interface{}{
@@ -142,6 +169,19 @@ func (ee Eventer[S, ST, E, IE]) Run(
 	}
 
 	return nil
+}
+
+// deriveEvent returns a new event with metadata derived from the causing
+// event and system actor
+func (ee Eventer[S, ST, E, IE]) deriveEvent(event E, inner IE) (evt E, err error) {
+	if ee.SystemActor == nil {
+		err = fmt.Errorf("no system actor defined, cannot derive events")
+		return
+	}
+	eventKey := ee.EventLabel(inner)
+	derived := ee.DeriveChainEvent(event, *ee.SystemActor, eventKey)
+	derived.SetPSMEvent(inner)
+	return derived, nil
 }
 
 type ITransition[

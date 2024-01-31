@@ -64,6 +64,7 @@ type IState[Status IStatusEnum] interface {
 type IEvent[Inner any] interface {
 	proto.Message
 	UnwrapPSMEvent() Inner
+	SetPSMEvent(Inner)
 }
 
 type IInnerEvent interface {

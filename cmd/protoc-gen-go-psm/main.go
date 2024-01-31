@@ -506,12 +506,22 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
 
 	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
-	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", options ...", sm.Ident("StateMachineOption"), "[")
+	g.P("func Default", ss.machineName, "Config() *", sm.Ident("StateMachineConfig"), "[")
+	printTypes()
+	g.P("] {")
+	g.P("return ", sm.Ident("NewStateMachineConfig"), "[")
+	printTypes()
+	g.P("](", FooPSMConverter, "{}, ", DefaultFooPSMTableSpec, ")")
+	g.P("}")
+	g.P()
+
+	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
+	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", config *", sm.Ident("StateMachineConfig"), "[")
 	printTypes()
 	g.P("]) (*", FooPSM, ", error) {")
 	g.P("return ", sm.Ident("NewStateMachine"), "[")
 	printTypes()
-	g.P("](db, ", FooPSMConverter, "{}, ", DefaultFooPSMTableSpec, ", options...)")
+	g.P("](db, config)")
 	g.P("}")
 	g.P()
 
@@ -705,6 +715,8 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 }
 
 func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
+	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
+	timestamppb := protogen.GoImportPath("google.golang.org/protobuf/types/known/timestamppb")
 
 	g.P("type ", ss.machineName, "Converter struct {}")
 	g.P()
@@ -727,6 +739,27 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("}")
 	g.P("}")
+	g.P()
+	g.P("func (c ", ss.machineName, "Converter) DeriveChainEvent(e *", ss.eventMessage.GoIdent, ", systemActor ", sm.Ident("SystemActor"), ", eventKey string) *", ss.eventMessage.GoIdent, " {")
+	g.P("  metadata := &", ss.metadataField.Message.GoIdent, "{")
+	g.P("  ", ss.eventIDField.GoName, ": systemActor.NewEventID(e.", ss.metadataField.GoName, ".", ss.eventIDField.GoName, ", eventKey),")
+	g.P("  ", ss.eventTimestampField.GoName, ": ", timestamppb.Ident("Now()"), ",")
+	g.P("}")
+
+	if ss.eventActorField != nil {
+		g.P("actorProto := systemActor.ActorProto()")
+		g.P("refl := metadata.ProtoReflect()")
+		g.P("refl.Set(refl.Descriptor().Fields().ByName(\"", ss.eventActorField.Desc.Name(), "\"), actorProto)")
+	}
+
+	g.P("return &", ss.eventMessage.GoIdent, "{")
+	g.P(ss.metadataField.GoName, ": metadata,")
+	for _, field := range ss.eventStateKeyFields {
+		g.P(field.eventField.GoName, ": e.", field.eventField.GoName, ",")
+	}
+	g.P("}")
+	g.P("}")
+	g.P()
 
 	g.P("func (c ", ss.machineName, "Converter) CheckStateKeys(s *", ss.stateMessage.GoIdent, ", e *", ss.eventMessage.GoIdent, ") error {")
 	for _, field := range ss.eventStateKeyFields {

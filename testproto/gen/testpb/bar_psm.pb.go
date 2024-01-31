@@ -7,6 +7,7 @@ import (
 	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
 	proto "google.golang.org/protobuf/proto"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StateObjectOptions: BarPSM
@@ -24,7 +25,21 @@ type BarPSM = psm.StateMachine[
 	BarPSMEvent,
 ]
 
-func NewBarPSM(db psm.Transactor, options ...psm.StateMachineOption[
+func DefaultBarPSMConfig() *psm.StateMachineConfig[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+] {
+	return psm.NewStateMachineConfig[
+		*BarState,
+		BarStatus,
+		*BarEvent,
+		BarPSMEvent,
+	](BarPSMConverter{}, DefaultBarPSMTableSpec)
+}
+
+func NewBarPSM(db psm.Transactor, config *psm.StateMachineConfig[
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -35,7 +50,7 @@ func NewBarPSM(db psm.Transactor, options ...psm.StateMachineOption[
 		BarStatus,
 		*BarEvent,
 		BarPSMEvent,
-	](db, BarPSMConverter{}, DefaultBarPSMTableSpec, options...)
+	](db, config)
 }
 
 type BarPSMTableSpec = psm.TableSpec[
@@ -122,6 +137,18 @@ func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 		BarId: e.BarId,
 	}
 }
+
+func (c BarPSMConverter) DeriveChainEvent(e *BarEvent, systemActor psm.SystemActor, eventKey string) *BarEvent {
+	metadata := &StrangeMetadata{
+		EventId:   systemActor.NewEventID(e.Metadata.EventId, eventKey),
+		Timestamp: timestamppb.Now(),
+	}
+	return &BarEvent{
+		Metadata: metadata,
+		BarId:    e.BarId,
+	}
+}
+
 func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
 	if s.BarId != e.BarId {
 		return fmt.Errorf("state field 'BarId' %q does not match event field %q", s.BarId, e.BarId)

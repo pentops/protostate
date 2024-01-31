@@ -166,6 +166,7 @@ message FooEventType {
     optional int64 weight = 4;
     optional int64 height = 5;
     optional int64 length = 6;
+    bool delete = 7;
   }
 
   message Deleted {}

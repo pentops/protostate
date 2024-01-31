@@ -7,6 +7,7 @@ import (
 	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
 	proto "google.golang.org/protobuf/proto"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StateObjectOptions: FooPSM
@@ -24,7 +25,21 @@ type FooPSM = psm.StateMachine[
 	FooPSMEvent,
 ]
 
-func NewFooPSM(db psm.Transactor, options ...psm.StateMachineOption[
+func DefaultFooPSMConfig() *psm.StateMachineConfig[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+] {
+	return psm.NewStateMachineConfig[
+		*FooState,
+		FooStatus,
+		*FooEvent,
+		FooPSMEvent,
+	](FooPSMConverter{}, DefaultFooPSMTableSpec)
+}
+
+func NewFooPSM(db psm.Transactor, config *psm.StateMachineConfig[
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -35,7 +50,7 @@ func NewFooPSM(db psm.Transactor, options ...psm.StateMachineOption[
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
-	](db, FooPSMConverter{}, DefaultFooPSMTableSpec, options...)
+	](db, config)
 }
 
 type FooPSMTableSpec = psm.TableSpec[
@@ -127,6 +142,22 @@ func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 		TenantId: e.TenantId,
 	}
 }
+
+func (c FooPSMConverter) DeriveChainEvent(e *FooEvent, systemActor psm.SystemActor, eventKey string) *FooEvent {
+	metadata := &Metadata{
+		EventId:   systemActor.NewEventID(e.Metadata.EventId, eventKey),
+		Timestamp: timestamppb.Now(),
+	}
+	actorProto := systemActor.ActorProto()
+	refl := metadata.ProtoReflect()
+	refl.Set(refl.Descriptor().Fields().ByName("actor"), actorProto)
+	return &FooEvent{
+		Metadata: metadata,
+		FooId:    e.FooId,
+		TenantId: e.TenantId,
+	}
+}
+
 func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
 	if s.FooId != e.FooId {
 		return fmt.Errorf("state field 'FooId' %q does not match event field %q", s.FooId, e.FooId)
