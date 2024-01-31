@@ -88,9 +88,6 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) error {
 }
 
 func (qs PSMQuerySet) listFilter(g *protogen.GeneratedFile, reqType protogen.GoIdent, name string, fields []ListFilterField) {
-	if len(qs.ListRequestFilter) == 0 {
-		return
-	}
 	// ListRequestFilter       func(ListREQ) (map[string]interface{}, error)
 	g.P(name, ": func(req *", reqType, ") (map[string]interface{}, error) {")
 	g.P("  filter := map[string]interface{}{}")
