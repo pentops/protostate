@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/lib/pq"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -52,10 +53,17 @@ func interfaceToDBValue(i interface{}) (interface{}, error) {
 	}
 
 	switch reflect.TypeOf(i).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+	case reflect.Ptr, reflect.Map, reflect.Chan:
 		if reflect.ValueOf(i).IsNil() {
 			return nil, nil
 		}
+
+	case reflect.Slice, reflect.Array:
+		if reflect.ValueOf(i).IsNil() {
+			return nil, nil
+		}
+
+		return pq.Array(i), nil
 	}
 
 	return i, nil
