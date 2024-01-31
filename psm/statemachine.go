@@ -7,10 +7,13 @@ import (
 	"fmt"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // TableSpec is the configuration for the state machine's table mapping.
@@ -102,6 +105,8 @@ type EventTypeConverter[
 	EventLabel(IE) string
 	EmptyState(E) S
 	CheckStateKeys(S, E) error
+
+	DeriveChainEvent(template E, actor SystemActor, eventKey string) E
 }
 
 type Transactor interface {
@@ -139,9 +144,34 @@ func (sm *StateMachine[S, ST, E, IE]) AddHook(hook StateHook[S, ST, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
-// stateMachineConfigBuilder allows the generated code to build a default
+type SystemActor struct {
+	ID    uuid.UUID
+	Actor protoreflect.Value
+}
+
+func NewSystemActor(id string, actor proto.Message) (SystemActor, error) {
+	idUUID, err := uuid.Parse(id)
+	if err != nil {
+		return SystemActor{}, fmt.Errorf("parsing id: %w", err)
+	}
+	actorValue := protoreflect.ValueOf(actor.ProtoReflect())
+	return SystemActor{
+		ID:    idUUID,
+		Actor: actorValue,
+	}, nil
+}
+
+func (sa SystemActor) NewEventID(fromEventUUID string, eventKey string) string {
+	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
+}
+
+func (sa SystemActor) ActorProto() protoreflect.Value {
+	return sa.Actor
+}
+
+// StateMachineConfig allows the generated code to build a default
 // machine, but expose options to the user to override the defaults
-type stateMachineConfigBuilder[
+type StateMachineConfig[
 	S IState[ST],
 	ST IStatusEnum,
 	E IEvent[IE],
@@ -149,53 +179,43 @@ type stateMachineConfigBuilder[
 ] struct {
 	conversions EventTypeConverter[S, ST, E, IE]
 	spec        TableSpec[S, ST, E, IE]
+	systemActor *SystemActor
 }
 
-func WithTableSpec[
+func NewStateMachineConfig[
 	S IState[ST],
 	ST IStatusEnum,
 	E IEvent[IE],
 	IE IInnerEvent,
 ](
-	spec TableSpec[S, ST, E, IE],
-) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
-	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
-		cb.spec = spec
+	defaultConversions EventTypeConverter[S, ST, E, IE],
+	defaultSpec TableSpec[S, ST, E, IE],
+) *StateMachineConfig[S, ST, E, IE] {
+	return &StateMachineConfig[S, ST, E, IE]{
+		conversions: defaultConversions,
+		spec:        defaultSpec,
 	}
 }
 
-func WithEventTypeConverter[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-](
-	conversions EventTypeConverter[S, ST, E, IE],
-) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
-	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
-		cb.conversions = conversions
-	}
+func (cb *StateMachineConfig[S, ST, E, IE]) WithTableSpec(spec TableSpec[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
+	cb.spec = spec
+	return cb
 }
 
-func WithExtraStateColumns[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-](
-	extraStateColumns func(S) (map[string]interface{}, error),
-) func(*stateMachineConfigBuilder[S, ST, E, IE]) {
-	return func(cb *stateMachineConfigBuilder[S, ST, E, IE]) {
-		cb.spec.StateColumns = extraStateColumns
-	}
+func (cb *StateMachineConfig[S, ST, E, IE]) WithEventTypeConverter(conversions EventTypeConverter[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
+	cb.conversions = conversions
+	return cb
 }
 
-type StateMachineOption[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-] func(*stateMachineConfigBuilder[S, ST, E, IE])
+func (cb *StateMachineConfig[S, ST, E, IE]) WithSystemActor(systemActor SystemActor) *StateMachineConfig[S, ST, E, IE] {
+	cb.systemActor = &systemActor
+	return cb
+}
+
+func (cb *StateMachineConfig[S, ST, E, IE]) WithStateColumns(stateColumns func(S) (map[string]interface{}, error)) *StateMachineConfig[S, ST, E, IE] {
+	cb.spec.StateColumns = stateColumns
+	return cb
+}
 
 func NewStateMachine[
 	S IState[ST], // Outer State Entity
@@ -204,19 +224,8 @@ func NewStateMachine[
 	IE IInnerEvent, // Inner Event, the typed event
 ](
 	db Transactor,
-	defaultConversions EventTypeConverter[S, ST, E, IE],
-	defaultSpec TableSpec[S, ST, E, IE],
-	options ...StateMachineOption[S, ST, E, IE],
+	cb *StateMachineConfig[S, ST, E, IE],
 ) (*StateMachine[S, ST, E, IE], error) {
-
-	cb := &stateMachineConfigBuilder[S, ST, E, IE]{
-		conversions: defaultConversions,
-		spec:        defaultSpec,
-	}
-
-	for _, option := range options {
-		option(cb)
-	}
 
 	if err := cb.spec.Validate(); err != nil {
 		return nil, err
@@ -225,9 +234,11 @@ func NewStateMachine[
 	(&cb.spec).setDefaults()
 
 	ee := &Eventer[S, ST, E, IE]{
-		UnwrapEvent: cb.conversions.Unwrap,
-		StateLabel:  cb.conversions.StateLabel,
-		EventLabel:  cb.conversions.EventLabel,
+		UnwrapEvent:      cb.conversions.Unwrap,
+		StateLabel:       cb.conversions.StateLabel,
+		EventLabel:       cb.conversions.EventLabel,
+		SystemActor:      cb.systemActor,
+		DeriveChainEvent: cb.conversions.DeriveChainEvent,
 	}
 
 	return &StateMachine[S, ST, E, IE]{

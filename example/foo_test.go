@@ -34,10 +34,21 @@ func TestStateEntityExtensions(t *testing.T) {
 	assert.Equal(t, testpb.FooPSMEventCreated, event.PSMEventKey())
 }
 
+var fooActorID = uuid.NewString()
+
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 	customTableSpec := testpb.DefaultFooPSMTableSpec
 
-	sm, err := testpb.NewFooPSM(db, psm.WithTableSpec(customTableSpec))
+	systemActor, err := psm.NewSystemActor(fooActorID, &testpb.Actor{
+		ActorId: fooActorID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sm, err := testpb.NewFooPSM(db, testpb.
+		DefaultFooPSMConfig().
+		WithTableSpec(customTableSpec).
+		WithSystemActor(systemActor))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +89,22 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
+			state.LastEventId = tb.FullCause().Metadata.EventId
+
+			if event.Delete {
+				tb.ChainDerived(&testpb.FooEventType_Deleted{})
+			}
+			return nil
+		}))
+
+	sm.From(testpb.FooStatus_ACTIVE).
+		Do(testpb.FooPSMFunc(func(
+			ctx context.Context,
+			tb testpb.FooPSMTransitionBaton,
+			state *testpb.FooState,
+			event *testpb.FooEventType_Deleted,
+		) error {
+			state.Status = testpb.FooStatus_DELETED
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
@@ -164,8 +191,26 @@ func TestFooStateMachine(t *testing.T) {
 		},
 	}
 
+	event4 := &testpb.FooEvent{
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: foo2ID,
+		Event: &testpb.FooEventType{
+			Type: &testpb.FooEventType_Updated_{
+				Updated: &testpb.FooEventType_Updated{
+					Delete: true,
+				},
+			},
+		},
+	}
+
 	statesOut := map[string]*testpb.FooState{}
-	for _, event := range []*testpb.FooEvent{event1, event2, event3} {
+	for _, event := range []*testpb.FooEvent{event1, event2, event3, event4} {
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -200,7 +245,6 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	t.Run("Get1", func(t *testing.T) {
-
 		req := &testpb.GetFooRequest{
 			FooId: fooID,
 		}
@@ -240,6 +284,34 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(protojson.Format(res))
 		if len(res.Events) != 2 {
 			t.Fatalf("expected 2 events for foo 1, got %d", len(res.Events))
+		}
+	})
+
+	t.Run("Get2", func(t *testing.T) {
+
+		req := &testpb.GetFooRequest{
+			FooId: foo2ID,
+		}
+
+		res := &testpb.GetFooResponse{}
+
+		err = queryer.Get(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if !proto.Equal(res.State, statesOut[foo2ID]) {
+			t.Fatalf("expected %v, got %v", statesOut[foo2ID], res.State)
+		}
+
+		if len(res.Events) != 3 {
+			t.Fatalf("expected 3 events, got %d", len(res.Events))
+		}
+		t.Log(res.Events)
+
+		derivedEvent := res.Events[2]
+		if derivedEvent.Metadata.Actor.ActorId != fooActorID {
+			t.Fatalf("expected derived event to have actor ID %s, got %s", fooActorID, derivedEvent.Metadata.Actor.ActorId)
 		}
 	})
 }

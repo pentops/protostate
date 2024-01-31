@@ -7,7 +7,6 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -15,23 +14,26 @@ import (
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 
-	sm, err := testpb.NewBarPSM(db, psm.WithTableSpec(testpb.BarPSMTableSpec{
-		StateTable: "bar",
-		EventTable: "bar_event",
-		PrimaryKey: func(event *testpb.BarEvent) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"id": event.BarId,
-			}, nil
-		},
-		EventColumns: func(event *testpb.BarEvent) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"bar_id":    event.BarId,
-				"id":        event.Metadata.EventId,
-				"timestamp": event.Metadata.Timestamp,
-				"data":      event,
-			}, nil
-		},
-	}))
+	config := testpb.DefaultBarPSMConfig().
+		WithTableSpec(testpb.BarPSMTableSpec{
+			StateTable: "bar",
+			EventTable: "bar_event",
+			PrimaryKey: func(event *testpb.BarEvent) (map[string]interface{}, error) {
+				return map[string]interface{}{
+					"id": event.BarId,
+				}, nil
+			},
+			EventColumns: func(event *testpb.BarEvent) (map[string]interface{}, error) {
+				return map[string]interface{}{
+					"bar_id":    event.BarId,
+					"id":        event.Metadata.EventId,
+					"timestamp": event.Metadata.Timestamp,
+					"data":      event,
+				}, nil
+			},
+		})
+
+	sm, err := testpb.NewBarPSM(db, config)
 	if err != nil {
 		return nil, err
 	}
