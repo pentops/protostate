@@ -25,6 +25,13 @@ type BarPSM = psm.StateMachine[
 	BarPSMEvent,
 ]
 
+type BarPSMDB = psm.DBStateMachine[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+]
+
 func DefaultBarPSMConfig() *psm.StateMachineConfig[
 	*BarState,
 	BarStatus,
@@ -39,7 +46,7 @@ func DefaultBarPSMConfig() *psm.StateMachineConfig[
 	](BarPSMConverter{}, DefaultBarPSMTableSpec)
 }
 
-func NewBarPSM(db psm.Transactor, config *psm.StateMachineConfig[
+func NewBarPSM(config *psm.StateMachineConfig[
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -50,7 +57,7 @@ func NewBarPSM(db psm.Transactor, config *psm.StateMachineConfig[
 		BarStatus,
 		*BarEvent,
 		BarPSMEvent,
-	](db, config)
+	](config)
 }
 
 type BarPSMTableSpec = psm.TableSpec[

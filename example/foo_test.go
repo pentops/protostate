@@ -36,7 +36,7 @@ func TestStateEntityExtensions(t *testing.T) {
 
 var fooActorID = uuid.NewString()
 
-func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
+func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 	customTableSpec := testpb.DefaultFooPSMTableSpec
 
 	systemActor, err := psm.NewSystemActor(fooActorID, &testpb.Actor{
@@ -45,7 +45,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 	if err != nil {
 		return nil, err
 	}
-	sm, err := testpb.NewFooPSM(db, testpb.
+	sm, err := testpb.NewFooPSM(testpb.
 		DefaultFooPSMConfig().
 		WithTableSpec(customTableSpec).
 		WithSystemActor(systemActor))
@@ -109,7 +109,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSM, error) {
 			return nil
 		}))
 
-	return (*testpb.FooPSM)(sm), nil
+	return (*testpb.FooPSMDB)(sm.WithDB(db)), nil
 }
 
 func TestFooStateMachine(t *testing.T) {
