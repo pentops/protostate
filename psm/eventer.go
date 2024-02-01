@@ -56,11 +56,7 @@ type Eventer[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
-	// from conversions, TODO: group in a struct
-	UnwrapEvent      func(E) IE
-	StateLabel       func(S) string
-	EventLabel       func(IE) string
-	DeriveChainEvent func(E, SystemActor, string) E
+	conversions EventTypeConverter[S, ST, E, IE]
 
 	Transitions []ITransition[S, ST, E, IE]
 
@@ -76,10 +72,10 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 		}
 	}
 
-	innerEvent := ee.UnwrapEvent(event)
-	typeKey := ee.EventLabel(innerEvent)
+	innerEvent := ee.conversions.Unwrap(event)
+	typeKey := ee.conversions.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
-		ee.StateLabel(state),
+		ee.conversions.StateLabel(state),
 		typeKey,
 	)
 }
@@ -118,10 +114,10 @@ func (ee Eventer[S, ST, E, IE]) Run(
 			err:         nil,
 		}
 
-		unwrapped := ee.UnwrapEvent(innerEvent)
+		unwrapped := ee.conversions.Unwrap(innerEvent)
 
-		typeKey := ee.EventLabel(unwrapped)
-		stateBefore := ee.StateLabel(state)
+		typeKey := ee.conversions.EventLabel(unwrapped)
+		stateBefore := ee.conversions.StateLabel(state)
 
 		ctx = log.WithFields(ctx, map[string]interface{}{
 			"eventType":  typeKey,
@@ -145,7 +141,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		}
 
 		ctx = log.WithFields(ctx, map[string]interface{}{
-			"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, ee.StateLabel(state), typeKey),
+			"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, ee.conversions.StateLabel(state), typeKey),
 		})
 
 		log.Info(ctx, "Event Handled")
@@ -178,8 +174,8 @@ func (ee Eventer[S, ST, E, IE]) deriveEvent(event E, inner IE) (evt E, err error
 		err = fmt.Errorf("no system actor defined, cannot derive events")
 		return
 	}
-	eventKey := ee.EventLabel(inner)
-	derived := ee.DeriveChainEvent(event, *ee.SystemActor, eventKey)
+	eventKey := ee.conversions.EventLabel(inner)
+	derived := ee.conversions.DeriveChainEvent(event, *ee.SystemActor, eventKey)
 	derived.SetPSMEvent(inner)
 	return derived, nil
 }
@@ -218,7 +214,7 @@ func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, 
 
 func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE) bool) EventerTransitionBuilder[S, ST, E, IE] {
 	innerFilter := func(fullEvent E) bool {
-		innerEvent := tb.eventer.UnwrapEvent(fullEvent)
+		innerEvent := tb.eventer.conversions.Unwrap(fullEvent)
 		return filter(innerEvent)
 	}
 	tb.filters = append(tb.filters, innerFilter)

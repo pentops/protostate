@@ -143,29 +143,34 @@ func (sm *StateMachine[S, ST, E, IE]) AddHook(hook StateHook[S, ST, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
-type SystemActor struct {
+type SimpleSystemActor struct {
 	ID    uuid.UUID
 	Actor protoreflect.Value
 }
 
-func NewSystemActor(id string, actor proto.Message) (SystemActor, error) {
+func NewSystemActor(id string, actor proto.Message) (SimpleSystemActor, error) {
 	idUUID, err := uuid.Parse(id)
 	if err != nil {
-		return SystemActor{}, fmt.Errorf("parsing id: %w", err)
+		return SimpleSystemActor{}, fmt.Errorf("parsing id: %w", err)
 	}
 	actorValue := protoreflect.ValueOf(actor.ProtoReflect())
-	return SystemActor{
+	return SimpleSystemActor{
 		ID:    idUUID,
 		Actor: actorValue,
 	}, nil
 }
 
-func (sa SystemActor) NewEventID(fromEventUUID string, eventKey string) string {
+func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) string {
 	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
 }
 
-func (sa SystemActor) ActorProto() protoreflect.Value {
+func (sa SimpleSystemActor) ActorProto() protoreflect.Value {
 	return sa.Actor
+}
+
+type SystemActor interface {
+	NewEventID(fromEventUUID string, eventKey string) string
+	ActorProto() protoreflect.Value
 }
 
 // StateMachineConfig allows the generated code to build a default
@@ -232,11 +237,8 @@ func NewStateMachine[
 	(&cb.spec).setDefaults()
 
 	ee := &Eventer[S, ST, E, IE]{
-		UnwrapEvent:      cb.conversions.Unwrap,
-		StateLabel:       cb.conversions.StateLabel,
-		EventLabel:       cb.conversions.EventLabel,
-		SystemActor:      cb.systemActor,
-		DeriveChainEvent: cb.conversions.DeriveChainEvent,
+		conversions: cb.conversions,
+		SystemActor: cb.systemActor,
 	}
 
 	return &StateMachine[S, ST, E, IE]{
