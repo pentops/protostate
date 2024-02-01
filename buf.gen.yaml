@@ -3,5 +3,3 @@ plugins:
   - plugin: buf.build/protocolbuffers/go:v1.31.0
     out: .
     opt: paths=import,module=github.com/pentops/protostate
-
-
