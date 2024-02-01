@@ -497,7 +497,10 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("type ", ss.machineName, " = ", sm.Ident("StateMachine"), "[")
 	printTypes()
 	g.P("]")
-
+	g.P()
+	g.P("type ", ss.machineName, "DB = ", sm.Ident("DBStateMachine"), "[")
+	printTypes()
+	g.P("]")
 	g.P()
 
 	FooPSM := ss.machineName
@@ -516,12 +519,12 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P()
 
 	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
-	g.P("func New", ss.machineName, "(db ", sm.Ident("Transactor"), ", config *", sm.Ident("StateMachineConfig"), "[")
+	g.P("func New", ss.machineName, "(config *", sm.Ident("StateMachineConfig"), "[")
 	printTypes()
 	g.P("]) (*", FooPSM, ", error) {")
 	g.P("return ", sm.Ident("NewStateMachine"), "[")
 	printTypes()
-	g.P("](db, config)")
+	g.P("](config)")
 	g.P("}")
 	g.P()
 

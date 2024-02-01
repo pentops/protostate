@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
+func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 
 	config := testpb.DefaultBarPSMConfig().
 		WithTableSpec(testpb.BarPSMTableSpec{
@@ -33,7 +33,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 			},
 		})
 
-	sm, err := testpb.NewBarPSM(db, config)
+	sm, err := testpb.NewBarPSM(config)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSM, error) {
 			return nil
 		}))
 
-	return (*testpb.BarPSM)(sm), nil
+	return (*testpb.BarPSMDB)(sm.WithDB(db)), nil
 }
 
 func TestBarStateMachine(t *testing.T) {

@@ -121,7 +121,6 @@ type StateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	db          Transactor
 	spec        TableSpec[S, ST, E, IE]
 	conversions EventTypeConverter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
@@ -223,7 +222,6 @@ func NewStateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ](
-	db Transactor,
 	cb *StateMachineConfig[S, ST, E, IE],
 ) (*StateMachine[S, ST, E, IE], error) {
 
@@ -242,11 +240,17 @@ func NewStateMachine[
 	}
 
 	return &StateMachine[S, ST, E, IE]{
-		db:          db,
 		spec:        cb.spec,
 		conversions: cb.conversions,
 		Eventer:     ee,
 	}, nil
+}
+
+func (sm *StateMachine[S, ST, E, IE]) WithDB(db Transactor) *DBStateMachine[S, ST, E, IE] {
+	return &DBStateMachine[S, ST, E, IE]{
+		StateMachine: sm,
+		db:           db,
+	}
 }
 
 func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
@@ -377,24 +381,39 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 }
 
 // TransitionInTx uses an existing transaction to transition the state machine.
-func (sm *StateMachine[S, ST, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
-	return sm.runTx(ctx, tx, event)
+func (sm *StateMachine[S, ST, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, events ...E) (S, error) {
+	var state S
+	var err error
+	for _, event := range events {
+		state, err = sm.runTx(ctx, tx, event)
+		if err != nil {
+			return state, err
+		}
+	}
+	return state, nil
+}
+
+type DBStateMachine[S IState[ST], ST IStatusEnum, E IEvent[IE], IE IInnerEvent] struct {
+	*StateMachine[S, ST, E, IE]
+	db Transactor
 }
 
 // Transition transitions the state machine in a new transaction from the state
 // machine's database pool
-func (sm *StateMachine[S, ST, E, IE]) Transition(ctx context.Context, event E) (S, error) {
+func (sm *DBStateMachine[S, ST, E, IE]) Transition(ctx context.Context, events ...E) (S, error) {
 	var state S
 	if err := sm.db.Transact(ctx, &sqrlx.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
 		Retryable: true,
 	}, func(ctx context.Context, tx sqrlx.Transaction) error {
-		stateOut, err := sm.runTx(ctx, tx, event)
-		if err != nil {
-			return err
+		var err error
+		for _, event := range events {
+			state, err = sm.runTx(ctx, tx, event)
+			if err != nil {
+				return err
+			}
 		}
-		state = stateOut
 		return nil
 	}); err != nil {
 		return state, err

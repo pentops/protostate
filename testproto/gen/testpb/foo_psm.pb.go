@@ -25,6 +25,13 @@ type FooPSM = psm.StateMachine[
 	FooPSMEvent,
 ]
 
+type FooPSMDB = psm.DBStateMachine[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
 func DefaultFooPSMConfig() *psm.StateMachineConfig[
 	*FooState,
 	FooStatus,
@@ -39,7 +46,7 @@ func DefaultFooPSMConfig() *psm.StateMachineConfig[
 	](FooPSMConverter{}, DefaultFooPSMTableSpec)
 }
 
-func NewFooPSM(db psm.Transactor, config *psm.StateMachineConfig[
+func NewFooPSM(config *psm.StateMachineConfig[
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -50,7 +57,7 @@ func NewFooPSM(db psm.Transactor, config *psm.StateMachineConfig[
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
-	](db, config)
+	](config)
 }
 
 type FooPSMTableSpec = psm.TableSpec[
