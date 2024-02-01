@@ -190,7 +190,7 @@ func NewGetter[
 func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
 
 	as := newAliasSet()
-	rootAlias := as.Next()
+	rootAlias := as.Next(gc.tableName)
 
 	resReflect := resMsg.ProtoReflect()
 
@@ -226,7 +226,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 
 		authAlias := rootAlias
 		if gc.authJoin != nil {
-			authAlias = as.Next()
+			authAlias = as.Next(gc.authJoin.TableName)
 			// LEFT JOIN
 			//   <t> AS authAlias
 			//   ON authAlias.<authJoin.foreignKeyColumn> = rootAlias.<authJoin.primaryKeyColumn>
@@ -246,7 +246,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 
 	if gc.join != nil {
-		joinAlias := as.Next()
+		joinAlias := as.Next(gc.join.tableName)
 
 		selectQuery.
 			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColunn)).
