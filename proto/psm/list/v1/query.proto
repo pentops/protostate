@@ -25,7 +25,7 @@ message Sort {
 message Filter {
   string field = 1;
 
-  oneof filter_value {
+  oneof type {
     option (buf.validate.oneof).required = true;
 
     string value = 2;
