@@ -125,47 +125,27 @@ func TestFooStateMachine(t *testing.T) {
 	}
 
 	fooID := uuid.NewString()
-	event1 := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
+	event1 := newFooEvent(fooID, func(e *testpb.FooEvent) {
+		e.Event.Type = &testpb.FooEventType_Created_{
+			Created: &testpb.FooEventType_Created{
+				Name:        "foo",
+				Field:       "event1",
+				Description: ptr.To("event1"),
+				Weight:      ptr.To(int64(10)),
 			},
-		},
-		FooId: fooID,
-		Event: &testpb.FooEventType{
-			Type: &testpb.FooEventType_Created_{
-				Created: &testpb.FooEventType_Created{
-					Name:        "foo",
-					Field:       "event1",
-					Description: ptr.To("event1"),
-					Weight:      ptr.To(int64(10)),
-				},
-			},
-		},
-	}
+		}
+	})
 
-	event2 := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
+	event2 := newFooEvent(fooID, func(e *testpb.FooEvent) {
+		e.Event.Type = &testpb.FooEventType_Updated_{
+			Updated: &testpb.FooEventType_Updated{
+				Name:        "foo",
+				Field:       "event2",
+				Description: ptr.To("event2"),
+				Weight:      ptr.To(int64(10)),
 			},
-		},
-		FooId: fooID,
-		Event: &testpb.FooEventType{
-			Type: &testpb.FooEventType_Updated_{
-				Updated: &testpb.FooEventType_Updated{
-					Name:        "foo",
-					Field:       "event2",
-					Description: ptr.To("event2"),
-					Weight:      ptr.To(int64(10)),
-				},
-			},
-		},
-	}
+		}
+	})
 
 	foo2ID := uuid.NewString()
 	event3 := &testpb.FooEvent{
