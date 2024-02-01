@@ -11,9 +11,9 @@ import (
 
 type aliasSet int
 
-func (as *aliasSet) Next() string {
+func (as *aliasSet) Next(name string) string {
 	*as++
-	return fmt.Sprintf("_gc_alias_%d", *as)
+	return fmt.Sprintf("_%s__a%d", name, *as)
 }
 
 func newAliasSet() *aliasSet {

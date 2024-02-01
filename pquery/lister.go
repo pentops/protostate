@@ -458,7 +458,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sqrl.SelectBuilder, error) {
 	as := newAliasSet()
-	tableAlias := as.Next()
+	tableAlias := as.Next(ll.tableName)
 
 	selectQuery := sq.
 		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
@@ -512,7 +512,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		for _, join := range ll.authJoin {
 			priorAlias := authAlias
-			authAlias = as.Next()
+			authAlias = as.Next(join.TableName)
 			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
 				join.TableName,
