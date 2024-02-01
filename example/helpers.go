@@ -5,10 +5,29 @@ import (
 	"fmt"
 
 	"github.com/elgris/sqrl"
+	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/log.go/log"
+	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func newFooEvent(fooID string, mod func(e *testpb.FooEvent)) *testpb.FooEvent {
+	e := &testpb.FooEvent{
+		Metadata: &testpb.Metadata{
+			EventId:   uuid.NewString(),
+			Timestamp: timestamppb.Now(),
+			Actor: &testpb.Actor{
+				ActorId: uuid.NewString(),
+			},
+		},
+		FooId: fooID,
+		Event: &testpb.FooEventType{},
+	}
+	mod(e)
+	return e
+}
 
 type tokenCtxKey struct{}
 
