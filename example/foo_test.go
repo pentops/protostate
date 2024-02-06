@@ -124,68 +124,17 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	fooID := uuid.NewString()
-	event1 := newFooEvent(fooID, func(e *testpb.FooEvent) {
-		e.Event.Type = &testpb.FooEventType_Created_{
-			Created: &testpb.FooEventType_Created{
-				Name:        "foo",
-				Field:       "event1",
-				Description: ptr.To("event1"),
-				Weight:      ptr.To(int64(10)),
-			},
-		}
-	})
+	tenantID := uuid.NewString()
 
-	event2 := newFooEvent(fooID, func(e *testpb.FooEvent) {
-		e.Event.Type = &testpb.FooEventType_Updated_{
-			Updated: &testpb.FooEventType_Updated{
-				Name:        "foo",
-				Field:       "event2",
-				Description: ptr.To("event2"),
-				Weight:      ptr.To(int64(10)),
-			},
-		}
-	})
+	fooID := uuid.NewString()
+	event1 := newFooCreatedEvent(fooID, tenantID, nil)
+	event2 := newFooUpdatedEvent(fooID, tenantID, nil)
 
 	foo2ID := uuid.NewString()
-	event3 := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
-			},
-		},
-		FooId: foo2ID,
-		Event: &testpb.FooEventType{
-			Type: &testpb.FooEventType_Created_{
-				Created: &testpb.FooEventType_Created{
-					Name:        "foo2",
-					Field:       "event3",
-					Description: ptr.To("event3"),
-					Weight:      ptr.To(int64(10)),
-				},
-			},
-		},
-	}
-
-	event4 := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
-			},
-		},
-		FooId: foo2ID,
-		Event: &testpb.FooEventType{
-			Type: &testpb.FooEventType_Updated_{
-				Updated: &testpb.FooEventType_Updated{
-					Delete: true,
-				},
-			},
-		},
-	}
+	event3 := newFooCreatedEvent(foo2ID, tenantID, nil)
+	event4 := newFooUpdatedEvent(foo2ID, tenantID, func(u *testpb.FooEventType_Updated) {
+		u.Delete = true
+	})
 
 	statesOut := map[string]*testpb.FooState{}
 	for _, event := range []*testpb.FooEvent{event1, event2, event3, event4} {
@@ -206,7 +155,6 @@ func TestFooStateMachine(t *testing.T) {
 	}
 
 	t.Run("List", func(t *testing.T) {
-
 		req := &testpb.ListFoosRequest{}
 		res := &testpb.ListFoosResponse{}
 
@@ -219,7 +167,6 @@ func TestFooStateMachine(t *testing.T) {
 		if len(res.Foos) != 2 {
 			t.Fatalf("expected 2 states, got %d", len(res.Foos))
 		}
-
 	})
 
 	t.Run("Get1", func(t *testing.T) {
@@ -266,7 +213,6 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	t.Run("Get2", func(t *testing.T) {
-
 		req := &testpb.GetFooRequest{
 			FooId: foo2ID,
 		}
@@ -294,7 +240,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 }
 
-func TestFooStateMachineMarshaling(t *testing.T) {
+func TestFooMarshaling(t *testing.T) {
 	ctx := context.Background()
 
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
@@ -313,29 +259,15 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	tenantID := uuid.NewString()
+
 	t.Run("Optional field", func(t *testing.T) {
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				FooId: fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Created_{
-						Created: &testpb.FooEventType_Created{
-							Name:        "foo",
-							Field:       "event1",
-							Description: ptr.To(""),
-						},
-					},
-				},
-			}
+			event := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+				c.Description = ptr.To("")
+			})
 
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -381,26 +313,9 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				FooId: fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Updated_{
-						Updated: &testpb.FooEventType_Updated{
-							Name:        "foo",
-							Field:       "event2",
-							Description: ptr.To("non blank description"),
-						},
-					},
-				},
-			}
-
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+				u.Description = ptr.To("non blank description")
+			})
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -445,24 +360,9 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with missing", func(t *testing.T) {
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				FooId: fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Updated_{
-						Updated: &testpb.FooEventType_Updated{
-							Name:  "foo",
-							Field: "event3",
-						},
-					},
-				},
-			}
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+				u.Description = nil
+			})
 
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -508,24 +408,10 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				FooId: fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Created_{
-						Created: &testpb.FooEventType_Created{
-							Name:  "foo",
-							Field: "",
-						},
-					},
-				},
-			}
+			event := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+				c.Field = ""
+				c.Description = nil
+			})
 
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -567,24 +453,10 @@ func TestFooStateMachineMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.Now(),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				FooId: fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Updated_{
-						Updated: &testpb.FooEventType_Updated{
-							Name:  "foo",
-							Field: "non empty",
-						},
-					},
-				},
-			}
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+				u.Field = "non empty"
+				u.Description = nil
+			})
 
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -657,27 +529,12 @@ func TestFooPagination(t *testing.T) {
 			tt := time.Now()
 			fooID := uuid.NewString()
 
-			event1 := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.New(tt),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				TenantId: &tenantID,
-				FooId:    fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Created_{
-						Created: &testpb.FooEventType_Created{
-							Name:   "foo",
-							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
-							Weight: ptr.To(10 + int64(ii)),
-						},
-					},
-				},
-			}
-			stateOut, err := sm.Transition(ctx, event1)
+			event := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+				c.Field = fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano))
+				c.Weight = ptr.To(10 + int64(ii))
+			})
+
+			stateOut, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -689,7 +546,6 @@ func TestFooPagination(t *testing.T) {
 	var pageResp *psml_pb.PageResponse
 
 	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-
 		req := &testpb.ListFoosRequest{}
 		res := &testpb.ListFoosResponse{}
 
@@ -714,11 +570,9 @@ func TestFooPagination(t *testing.T) {
 		if pageResp.NextToken == nil {
 			t.Fatalf("Should not be the final page")
 		}
-
 	})
 
 	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-
 		req := &testpb.ListFoosRequest{
 			Page: &psml_pb.PageRequest{
 				Token: pageResp.NextToken,
@@ -777,52 +631,18 @@ func TestFooEventPagination(t *testing.T) {
 		restore := silenceLogger()
 		defer restore()
 
-		foo1Create := &testpb.FooEvent{
-			Metadata: &testpb.Metadata{
-				EventId:   uuid.NewString(),
-				Timestamp: timestamppb.Now(),
-				Actor: &testpb.Actor{
-					ActorId: uuid.NewString(),
-				},
-			},
-			TenantId: &tenantID,
-			FooId:    fooID,
-			Event: &testpb.FooEventType{
-				Type: &testpb.FooEventType_Created_{
-					Created: &testpb.FooEventType_Created{
-						Name: "foo",
-					},
-				},
-			},
-		}
-
-		_, err := sm.Transition(ctx, foo1Create)
+		event := newFooCreatedEvent(fooID, tenantID, nil)
+		_, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
 		for ii := 0; ii < 30; ii++ {
 			tt := time.Now()
-			event := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.New(tt),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				TenantId: &tenantID,
-				FooId:    fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Updated_{
-						Updated: &testpb.FooEventType_Updated{
-							Name:   "foo",
-							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
-							Weight: ptr.To(11 + int64(ii)),
-						},
-					},
-				},
-			}
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+				u.Field = fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano))
+				u.Weight = ptr.To(11 + int64(ii))
+			})
 			t.Logf("Entering foo %d TS: %d, ID: %s", ii, event.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro(), event.Metadata.EventId)
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -941,29 +761,9 @@ func TestFooStateField(t *testing.T) {
 	fooID := uuid.NewString()
 	tenantID := uuid.NewString()
 
-	event1 := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
-			},
-		},
-		TenantId: &tenantID,
-		FooId:    fooID,
-		Event: &testpb.FooEventType{
-			Type: &testpb.FooEventType_Created_{
-				Created: &testpb.FooEventType_Created{
-					Name:   "foo",
-					Field:  "event1",
-					Weight: ptr.To(int64(10)),
-				},
-			},
-		},
-	}
-
 	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
-		stateOut, err := sm.Transition(ctx, event1)
+		event := newFooCreatedEvent(fooID, tenantID, nil)
+		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -972,26 +772,9 @@ func TestFooStateField(t *testing.T) {
 	})
 
 	ss.StepC("Update OK, Same Key", func(ctx context.Context, a flowtest.Asserter) {
-		event := &testpb.FooEvent{
-			Metadata: &testpb.Metadata{
-				EventId:   uuid.NewString(),
-				Timestamp: timestamppb.Now(),
-				Actor: &testpb.Actor{
-					ActorId: uuid.NewString(),
-				},
-			},
-			FooId:    fooID,
-			TenantId: &tenantID,
-			Event: &testpb.FooEventType{
-				Type: &testpb.FooEventType_Updated_{
-					Updated: &testpb.FooEventType_Updated{
-						Name:   "foo",
-						Field:  "event2",
-						Weight: ptr.To(int64(11)),
-					},
-				},
-			},
-		}
+		event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+			u.Weight = ptr.To(int64(11))
+		})
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())

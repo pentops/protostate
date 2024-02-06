@@ -9,7 +9,6 @@ import (
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
@@ -71,24 +70,10 @@ func TestBarStateMachine(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	fooID := uuid.NewString()
-	event1 := &testpb.BarEvent{
-		Metadata: &testpb.StrangeMetadata{
-			EventId:   uuid.NewString(),
-			Timestamp: timestamppb.Now(),
-		},
-		BarId: fooID,
-		Event: &testpb.BarEventType{
-			Type: &testpb.BarEventType_Created_{
-				Created: &testpb.BarEventType_Created{
-					Name:  "foo",
-					Field: "event1",
-				},
-			},
-		},
-	}
+	barID := uuid.NewString()
+	event := newBarCreatedEvent(barID, nil)
 
-	stateOut, err := sm.Transition(ctx, event1)
+	stateOut, err := sm.Transition(ctx, event)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
