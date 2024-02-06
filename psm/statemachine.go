@@ -221,6 +221,11 @@ func (cb *StateMachineConfig[S, ST, E, IE]) WithStateColumns(stateColumns func(S
 	return cb
 }
 
+func (cb *StateMachineConfig[S, ST, E, IE]) WithEventColumns(eventColumns func(E) (map[string]interface{}, error)) *StateMachineConfig[S, ST, E, IE] {
+	cb.spec.EventColumns = eventColumns
+	return cb
+}
+
 func NewStateMachine[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
