@@ -16,6 +16,8 @@ import (
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -470,7 +472,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	if ok && reqQuery != nil {
 		dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSort())
 		if err != nil {
-			return nil, fmt.Errorf("sort validation: %w", err)
+			return nil, status.Errorf(codes.InvalidArgument, "sort validation: %s", err)
 		}
 
 		sortFields = dynSorts
