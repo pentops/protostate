@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"github.com/bufbuild/protovalidate-go"
@@ -700,6 +701,21 @@ func (nf nestedField) jsonbPath() string {
 	return out.String()
 }
 
+func camelToSnake(jsonName string) string {
+	var out strings.Builder
+	for i, r := range jsonName {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				out.WriteRune('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+		} else {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
 func findField(message protoreflect.MessageDescriptor, path string) (*nestedField, error) {
 	var fieldName protoreflect.Name
 	var furtherPath string
@@ -708,7 +724,7 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 		fieldName = protoreflect.Name(parts[0])
 		furtherPath = parts[1]
 	} else {
-		fieldName = protoreflect.Name(path)
+		fieldName = protoreflect.Name(camelToSnake(path))
 	}
 
 	field := message.Fields().ByName(fieldName)
