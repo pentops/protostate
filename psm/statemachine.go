@@ -400,6 +400,10 @@ func (sm *StateMachine[S, ST, E, IE]) TransitionInTx(ctx context.Context, tx sqr
 	return state, nil
 }
 
+func (sm *StateMachine[S, ST, E, IE]) Transition(ctx context.Context, db Transactor, events ...E) (S, error) {
+	return sm.WithDB(db).Transition(ctx, events...)
+}
+
 type DBStateMachine[S IState[ST], ST IStatusEnum, E IEvent[IE], IE IInnerEvent] struct {
 	*StateMachine[S, ST, E, IE]
 	db Transactor
