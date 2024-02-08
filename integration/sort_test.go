@@ -2,9 +2,7 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
@@ -15,8 +13,6 @@ import (
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/utils/ptr"
 )
 
 func TestSortingWithAuthScope(t *testing.T) {
@@ -42,57 +38,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 	tenantID1 := uuid.NewString()
 	tenantID2 := uuid.NewString()
 
+	tenants := []string{tenantID1, tenantID2}
+	setupFooListableData(t, ss, sm, tenants, 10)
+
 	tkn := &token{
 		tenantID: tenantID1,
 	}
-
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
-		tenants := []string{tenantID1, tenantID2}
-
-		for ti := range tenants {
-			tkn := &token{
-				tenantID: tenants[ti],
-			}
-			ctx = tkn.WithToken(ctx)
-
-			restore := silenceLogger()
-			defer restore()
-
-			for ii := 0; ii < 10; ii++ {
-				tt := time.Now()
-				fooID := uuid.NewString()
-
-				event1 := &testpb.FooEvent{
-					Metadata: &testpb.Metadata{
-						EventId:   uuid.NewString(),
-						Timestamp: timestamppb.New(tt),
-						Actor: &testpb.Actor{
-							ActorId: uuid.NewString(),
-						},
-					},
-					TenantId: &tenants[ti],
-					FooId:    fooID,
-					Event: &testpb.FooEventType{
-						Type: &testpb.FooEventType_Created_{
-							Created: &testpb.FooEventType_Created{
-								Name:   "foo",
-								Field:  fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), (10+ii)*(ti+1), (50-ii)*(ti+1), (ii%2)*(ti+1)),
-								Weight: ptr.To((10 + int64(ii)) * (int64(ti) + 1)),
-								Height: ptr.To((50 - int64(ii)) * (int64(ti) + 1)),
-								Length: ptr.To((int64(ii%2) * (int64(ti) + 1))),
-							},
-						},
-					},
-				}
-				stateOut, err := sm.Transition(ctx, event1)
-				if err != nil {
-					t.Fatal(err.Error())
-				}
-				a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-				a.Equal(tenants[ti], *stateOut.TenantId)
-			}
-		}
-	})
 
 	nextToken := ""
 	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
@@ -219,57 +170,12 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	tenants := []string{uuid.NewString(), uuid.NewString()}
+	setupFooListableData(t, ss, sm, tenants, 30)
+
 	tkn := &token{
 		tenantID: "",
 	}
-
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
-		tenants := []string{uuid.NewString(), uuid.NewString()}
-
-		for ti := range tenants {
-			tkn := &token{
-				tenantID: tenants[ti],
-			}
-			ctx = tkn.WithToken(ctx)
-
-			restore := silenceLogger()
-			defer restore()
-
-			for ii := 0; ii < 10; ii++ {
-				tt := time.Now()
-				fooID := uuid.NewString()
-
-				event1 := &testpb.FooEvent{
-					Metadata: &testpb.Metadata{
-						EventId:   uuid.NewString(),
-						Timestamp: timestamppb.New(tt),
-						Actor: &testpb.Actor{
-							ActorId: uuid.NewString(),
-						},
-					},
-					TenantId: &tenants[ti],
-					FooId:    fooID,
-					Event: &testpb.FooEventType{
-						Type: &testpb.FooEventType_Created_{
-							Created: &testpb.FooEventType_Created{
-								Name:   "foo",
-								Field:  fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), (10+ii)*(ti+1), (50-ii)*(ti+1), (ii%2)*(ti+1)),
-								Weight: ptr.To((10 + int64(ii)) * (int64(ti) + 1)),
-								Height: ptr.To((50 - int64(ii)) * (int64(ti) + 1)),
-								Length: ptr.To((int64(ii%2) * (int64(ti) + 1))),
-							},
-						},
-					},
-				}
-				stateOut, err := sm.Transition(ctx, event1)
-				if err != nil {
-					t.Fatal(err.Error())
-				}
-				a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-				a.Equal(tenants[ti], *stateOut.TenantId)
-			}
-		}
-	})
 
 	nextToken := ""
 	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
@@ -368,7 +274,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 	})
 }
 
-func TestFooDynamicSorting(t *testing.T) {
+func TestDynamicSorting(t *testing.T) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
@@ -380,7 +286,7 @@ func TestFooDynamicSorting(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss := flowtest.NewStepper[*testing.T]("TestFooDynamicSorting")
+	ss := flowtest.NewStepper[*testing.T]("TestDynamicSorting")
 	defer ss.RunSteps(t)
 
 	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
@@ -388,46 +294,8 @@ func TestFooDynamicSorting(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
-		tenantID := uuid.NewString()
-
-		restore := silenceLogger()
-		defer restore()
-
-		for ii := 0; ii < 30; ii++ {
-			tt := time.Now()
-			fooID := uuid.NewString()
-
-			event1 := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.New(tt),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
-				},
-				TenantId: &tenantID,
-				FooId:    fooID,
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Created_{
-						Created: &testpb.FooEventType_Created{
-							Name:   "foo",
-							Field:  fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), 10+ii, 50-ii, ii%2),
-							Weight: ptr.To(10 + int64(ii)),
-							Height: ptr.To(50 - int64(ii)),
-							Length: ptr.To(int64(ii % 2)),
-						},
-					},
-				},
-			}
-			stateOut, err := sm.Transition(ctx, event1)
-			if err != nil {
-				t.Fatal(err.Error())
-			}
-			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-			a.Equal(tenantID, *stateOut.TenantId)
-		}
-	})
+	tenants := []string{uuid.NewString()}
+	setupFooListableData(t, ss, sm, tenants, 30)
 
 	{
 		nextToken := ""
