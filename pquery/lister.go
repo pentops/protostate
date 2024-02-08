@@ -78,7 +78,7 @@ type ListReflectionSet struct {
 	defaultSortFields []sortSpec
 	tieBreakerFields  []sortSpec
 
-	// fields in the list request object which become mandatory filters
+	defaultFilterFields []protoreflect.FieldDescriptor
 	RequestFilterFields []protoreflect.FieldDescriptor
 }
 
@@ -152,6 +152,8 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: default filter fields
 
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
@@ -563,6 +565,20 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields
+	filters := map[string]interface{}{}
+
+	sortFields = append(sortFields, ll.tieBreakerFields...)
+
+	if ll.requestFilter != nil {
+		filter, err := ll.requestFilter(req.Interface().(REQ))
+		if err != nil {
+			return nil, err
+		}
+
+		for k := range filter {
+			filters[k] = filter[k]
+		}
+	}
 
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
@@ -572,9 +588,16 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 
 		sortFields = dynSorts
-	}
 
-	sortFields = append(sortFields, ll.tieBreakerFields...)
+		dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
+		}
+
+		for k := range dynFilters {
+			filters[k] = dynFilters[k]
+		}
+	}
 
 	for _, sortField := range sortFields {
 		direction := "ASC"
@@ -584,21 +607,13 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
-	if ll.requestFilter != nil {
-		filter, err := ll.requestFilter(req.Interface().(REQ))
+	if len(filters) > 0 {
+		filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filters)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(filter) > 0 {
-
-			filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filter)
-			if err != nil {
-				return nil, err
-			}
-
-			selectQuery.Where(filterMapped)
-		}
+		selectQuery.Where(filterMapped)
 	}
 
 	if ll.auth != nil {
@@ -635,8 +650,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	}
 
 	selectQuery.Limit(pageSize + 1)
-
-	// TODO: Request Filters req := reqMsg.ProtoReflect()
 
 	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
 	if ok && reqPage != nil && reqPage.GetToken() != "" {
@@ -952,6 +965,74 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 				return nil, fmt.Errorf("requested sorts have conflicting directions, they must all be the same")
 			}
 		}
+	}
+
+	return results, nil
+}
+
+func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) (map[string]interface{}, error) {
+	results := map[string]interface{}{}
+	for _, filter := range filters {
+		// validate the field requested exists
+		nestedField, err := findField(ll.arrayField.Message(), filter.Field)
+		if err != nil {
+			return nil, fmt.Errorf("requested filter: %w", err)
+		}
+
+		// validate the field requested is marked as filterable
+		filterOpts, ok := proto.GetExtension(nestedField.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return nil, fmt.Errorf("requested filter field '%s' does not have any filter constraints defined", filter.Field)
+		}
+
+		filterable := false
+		if filterOpts != nil {
+			// TODO: check oneof too
+
+			switch nestedField.field.Kind() {
+			case protoreflect.DoubleKind:
+				filterable = filterOpts.GetDouble().GetFiltering().Filterable
+			case protoreflect.Fixed32Kind:
+				filterable = filterOpts.GetFixed32().GetFiltering().Filterable
+			case protoreflect.Fixed64Kind:
+				filterable = filterOpts.GetFixed64().GetFiltering().Filterable
+			case protoreflect.FloatKind:
+				filterable = filterOpts.GetFloat().GetFiltering().Filterable
+			case protoreflect.Int32Kind:
+				filterable = filterOpts.GetInt32().GetFiltering().Filterable
+			case protoreflect.Int64Kind:
+				filterable = filterOpts.GetInt64().GetFiltering().Filterable
+			case protoreflect.Sfixed32Kind:
+				filterable = filterOpts.GetSfixed32().GetFiltering().Filterable
+			case protoreflect.Sfixed64Kind:
+				filterable = filterOpts.GetSfixed64().GetFiltering().Filterable
+			case protoreflect.Sint32Kind:
+				filterable = filterOpts.GetSint32().GetFiltering().Filterable
+			case protoreflect.Sint64Kind:
+				filterable = filterOpts.GetSint64().GetFiltering().Filterable
+			case protoreflect.Uint32Kind:
+				filterable = filterOpts.GetUint32().GetFiltering().Filterable
+			case protoreflect.Uint64Kind:
+				filterable = filterOpts.GetUint64().GetFiltering().Filterable
+			case protoreflect.BoolKind:
+				filterable = filterOpts.GetBool().GetFiltering().Filterable
+			case protoreflect.EnumKind:
+				filterable = filterOpts.GetEnum().GetFiltering().Filterable
+			case protoreflect.MessageKind:
+				// date
+				// unique string
+				// uuid
+				if nestedField.field.Message().FullName() == "google.protobuf.Timestamp" {
+					filterable = filterOpts.GetTimestamp().GetFiltering().Filterable
+				}
+			}
+		}
+
+		if !filterable {
+			return nil, fmt.Errorf("requested filter field '%s' is not filterable", filter.Field)
+		}
+
+		//
 	}
 
 	return results, nil
