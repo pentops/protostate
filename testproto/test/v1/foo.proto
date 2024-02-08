@@ -72,6 +72,7 @@ message FooState {
   }];
 
   FooCharacteristics characteristics = 9;
+  repeated FooProfile profiles = 10;
 }
 
 message FooCharacteristics {
@@ -89,6 +90,15 @@ message FooCharacteristics {
     filtering: {filterable: true},
     sorting: {sortable: true}
   }];
+}
+
+message FooProfile {
+  int64 place = 1 [(psm.list.v1.field).int64 = {
+    filtering: {filterable: true},
+    sorting: {sortable: true}
+  }];
+
+  string name = 2 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 }
 
 enum FooStatus {
