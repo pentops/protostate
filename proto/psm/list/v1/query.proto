@@ -7,8 +7,8 @@ import "buf/validate/validate.proto";
 option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
 
 message QueryRequest {
-  repeated Search search  = 1;
-  repeated Sort   sort    = 2;
+  repeated Search searches = 1;
+  repeated Sort sorts = 2;
   repeated Filter filters = 3;
 }
 
@@ -18,8 +18,8 @@ message Search {
 }
 
 message Sort {
-  string field      = 1;
-  bool   descending = 2;
+  string field = 1;
+  bool descending = 2;
 }
 
 message Filter {
