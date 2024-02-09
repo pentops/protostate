@@ -1,2 +1,4 @@
-Go Statemachine
+Go Statemachine protoc plugin
 ===============
+
+
