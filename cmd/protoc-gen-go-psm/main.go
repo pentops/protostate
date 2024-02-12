@@ -15,13 +15,13 @@ import (
 	"github.com/pentops/protostate/pquery"
 )
 
-const version = "1.0"
+var Version = "1.0"
 
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("protoc-gen-go-psm %v\n", version)
+		fmt.Printf("protoc-gen-go-psm %v\n", Version)
 		return
 	}
 

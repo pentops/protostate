@@ -54,7 +54,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 				PageSize: proto.Int64(5),
 			},
 			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
+				Sorts: []*psml_pb.Sort{
 					{
 						Field: "characteristics.weight",
 					},
@@ -107,7 +107,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 				Token:    &nextToken,
 			},
 			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
+				Sorts: []*psml_pb.Sort{
 					{
 						Field: "characteristics.weight",
 					},
@@ -186,7 +186,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 				PageSize: proto.Int64(5),
 			},
 			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
+				Sorts: []*psml_pb.Sort{
 					{
 						Field: "characteristics.weight",
 					},
@@ -235,7 +235,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 				Token:    &nextToken,
 			},
 			Query: &psml_pb.QueryRequest{
-				Sort: []*psml_pb.Sort{
+				Sorts: []*psml_pb.Sort{
 					{
 						Field: "characteristics.weight",
 					},
@@ -305,7 +305,7 @@ func TestDynamicSorting(t *testing.T) {
 					PageSize: proto.Int64(5),
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "createdAt",
 						},
@@ -352,7 +352,7 @@ func TestDynamicSorting(t *testing.T) {
 					Token:    &nextToken,
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "createdAt",
 						},
@@ -399,7 +399,7 @@ func TestDynamicSorting(t *testing.T) {
 					PageSize: proto.Int64(5),
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "characteristics.weight",
 						},
@@ -446,7 +446,7 @@ func TestDynamicSorting(t *testing.T) {
 					Token:    &nextToken,
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "characteristics.weight",
 						},
@@ -493,7 +493,7 @@ func TestDynamicSorting(t *testing.T) {
 					PageSize: proto.Int64(5),
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "characteristics.length",
 						},
@@ -547,7 +547,7 @@ func TestDynamicSorting(t *testing.T) {
 					Token:    &nextToken,
 				},
 				Query: &psml_pb.QueryRequest{
-					Sort: []*psml_pb.Sort{
+					Sorts: []*psml_pb.Sort{
 						{
 							Field: "characteristics.length",
 						},
