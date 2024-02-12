@@ -101,7 +101,10 @@ func (f TransitionFunc[S, ST, E, IE, SE]) RunTransition(
 	// this func handles
 	asType, ok := any(event).(SE)
 	if !ok {
-		return fmt.Errorf("unexpected event type: %T", event)
+
+		name := asType.ProtoReflect().Descriptor().FullName()
+
+		return fmt.Errorf("unexpected event type: %s [IE] does not match [SE] (%T)", name, new(SE))
 	}
 	return f(ctx, tb, state, asType)
 }
