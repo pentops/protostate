@@ -287,7 +287,7 @@ func TestDynamicSorting(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	ids := setupFooListableData(t, ss, sm, tenants, 30)
+	setupFooListableData(t, ss, sm, tenants, 30)
 
 	t.Run("Top Level Field", func(t *testing.T) {
 		nextToken := ""
@@ -555,6 +555,102 @@ func TestDynamicSorting(t *testing.T) {
 			for _, state := range res.Foos {
 				if state.Characteristics.Weight%2 != 0 {
 					t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+		})
+	})
+
+	t.Run("Descending", func(t *testing.T) {
+		nextToken := ""
+		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Sorts: []*psml_pb.Sort{
+						{
+							Field:      "characteristics.weight",
+							Descending: true,
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(39-ii) {
+					t.Fatalf("expected weight %d, got %d", 39-ii, state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+
+			nextToken = pageResp.GetNextToken()
+		})
+
+		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+					Token:    &nextToken,
+				},
+				Query: &psml_pb.QueryRequest{
+					Sorts: []*psml_pb.Sort{
+						{
+							Field:      "characteristics.weight",
+							Descending: true,
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(34-ii) {
+					t.Fatalf("expected weight %d, got %d", 34-ii, state.Characteristics.Weight)
 				}
 			}
 
