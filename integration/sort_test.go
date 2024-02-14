@@ -287,9 +287,9 @@ func TestDynamicSorting(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	setupFooListableData(t, ss, sm, tenants, 30)
+	ids := setupFooListableData(t, ss, sm, tenants, 30)
 
-	{
+	t.Run("Top Level Field", func(t *testing.T) {
 		nextToken := ""
 		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
@@ -377,9 +377,9 @@ func TestDynamicSorting(t *testing.T) {
 				t.Fatalf("Should not be the final page")
 			}
 		})
-	}
+	})
 
-	{
+	t.Run("Nested Field", func(t *testing.T) {
 		nextToken := ""
 		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
@@ -467,9 +467,9 @@ func TestDynamicSorting(t *testing.T) {
 				t.Fatalf("Should not be the final page")
 			}
 		})
-	}
+	})
 
-	{
+	t.Run("Multiple Nested Fields", func(t *testing.T) {
 		nextToken := ""
 		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
@@ -567,5 +567,5 @@ func TestDynamicSorting(t *testing.T) {
 				t.Fatalf("Should not be the final page")
 			}
 		})
-	}
+	})
 }
