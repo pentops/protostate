@@ -679,6 +679,10 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			), rhsValues...)
 	}
 
+	stmt, args, _ := selectQuery.ToSql()
+	fmt.Println("statement: ", stmt)
+	fmt.Println("args: ", args)
+
 	return selectQuery, nil
 }
 
@@ -772,6 +776,7 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 	if err != nil {
 		return nil, fmt.Errorf("field %s: %w", parts[0], err)
 	}
+
 	return &nestedField{
 		field:     spec.field,
 		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
@@ -788,6 +793,12 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
 		if err != nil {
 			return nil, fmt.Errorf("requested sort: %w", err)
+		}
+
+		fmt.Println("field: ", nestedField.field)
+
+		if nestedField.field.Cardinality() == protoreflect.Repeated {
+			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
 		}
 
 		// validate the fields requested are marked as sortable
