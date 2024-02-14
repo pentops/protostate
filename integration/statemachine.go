@@ -2,6 +2,8 @@ package integration
 
 import (
 	"context"
+	"math/rand"
+	"time"
 
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
@@ -9,6 +11,7 @@ import (
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, error) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	customTableSpec := testpb.DefaultFooPSMTableSpec
 
 	systemActor, err := psm.NewSystemActor(actorID, &testpb.Actor{
@@ -43,6 +46,16 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			}
 			state.LastEventId = tb.FullCause().Metadata.EventId
 			state.CreatedAt = tb.FullCause().Metadata.Timestamp
+			state.Profiles = []*testpb.FooProfile{
+				{
+					Place: r.Int63n(20),
+					Name:  "profile1",
+				},
+				{
+					Place: r.Int63n(20),
+					Name:  "profile2",
+				},
+			}
 			return nil
 		}))
 
