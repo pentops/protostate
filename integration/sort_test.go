@@ -55,9 +55,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
-					},
+					{Field: "characteristics.weight"},
 				},
 			},
 		}
@@ -108,9 +106,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
-					},
+					{Field: "characteristics.weight"},
 				},
 			},
 		}
@@ -187,9 +183,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
-					},
+					{Field: "characteristics.weight"},
 				},
 			},
 		}
@@ -236,9 +230,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{
-						Field: "characteristics.weight",
-					},
+					{Field: "characteristics.weight"},
 				},
 			},
 		}
@@ -306,9 +298,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "createdAt",
-						},
+						{Field: "createdAt"},
 					},
 				},
 			}
@@ -353,9 +343,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "createdAt",
-						},
+						{Field: "createdAt"},
 					},
 				},
 			}
@@ -400,9 +388,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "characteristics.weight",
-						},
+						{Field: "characteristics.weight"},
 					},
 				},
 			}
@@ -447,9 +433,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "characteristics.weight",
-						},
+						{Field: "characteristics.weight"},
 					},
 				},
 			}
@@ -494,12 +478,8 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "characteristics.length",
-						},
-						{
-							Field: "characteristics.weight",
-						},
+						{Field: "characteristics.length"},
+						{Field: "characteristics.weight"},
 					},
 				},
 			}
@@ -548,12 +528,8 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{
-							Field: "characteristics.length",
-						},
-						{
-							Field: "characteristics.weight",
-						},
+						{Field: "characteristics.length"},
+						{Field: "characteristics.weight"},
 					},
 				},
 			}
