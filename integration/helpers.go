@@ -70,7 +70,9 @@ func getRawEvent(db *sqrlx.Wrapper, id string) (string, error) {
 	return string(data), nil
 }
 
-func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *testpb.FooPSMDB, tenants []string, count int) {
+func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *testpb.FooPSMDB, tenants []string, count int) []string {
+	ids := make([]string, 0, count)
+
 	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
 		for ti := range tenants {
 			tkn := &token{
@@ -84,6 +86,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 			for ii := 0; ii < count; ii++ {
 				tt := time.Now()
 				fooID := uuid.NewString()
+				ids = append(ids, fooID)
 
 				event := newFooCreatedEvent(fooID, tenants[ti], func(c *testpb.FooEventType_Created) {
 					c.Field = fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), (10+ii)*(ti+1), (50-ii)*(ti+1), (ii%2)*(ti+1))
@@ -101,4 +104,6 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 			}
 		}
 	})
+
+	return ids
 }
