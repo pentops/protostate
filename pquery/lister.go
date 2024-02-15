@@ -611,9 +611,34 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
 				}
 
+			case int64:
+				if sortField.desc {
+					dbVal = dbVal.(int64) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::bigint", rowSelecter)
+				}
+			case int32:
+				if sortField.desc {
+					dbVal = dbVal.(int32) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::integer", rowSelecter)
+				}
+			case float32:
+				if sortField.desc {
+					dbVal = dbVal.(float32) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::real", rowSelecter)
+				}
+			case float64:
+				if sortField.desc {
+					dbVal = dbVal.(float64) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::double precision", rowSelecter)
+				}
+			case bool:
+				if sortField.desc {
+					dbVal = !dbVal.(bool)
+					rowSelecter = fmt.Sprintf("NOT (%s)::boolean", rowSelecter)
+				}
+
 			default:
-				// Noop, validation will have caught any problem types from the request
-				// and any other custom overrides are handled above.
+				return nil, fmt.Errorf("sort field %s is of type %T", sortField.field.Name(), dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
