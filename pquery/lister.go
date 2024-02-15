@@ -660,15 +660,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		// records.
 		// `(1, 30) >= (1, 20)` is true, so is `1 >= 1 AND 30 >= 20`
 		// `(2, 10) >= (1, 20)` is also true, but `2 >= 1 AND 10 >= 20` is false
-		// Since the tuple comparrison starts from the left and stops at the first term.
+		// Since the tuple comparison starts from the left and stops at the first term.
 		//
 		// The downside is that we have to negate the values to sort in reverse
 		// order, as we don't get an operator per term. This gets strange for
 		// some data types and will create some crazy indexes.
 		//
-		// TODO: Optimise the cases when the order is ASC and therefore we don't
+		// TODO: Optimize the cases when the order is ASC and therefore we don't
 		// need to flip, but also the cases where we can just reverse the whole
-		// comparrison and reverse all flips to simplify, noting again that it
+		// comparison and reverse all flips to simplify, noting again that it
 		// does not actually matter in which order the string field is sorted...
 		// or don't because indexes.
 
