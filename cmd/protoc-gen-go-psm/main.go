@@ -269,10 +269,6 @@ type eventFieldDescriptors struct {
 
 func (desc eventFieldDescriptors) validate() error {
 
-	if desc.metadataField == nil {
-		return fmt.Errorf("event object missing metadata field")
-	}
-
 	if desc.eventIDField == nil {
 		return fmt.Errorf("event object missing id field")
 	}
@@ -393,6 +389,10 @@ func buildEventFieldDescriptors(src stateEntityDescriptorSet) (*eventFieldDescri
 
 		}
 
+	}
+
+	if out.metadataField == nil {
+		return nil, fmt.Errorf("event object '%s' missing metadata field", src.eventOptions.Name)
 	}
 
 	metadataFields := out.metadataField.Message().Fields()

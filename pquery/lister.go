@@ -446,6 +446,8 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
+			log.WithField(context.Background(), "message", field.Message().FullName()).Debug("buildDefaultSorts")
+
 			subSort := buildDefaultSorts(field.Message().Fields())
 			for idx, subSortField := range subSort {
 				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
