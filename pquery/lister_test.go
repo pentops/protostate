@@ -102,7 +102,6 @@ func (c composed) toString() string {
 }
 
 func TestBuildListReflection(t *testing.T) {
-
 	build := func(t testing.TB, input string, options listerOptions) (*ListReflectionSet, error) {
 		pdf := prototest.DescriptorsFromSource(t, map[string]string{
 			"test.proto": `

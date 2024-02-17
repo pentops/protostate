@@ -679,10 +679,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			), rhsValues...)
 	}
 
-	stmt, args, _ := selectQuery.ToSql()
-	fmt.Println("statement: ", stmt)
-	fmt.Println("args: ", args)
-
 	return selectQuery, nil
 }
 
