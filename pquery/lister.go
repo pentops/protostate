@@ -148,6 +148,11 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
+	err = validateSortsAnnotations(ll.arrayField.Message().Fields())
+	if err != nil {
+		return nil, err
+	}
+
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
 		field := requestFields.Get(i)
@@ -194,6 +199,94 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	return &ll, nil
+}
+
+func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Get(i)
+
+		if field.Kind() == protoreflect.MessageKind {
+			subFields := field.Message().Fields()
+
+			for i := 0; i < subFields.Len(); i++ {
+				subField := subFields.Get(i)
+
+				if subField.Kind() == protoreflect.MessageKind {
+					err := validateSortsAnnotations(subField.Message().Fields())
+					if err != nil {
+						return err
+					}
+				} else {
+					if field.Cardinality() == protoreflect.Repeated {
+						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+						if fieldOpts != nil {
+							invalid := false
+							switch fieldOpts.Type.(type) {
+							case *psml_pb.FieldConstraint_Double:
+								if fieldOpts.GetDouble().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Fixed32:
+								if fieldOpts.GetFixed32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Fixed64:
+								if fieldOpts.GetFixed64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Float:
+								if fieldOpts.GetFloat().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Int32:
+								if fieldOpts.GetInt32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Int64:
+								if fieldOpts.GetInt64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sfixed32:
+								if fieldOpts.GetSfixed32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sfixed64:
+								if fieldOpts.GetSfixed64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sint32:
+								if fieldOpts.GetSint32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sint64:
+								if fieldOpts.GetSint64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Uint32:
+								if fieldOpts.GetUint32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Uint64:
+								if fieldOpts.GetUint64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Timestamp:
+								if fieldOpts.GetTimestamp().Sorting != nil {
+									invalid = true
+								}
+							}
+
+							if invalid {
+								return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 type Lister[
@@ -613,9 +706,34 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
 				}
 
+			case int64:
+				if sortField.desc {
+					dbVal = dbVal.(int64) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::bigint", rowSelecter)
+				}
+			case int32:
+				if sortField.desc {
+					dbVal = dbVal.(int32) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::integer", rowSelecter)
+				}
+			case float32:
+				if sortField.desc {
+					dbVal = dbVal.(float32) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::real", rowSelecter)
+				}
+			case float64:
+				if sortField.desc {
+					dbVal = dbVal.(float64) * -1
+					rowSelecter = fmt.Sprintf("-1 * (%s)::double precision", rowSelecter)
+				}
+			case bool:
+				if sortField.desc {
+					dbVal = !dbVal.(bool)
+					rowSelecter = fmt.Sprintf("NOT (%s)::boolean", rowSelecter)
+				}
+
 			default:
-				// Noop, validation will have caught any problem types from the request
-				// and any other custom overrides are handled above.
+				return nil, fmt.Errorf("sort field %s is of type %T", sortField.field.Name(), dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
@@ -637,15 +755,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		// records.
 		// `(1, 30) >= (1, 20)` is true, so is `1 >= 1 AND 30 >= 20`
 		// `(2, 10) >= (1, 20)` is also true, but `2 >= 1 AND 10 >= 20` is false
-		// Since the tuple comparrison starts from the left and stops at the first term.
+		// Since the tuple comparison starts from the left and stops at the first term.
 		//
 		// The downside is that we have to negate the values to sort in reverse
 		// order, as we don't get an operator per term. This gets strange for
 		// some data types and will create some crazy indexes.
 		//
-		// TODO: Optimise the cases when the order is ASC and therefore we don't
+		// TODO: Optimize the cases when the order is ASC and therefore we don't
 		// need to flip, but also the cases where we can just reverse the whole
-		// comparrison and reverse all flips to simplify, noting again that it
+		// comparison and reverse all flips to simplify, noting again that it
 		// does not actually matter in which order the string field is sorted...
 		// or don't because indexes.
 
@@ -749,6 +867,7 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 	if err != nil {
 		return nil, fmt.Errorf("field %s: %w", parts[0], err)
 	}
+
 	return &nestedField{
 		field:     spec.field,
 		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
@@ -765,6 +884,12 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
 		if err != nil {
 			return nil, fmt.Errorf("requested sort: %w", err)
+		}
+
+		fmt.Println("field: ", nestedField.field)
+
+		if nestedField.field.Cardinality() == protoreflect.Repeated {
+			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
 		}
 
 		// validate the fields requested are marked as sortable
