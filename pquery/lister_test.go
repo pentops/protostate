@@ -415,4 +415,30 @@ func TestBuildListReflection(t *testing.T) {
 		listerOptions{},
 		"no query field in request",
 	)
+
+	runSad("repeated sub field sort", `
+		message ListFoosRequest {
+			psm.list.v1.PageRequest page = 1;
+			psm.list.v1.QueryRequest query = 2;
+		}
+
+		message ListFoosResponse {
+			repeated Foo foos = 1;
+			psm.list.v1.PageResponse page = 2;
+		}
+
+		message Foo {
+			string id = 1;
+			int64 seq = 2 [(psm.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
+			repeated Profile profiles = 3;
+		}
+
+		message Profile {
+			string name = 1;
+			int64 weight = 2 [(psm.list.v1.field).int64.sorting.sortable = true];
+		}
+		`,
+		listerOptions{},
+		"sorting not allowed on subfield of repeated parent",
+	)
 }
