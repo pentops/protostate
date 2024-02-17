@@ -95,7 +95,6 @@ message FooCharacteristics {
 message FooProfile {
   int64 place = 1 [(psm.list.v1.field).int64 = {
     filtering: {filterable: true},
-    sorting: {sortable: true}
   }];
 
   string name = 2 [(psm.list.v1.field).string.open_text.searching.searchable = true];
@@ -167,6 +166,7 @@ message FooEventType {
     optional int64 weight = 4;
     optional int64 height = 5;
     optional int64 length = 6;
+    repeated FooProfile profiles = 7;
   }
 
   message Updated {
@@ -176,7 +176,8 @@ message FooEventType {
     optional int64 weight = 4;
     optional int64 height = 5;
     optional int64 length = 6;
-    bool delete = 7;
+    repeated FooProfile profiles = 7;
+    bool delete = 8;
   }
 
   message Deleted {}
