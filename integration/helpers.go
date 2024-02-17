@@ -93,6 +93,16 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 					c.Weight = ptr.To((10 + int64(ii)) * (int64(ti) + 1))
 					c.Height = ptr.To((50 - int64(ii)) * (int64(ti) + 1))
 					c.Length = ptr.To((int64(ii%2) * (int64(ti) + 1)))
+					c.Profiles = []*testpb.FooProfile{
+						{
+							Name:  fmt.Sprintf("profile %d", ii),
+							Place: int64(ii),
+						},
+						{
+							Name:  fmt.Sprintf("profile %d", ii),
+							Place: int64(ii) + 15,
+						},
+					}
 				})
 
 				stateOut, err := sm.Transition(ctx, event)

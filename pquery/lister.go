@@ -148,6 +148,11 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
+	err = validateSortsAnnotations(ll.arrayField.Message().Fields())
+	if err != nil {
+		return nil, err
+	}
+
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
 		field := requestFields.Get(i)
@@ -194,6 +199,94 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	return &ll, nil
+}
+
+func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Get(i)
+
+		if field.Kind() == protoreflect.MessageKind {
+			subFields := field.Message().Fields()
+
+			for i := 0; i < subFields.Len(); i++ {
+				subField := subFields.Get(i)
+
+				if subField.Kind() == protoreflect.MessageKind {
+					err := validateSortsAnnotations(subField.Message().Fields())
+					if err != nil {
+						return err
+					}
+				} else {
+					if field.Cardinality() == protoreflect.Repeated {
+						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+						if fieldOpts != nil {
+							invalid := false
+							switch fieldOpts.Type.(type) {
+							case *psml_pb.FieldConstraint_Double:
+								if fieldOpts.GetDouble().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Fixed32:
+								if fieldOpts.GetFixed32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Fixed64:
+								if fieldOpts.GetFixed64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Float:
+								if fieldOpts.GetFloat().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Int32:
+								if fieldOpts.GetInt32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Int64:
+								if fieldOpts.GetInt64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sfixed32:
+								if fieldOpts.GetSfixed32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sfixed64:
+								if fieldOpts.GetSfixed64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sint32:
+								if fieldOpts.GetSint32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Sint64:
+								if fieldOpts.GetSint64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Uint32:
+								if fieldOpts.GetUint32().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Uint64:
+								if fieldOpts.GetUint64().Sorting != nil {
+									invalid = true
+								}
+							case *psml_pb.FieldConstraint_Timestamp:
+								if fieldOpts.GetTimestamp().Sorting != nil {
+									invalid = true
+								}
+							}
+
+							if invalid {
+								return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 type Lister[
