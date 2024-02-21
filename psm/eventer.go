@@ -75,7 +75,7 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 	innerEvent := event.UnwrapPSMEvent()
 	typeKey := ee.conversions.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
-		ee.conversions.StateLabel(state),
+		state.GetStatus().String(),
 		typeKey,
 	)
 }
@@ -134,7 +134,7 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 	unwrapped := innerEvent.UnwrapPSMEvent()
 
 	typeKey := ee.conversions.EventLabel(unwrapped)
-	stateBefore := ee.conversions.StateLabel(state)
+	stateBefore := state.GetStatus().String()
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
 		"eventType":  typeKey,
@@ -158,7 +158,7 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 	}
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
-		"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, ee.conversions.StateLabel(state), typeKey),
+		"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, state.GetStatus().String(), typeKey),
 	})
 
 	log.Info(ctx, "Event Handled")

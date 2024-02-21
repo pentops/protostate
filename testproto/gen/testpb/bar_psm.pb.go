@@ -133,14 +133,6 @@ type BarPSMEvent interface {
 }
 type BarPSMConverter struct{}
 
-func (c BarPSMConverter) Unwrap(e *BarEvent) BarPSMEvent {
-	return e.UnwrapPSMEvent()
-}
-
-func (c BarPSMConverter) StateLabel(s *BarState) string {
-	return s.Status.String()
-}
-
 func (c BarPSMConverter) EventLabel(e BarPSMEvent) string {
 	return string(e.PSMEventKey())
 }
