@@ -40,6 +40,7 @@ SE is set to a single type for each transition.
 type IStatusEnum interface {
 	~int32
 	ShortString() string
+	String() string
 }
 
 // IState is the main State Entity e.g. *testpb.FooState

@@ -137,14 +137,6 @@ type FooPSMEvent interface {
 }
 type FooPSMConverter struct{}
 
-func (c FooPSMConverter) Unwrap(e *FooEvent) FooPSMEvent {
-	return e.UnwrapPSMEvent()
-}
-
-func (c FooPSMConverter) StateLabel(s *FooState) string {
-	return s.Status.String()
-}
-
 func (c FooPSMConverter) EventLabel(e FooPSMEvent) string {
 	return string(e.PSMEventKey())
 }
