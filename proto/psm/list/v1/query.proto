@@ -23,13 +23,29 @@ message Sort {
 }
 
 message Filter {
-  string field = 1;
+  oneof type {
+    Field field = 1;
+    And and = 2;
+    Or or = 3;
+  }
+}
+
+message And {
+  repeated Filter filters = 1;
+}
+
+message Or {
+  repeated Filter filters = 1;
+}
+
+message Field {
+  string name = 1;
 
   oneof type {
     option (buf.validate.oneof).required = true;
 
     string value = 2;
-    Range  range = 3;
+    Range range = 3;
   }
 }
 
