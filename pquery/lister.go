@@ -571,6 +571,20 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields
+	filters := map[string]interface{}{}
+
+	sortFields = append(sortFields, ll.tieBreakerFields...)
+
+	if ll.requestFilter != nil {
+		filter, err := ll.requestFilter(req.Interface().(REQ))
+		if err != nil {
+			return nil, err
+		}
+
+		for k := range filter {
+			filters[k] = filter[k]
+		}
+	}
 
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
@@ -580,9 +594,16 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 
 		sortFields = dynSorts
-	}
 
-	sortFields = append(sortFields, ll.tieBreakerFields...)
+		dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
+		}
+
+		for k := range dynFilters {
+			filters[k] = dynFilters[k]
+		}
+	}
 
 	for _, sortField := range sortFields {
 		direction := "ASC"
@@ -592,21 +613,13 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
-	if ll.requestFilter != nil {
-		filter, err := ll.requestFilter(req.Interface().(REQ))
+	if len(filters) > 0 {
+		filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filters)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(filter) > 0 {
-
-			filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filter)
-			if err != nil {
-				return nil, err
-			}
-
-			selectQuery.Where(filterMapped)
-		}
+		selectQuery.Where(filterMapped)
 	}
 
 	if ll.auth != nil {
@@ -643,8 +656,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	}
 
 	selectQuery.Limit(pageSize + 1)
-
-	// TODO: Request Filters req := reqMsg.ProtoReflect()
 
 	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
 	if ok && reqPage != nil && reqPage.GetToken() != "" {
@@ -961,6 +972,12 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 			}
 		}
 	}
+
+	return results, nil
+}
+
+func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) (map[string]interface{}, error) {
+	results := map[string]interface{}{}
 
 	return results, nil
 }
