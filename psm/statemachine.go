@@ -75,7 +75,6 @@ func (spec PSMTableSpec[S, ST, E, IE]) StateTableSpec() QueryTableSpec {
 			DataColumn:   spec.Event.DataColumn,
 			PKFieldPaths: spec.Event.PKFieldPaths,
 		},
-
 		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
 		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
 	}
@@ -106,7 +105,7 @@ type EventTypeConverter[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] interface {
-	Unwrap(E) IE
+	//Unwrap(E) IE
 	StateLabel(S) string
 	EventLabel(IE) string
 	EmptyState(E) S
