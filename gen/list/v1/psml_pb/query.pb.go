@@ -199,11 +199,11 @@ type Filter struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Field string `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
 	// Types that are assignable to Type:
 	//
-	//	*Filter_Value
-	//	*Filter_Range
+	//	*Filter_Field
+	//	*Filter_And
+	//	*Filter_Or
 	Type isFilter_Type `protobuf_oneof:"type"`
 }
 
@@ -239,13 +239,6 @@ func (*Filter) Descriptor() ([]byte, []int) {
 	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Filter) GetField() string {
-	if x != nil {
-		return x.Field
-	}
-	return ""
-}
-
 func (m *Filter) GetType() isFilter_Type {
 	if m != nil {
 		return m.Type
@@ -253,16 +246,23 @@ func (m *Filter) GetType() isFilter_Type {
 	return nil
 }
 
-func (x *Filter) GetValue() string {
-	if x, ok := x.GetType().(*Filter_Value); ok {
-		return x.Value
+func (x *Filter) GetField() *Field {
+	if x, ok := x.GetType().(*Filter_Field); ok {
+		return x.Field
 	}
-	return ""
+	return nil
 }
 
-func (x *Filter) GetRange() *Range {
-	if x, ok := x.GetType().(*Filter_Range); ok {
-		return x.Range
+func (x *Filter) GetAnd() *And {
+	if x, ok := x.GetType().(*Filter_And); ok {
+		return x.And
+	}
+	return nil
+}
+
+func (x *Filter) GetOr() *Or {
+	if x, ok := x.GetType().(*Filter_Or); ok {
+		return x.Or
 	}
 	return nil
 }
@@ -271,17 +271,206 @@ type isFilter_Type interface {
 	isFilter_Type()
 }
 
-type Filter_Value struct {
+type Filter_Field struct {
+	Field *Field `protobuf:"bytes,1,opt,name=field,proto3,oneof"`
+}
+
+type Filter_And struct {
+	And *And `protobuf:"bytes,2,opt,name=and,proto3,oneof"`
+}
+
+type Filter_Or struct {
+	Or *Or `protobuf:"bytes,3,opt,name=or,proto3,oneof"`
+}
+
+func (*Filter_Field) isFilter_Type() {}
+
+func (*Filter_And) isFilter_Type() {}
+
+func (*Filter_Or) isFilter_Type() {}
+
+type And struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Filters []*Filter `protobuf:"bytes,1,rep,name=filters,proto3" json:"filters,omitempty"`
+}
+
+func (x *And) Reset() {
+	*x = And{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_psm_list_v1_query_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *And) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*And) ProtoMessage() {}
+
+func (x *And) ProtoReflect() protoreflect.Message {
+	mi := &file_psm_list_v1_query_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use And.ProtoReflect.Descriptor instead.
+func (*And) Descriptor() ([]byte, []int) {
+	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *And) GetFilters() []*Filter {
+	if x != nil {
+		return x.Filters
+	}
+	return nil
+}
+
+type Or struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Filters []*Filter `protobuf:"bytes,1,rep,name=filters,proto3" json:"filters,omitempty"`
+}
+
+func (x *Or) Reset() {
+	*x = Or{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_psm_list_v1_query_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Or) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Or) ProtoMessage() {}
+
+func (x *Or) ProtoReflect() protoreflect.Message {
+	mi := &file_psm_list_v1_query_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Or.ProtoReflect.Descriptor instead.
+func (*Or) Descriptor() ([]byte, []int) {
+	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Or) GetFilters() []*Filter {
+	if x != nil {
+		return x.Filters
+	}
+	return nil
+}
+
+type Field struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Types that are assignable to Type:
+	//
+	//	*Field_Value
+	//	*Field_Range
+	Type isField_Type `protobuf_oneof:"type"`
+}
+
+func (x *Field) Reset() {
+	*x = Field{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_psm_list_v1_query_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Field) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Field) ProtoMessage() {}
+
+func (x *Field) ProtoReflect() protoreflect.Message {
+	mi := &file_psm_list_v1_query_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Field.ProtoReflect.Descriptor instead.
+func (*Field) Descriptor() ([]byte, []int) {
+	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Field) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (m *Field) GetType() isField_Type {
+	if m != nil {
+		return m.Type
+	}
+	return nil
+}
+
+func (x *Field) GetValue() string {
+	if x, ok := x.GetType().(*Field_Value); ok {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *Field) GetRange() *Range {
+	if x, ok := x.GetType().(*Field_Range); ok {
+		return x.Range
+	}
+	return nil
+}
+
+type isField_Type interface {
+	isField_Type()
+}
+
+type Field_Value struct {
 	Value string `protobuf:"bytes,2,opt,name=value,proto3,oneof"`
 }
 
-type Filter_Range struct {
+type Field_Range struct {
 	Range *Range `protobuf:"bytes,3,opt,name=range,proto3,oneof"`
 }
 
-func (*Filter_Value) isFilter_Type() {}
+func (*Field_Value) isField_Type() {}
 
-func (*Filter_Range) isFilter_Type() {}
+func (*Field_Range) isField_Type() {}
 
 type Range struct {
 	state         protoimpl.MessageState
@@ -295,7 +484,7 @@ type Range struct {
 func (x *Range) Reset() {
 	*x = Range{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_psm_list_v1_query_proto_msgTypes[4]
+		mi := &file_psm_list_v1_query_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -308,7 +497,7 @@ func (x *Range) String() string {
 func (*Range) ProtoMessage() {}
 
 func (x *Range) ProtoReflect() protoreflect.Message {
-	mi := &file_psm_list_v1_query_proto_msgTypes[4]
+	mi := &file_psm_list_v1_query_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -321,7 +510,7 @@ func (x *Range) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Range.ProtoReflect.Descriptor instead.
 func (*Range) Descriptor() ([]byte, []int) {
-	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{4}
+	return file_psm_list_v1_query_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Range) GetMin() string {
@@ -362,9 +551,24 @@ var file_psm_list_v1_query_proto_rawDesc = []byte{
 	0x69, 0x65, 0x6c, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x66, 0x69, 0x65, 0x6c,
 	0x64, 0x12, 0x1e, 0x0a, 0x0a, 0x64, 0x65, 0x73, 0x63, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0a, 0x64, 0x65, 0x73, 0x63, 0x65, 0x6e, 0x64, 0x69, 0x6e,
-	0x67, 0x22, 0x71, 0x0a, 0x06, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x66,
-	0x69, 0x65, 0x6c, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x66, 0x69, 0x65, 0x6c,
-	0x64, 0x12, 0x16, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x67, 0x22, 0x85, 0x01, 0x0a, 0x06, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x12, 0x2a, 0x0a, 0x05,
+	0x66, 0x69, 0x65, 0x6c, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x70, 0x73,
+	0x6d, 0x2e, 0x6c, 0x69, 0x73, 0x74, 0x2e, 0x76, 0x31, 0x2e, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x48,
+	0x00, 0x52, 0x05, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x12, 0x24, 0x0a, 0x03, 0x61, 0x6e, 0x64, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x73, 0x6d, 0x2e, 0x6c, 0x69, 0x73, 0x74,
+	0x2e, 0x76, 0x31, 0x2e, 0x41, 0x6e, 0x64, 0x48, 0x00, 0x52, 0x03, 0x61, 0x6e, 0x64, 0x12, 0x21,
+	0x0a, 0x02, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x70, 0x73, 0x6d,
+	0x2e, 0x6c, 0x69, 0x73, 0x74, 0x2e, 0x76, 0x31, 0x2e, 0x4f, 0x72, 0x48, 0x00, 0x52, 0x02, 0x6f,
+	0x72, 0x42, 0x06, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x34, 0x0a, 0x03, 0x41, 0x6e, 0x64,
+	0x12, 0x2d, 0x0a, 0x07, 0x66, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x13, 0x2e, 0x70, 0x73, 0x6d, 0x2e, 0x6c, 0x69, 0x73, 0x74, 0x2e, 0x76, 0x31, 0x2e,
+	0x46, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x52, 0x07, 0x66, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x73, 0x22,
+	0x33, 0x0a, 0x02, 0x4f, 0x72, 0x12, 0x2d, 0x0a, 0x07, 0x66, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x70, 0x73, 0x6d, 0x2e, 0x6c, 0x69, 0x73,
+	0x74, 0x2e, 0x76, 0x31, 0x2e, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x52, 0x07, 0x66, 0x69, 0x6c,
+	0x74, 0x65, 0x72, 0x73, 0x22, 0x6e, 0x0a, 0x05, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x12, 0x12, 0x0a,
+	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x12, 0x16, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
 	0x48, 0x00, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x2a, 0x0a, 0x05, 0x72, 0x61, 0x6e,
 	0x67, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x70, 0x73, 0x6d, 0x2e, 0x6c,
 	0x69, 0x73, 0x74, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x61, 0x6e, 0x67, 0x65, 0x48, 0x00, 0x52, 0x05,
@@ -390,24 +594,32 @@ func file_psm_list_v1_query_proto_rawDescGZIP() []byte {
 	return file_psm_list_v1_query_proto_rawDescData
 }
 
-var file_psm_list_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_psm_list_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_psm_list_v1_query_proto_goTypes = []interface{}{
 	(*QueryRequest)(nil), // 0: psm.list.v1.QueryRequest
 	(*Search)(nil),       // 1: psm.list.v1.Search
 	(*Sort)(nil),         // 2: psm.list.v1.Sort
 	(*Filter)(nil),       // 3: psm.list.v1.Filter
-	(*Range)(nil),        // 4: psm.list.v1.Range
+	(*And)(nil),          // 4: psm.list.v1.And
+	(*Or)(nil),           // 5: psm.list.v1.Or
+	(*Field)(nil),        // 6: psm.list.v1.Field
+	(*Range)(nil),        // 7: psm.list.v1.Range
 }
 var file_psm_list_v1_query_proto_depIdxs = []int32{
 	1, // 0: psm.list.v1.QueryRequest.searches:type_name -> psm.list.v1.Search
 	2, // 1: psm.list.v1.QueryRequest.sorts:type_name -> psm.list.v1.Sort
 	3, // 2: psm.list.v1.QueryRequest.filters:type_name -> psm.list.v1.Filter
-	4, // 3: psm.list.v1.Filter.range:type_name -> psm.list.v1.Range
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 3: psm.list.v1.Filter.field:type_name -> psm.list.v1.Field
+	4, // 4: psm.list.v1.Filter.and:type_name -> psm.list.v1.And
+	5, // 5: psm.list.v1.Filter.or:type_name -> psm.list.v1.Or
+	3, // 6: psm.list.v1.And.filters:type_name -> psm.list.v1.Filter
+	3, // 7: psm.list.v1.Or.filters:type_name -> psm.list.v1.Filter
+	7, // 8: psm.list.v1.Field.range:type_name -> psm.list.v1.Range
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_psm_list_v1_query_proto_init() }
@@ -465,6 +677,42 @@ func file_psm_list_v1_query_proto_init() {
 			}
 		}
 		file_psm_list_v1_query_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*And); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_psm_list_v1_query_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Or); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_psm_list_v1_query_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Field); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_psm_list_v1_query_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Range); i {
 			case 0:
 				return &v.state
@@ -478,8 +726,13 @@ func file_psm_list_v1_query_proto_init() {
 		}
 	}
 	file_psm_list_v1_query_proto_msgTypes[3].OneofWrappers = []interface{}{
-		(*Filter_Value)(nil),
-		(*Filter_Range)(nil),
+		(*Filter_Field)(nil),
+		(*Filter_And)(nil),
+		(*Filter_Or)(nil),
+	}
+	file_psm_list_v1_query_proto_msgTypes[6].OneofWrappers = []interface{}{
+		(*Field_Value)(nil),
+		(*Field_Range)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -487,7 +740,7 @@ func file_psm_list_v1_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_psm_list_v1_query_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
