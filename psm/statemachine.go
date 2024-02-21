@@ -105,9 +105,7 @@ type EventTypeConverter[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] interface {
-	//Unwrap(E) IE
-	//StateLabel(S) string
-	EventLabel(IE) string
+	//EventLabel(IE) string
 	EmptyState(E) S
 	CheckStateKeys(S, E) error
 

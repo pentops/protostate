@@ -73,7 +73,7 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 	}
 
 	innerEvent := event.UnwrapPSMEvent()
-	typeKey := ee.conversions.EventLabel(innerEvent)
+	typeKey := innerEvent.PSMEventKey() // ee.conversions.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
 		state.GetStatus().String(),
 		typeKey,
@@ -133,7 +133,7 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 
 	unwrapped := innerEvent.UnwrapPSMEvent()
 
-	typeKey := ee.conversions.EventLabel(unwrapped)
+	typeKey := unwrapped.PSMEventKey()
 	stateBefore := state.GetStatus().String()
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
@@ -188,7 +188,7 @@ func (ee Eventer[S, ST, E, IE]) deriveEvent(event E, inner IE) (evt E, err error
 		err = fmt.Errorf("no system actor defined, cannot derive events")
 		return
 	}
-	eventKey := ee.conversions.EventLabel(inner)
+	eventKey := inner.PSMEventKey()
 	derived := ee.conversions.DeriveChainEvent(event, ee.SystemActor, eventKey)
 	derived.SetPSMEvent(inner)
 	return derived, nil

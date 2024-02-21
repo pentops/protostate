@@ -578,7 +578,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 
 	g.P()
-	g.P("type ", ss.eventName, "Key string")
+	g.P("type ", ss.eventName, "Key = string")
 	g.P()
 	g.P("const (")
 	g.P(ss.namePrefix, "PSMEventNil ", ss.eventName, "Key = \"<nil>\"")
@@ -742,10 +742,6 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	timestamppb := protogen.GoImportPath("google.golang.org/protobuf/types/known/timestamppb")
 
 	g.P("type ", ss.machineName, "Converter struct {}")
-	g.P()
-	g.P("func (c ", ss.machineName, "Converter) EventLabel(e ", ss.eventName, ") string {")
-	g.P("return string(e.PSMEventKey())")
-	g.P("}")
 	g.P()
 	g.P("func (c ", ss.machineName, "Converter) EmptyState(e *", ss.eventMessage.GoIdent, ") *", ss.stateMessage.GoIdent, " {")
 	g.P("return &", ss.stateMessage.GoIdent, "{")

@@ -118,7 +118,7 @@ func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, 
 	](cb)
 }
 
-type BarPSMEventKey string
+type BarPSMEventKey = string
 
 const (
 	BarPSMEventNil     BarPSMEventKey = "<nil>"
@@ -132,10 +132,6 @@ type BarPSMEvent interface {
 	PSMEventKey() BarPSMEventKey
 }
 type BarPSMConverter struct{}
-
-func (c BarPSMConverter) EventLabel(e BarPSMEvent) string {
-	return string(e.PSMEventKey())
-}
 
 func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
 	return &BarState{
