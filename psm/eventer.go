@@ -60,7 +60,7 @@ type Eventer[
 
 	Transitions []ITransition[S, ST, E, IE]
 
-	SystemActor *SystemActor
+	SystemActor SystemActor
 
 	validator *protovalidate.Validator
 }
@@ -175,7 +175,7 @@ func (ee Eventer[S, ST, E, IE]) deriveEvent(event E, inner IE) (evt E, err error
 		return
 	}
 	eventKey := ee.conversions.EventLabel(inner)
-	derived := ee.conversions.DeriveChainEvent(event, *ee.SystemActor, eventKey)
+	derived := ee.conversions.DeriveChainEvent(event, ee.SystemActor, eventKey)
 	derived.SetPSMEvent(inner)
 	return derived, nil
 }
