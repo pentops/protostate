@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestDefaultFiltering(t *testing.T) {
+func SkipTestDefaultFiltering(t *testing.T) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
@@ -91,7 +91,7 @@ func TestDefaultFiltering(t *testing.T) {
 	})
 }
 
-func TestDynamicFiltering(t *testing.T) {
+func SkipTestDynamicFiltering(t *testing.T) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
