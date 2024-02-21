@@ -122,7 +122,7 @@ func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, 
 	](cb)
 }
 
-type FooPSMEventKey string
+type FooPSMEventKey = string
 
 const (
 	FooPSMEventNil     FooPSMEventKey = "<nil>"
@@ -136,10 +136,6 @@ type FooPSMEvent interface {
 	PSMEventKey() FooPSMEventKey
 }
 type FooPSMConverter struct{}
-
-func (c FooPSMConverter) EventLabel(e FooPSMEvent) string {
-	return string(e.PSMEventKey())
-}
 
 func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
 	return &FooState{

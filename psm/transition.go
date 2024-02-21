@@ -64,6 +64,7 @@ type IEvent[Inner any] interface {
 // It is set at compile time specifically to the interface type.
 type IInnerEvent interface {
 	proto.Message
+	PSMEventKey() string
 }
 
 type TypedTransitionHandler[
