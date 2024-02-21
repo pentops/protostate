@@ -78,7 +78,7 @@ type ListReflectionSet struct {
 	defaultSortFields []sortSpec
 	tieBreakerFields  []sortSpec
 
-	// fields in the list request object which become mandatory filters
+	defaultFilterFields []protoreflect.FieldDescriptor
 	RequestFilterFields []protoreflect.FieldDescriptor
 }
 
@@ -152,6 +152,8 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	if err != nil {
 		return nil, err
 	}
+
+	ll.defaultFilterFields = buildDefaultFilters(ll.arrayField.Message().Fields())
 
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
@@ -459,6 +461,12 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 	}
 
 	return defaultSortFields
+}
+
+func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) []protoreflect.FieldDescriptor {
+	var defaultFilterFields []protoreflect.FieldDescriptor
+
+	return defaultFilterFields
 }
 
 func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
