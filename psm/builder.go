@@ -10,7 +10,7 @@ type StateMachineConfig[
 ] struct {
 	conversions EventTypeConverter[S, ST, E, IE]
 	spec        PSMTableSpec[S, ST, E, IE]
-	systemActor *SystemActor
+	systemActor SystemActor
 }
 
 func NewStateMachineConfig[
@@ -34,7 +34,7 @@ func (cb *StateMachineConfig[S, ST, E, IE]) EventTypeConverter(conversions Event
 }
 
 func (cb *StateMachineConfig[S, ST, E, IE]) SystemActor(systemActor SystemActor) *StateMachineConfig[S, ST, E, IE] {
-	cb.systemActor = &systemActor
+	cb.systemActor = systemActor
 	return cb
 }
 
