@@ -68,33 +68,39 @@ type FooPSMTableSpec = psm.PSMTableSpec[
 ]
 
 var DefaultFooPSMTableSpec = FooPSMTableSpec{
-	StateTable: "foo",
-	EventTable: "foo_event",
+	State: psm.TableSpec[*FooState]{
+		TableName:  "foo",
+		DataColumn: "state",
+		StoreExtraColumns: func(state *FooState) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"tenant_id": state.TenantId,
+			}, nil
+		},
+		PKFieldPaths: []string{
+			"foo_id",
+		},
+	},
+	Event: psm.TableSpec[*FooEvent]{
+		TableName:  "foo_event",
+		DataColumn: "data",
+		StoreExtraColumns: func(event *FooEvent) (map[string]interface{}, error) {
+			metadata := event.Metadata
+			return map[string]interface{}{
+				"id":        metadata.EventId,
+				"timestamp": metadata.Timestamp,
+				"actor":     metadata.Actor,
+				"foo_id":    event.FooId,
+				"tenant_id": event.TenantId,
+			}, nil
+		},
+		PKFieldPaths: []string{
+			"metadata.event_id",
+		},
+	},
 	PrimaryKey: func(event *FooEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
 			"id": event.FooId,
 		}, nil
-	},
-	StateColumns: func(state *FooState) (map[string]interface{}, error) {
-		return map[string]interface{}{
-			"tenant_id": state.TenantId,
-		}, nil
-	},
-	EventColumns: func(event *FooEvent) (map[string]interface{}, error) {
-		metadata := event.Metadata
-		return map[string]interface{}{
-			"id":        metadata.EventId,
-			"timestamp": metadata.Timestamp,
-			"actor":     metadata.Actor,
-			"foo_id":    event.FooId,
-			"tenant_id": event.TenantId,
-		}, nil
-	},
-	EventPrimaryKeyFieldPaths: []string{
-		"metadata.event_id",
-	},
-	StatePrimaryKeyFieldPaths: []string{
-		"foo_id",
 	},
 }
 
