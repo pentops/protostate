@@ -528,7 +528,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 	g.P()
 
-	g.P("type ", FooPSMTableSpec, " = ", sm.Ident("TableSpec"), "[")
+	g.P("type ", FooPSMTableSpec, " = ", sm.Ident("PSMTableSpec"), "[")
 	printTypes()
 	g.P("]")
 	g.P()

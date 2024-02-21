@@ -16,13 +16,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// TableSpec is the configuration for the state machine's table mapping.
+// PSMTableSpec is the configuration for the state machine's table mapping.
 // The generated code provides a default which is derived from the patterns and
 // annotations on the proto message, however, the proto message is designed to
 // specify the wire data, not the storage mechanism, so consuming code may need
 // to override some of the defaults to map to the database.
 // The generated default is called DefaultFooPSMTableSpec
-type TableSpec[
+type PSMTableSpec[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
@@ -46,7 +46,7 @@ type TableSpec[
 	StatePrimaryKeyFieldPaths []string
 }
 
-func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
+func (spec *PSMTableSpec[S, ST, E, IE]) setDefaults() {
 	if spec.StateDataColumn == "" {
 		spec.StateDataColumn = "state"
 	}
@@ -55,9 +55,11 @@ func (spec *TableSpec[S, ST, E, IE]) setDefaults() {
 	}
 }
 
-func (spec TableSpec[S, ST, E, IE]) StateTableSpec() StateTableSpec {
+// StateTableSpec derives the Query spec table elements from the StateMachine
+// specs. The Query spec is a subset of the TableSpec
+func (spec PSMTableSpec[S, ST, E, IE]) StateTableSpec() QueryTableSpec {
 	spec.setDefaults()
-	return StateTableSpec{
+	return QueryTableSpec{
 		StateTable:      spec.StateTable,
 		StateDataColumn: spec.StateDataColumn,
 		EventTable:      spec.EventTable,
@@ -71,7 +73,7 @@ func (spec TableSpec[S, ST, E, IE]) StateTableSpec() StateTableSpec {
 	}
 }
 
-func (spec TableSpec[S, ST, E, IE]) Validate() error {
+func (spec PSMTableSpec[S, ST, E, IE]) Validate() error {
 	if spec.PrimaryKey == nil {
 		return fmt.Errorf("missing PrimaryKey func")
 	}
@@ -121,14 +123,14 @@ type StateMachine[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	spec        TableSpec[S, ST, E, IE]
+	spec        PSMTableSpec[S, ST, E, IE]
 	conversions EventTypeConverter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
 
 	hooks []StateHook[S, ST, E, IE]
 }
 
-func (sm StateMachine[S, ST, E, IE]) StateTableSpec() StateTableSpec {
+func (sm StateMachine[S, ST, E, IE]) StateTableSpec() QueryTableSpec {
 	return sm.spec.StateTableSpec()
 }
 
@@ -182,7 +184,7 @@ type StateMachineConfig[
 	IE IInnerEvent,
 ] struct {
 	conversions EventTypeConverter[S, ST, E, IE]
-	spec        TableSpec[S, ST, E, IE]
+	spec        PSMTableSpec[S, ST, E, IE]
 	systemActor *SystemActor
 }
 
@@ -193,7 +195,7 @@ func NewStateMachineConfig[
 	IE IInnerEvent,
 ](
 	defaultConversions EventTypeConverter[S, ST, E, IE],
-	defaultSpec TableSpec[S, ST, E, IE],
+	defaultSpec PSMTableSpec[S, ST, E, IE],
 ) *StateMachineConfig[S, ST, E, IE] {
 	return &StateMachineConfig[S, ST, E, IE]{
 		conversions: defaultConversions,
@@ -201,7 +203,7 @@ func NewStateMachineConfig[
 	}
 }
 
-func (cb *StateMachineConfig[S, ST, E, IE]) WithTableSpec(spec TableSpec[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
+func (cb *StateMachineConfig[S, ST, E, IE]) WithTableSpec(spec PSMTableSpec[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
 	cb.spec = spec
 	return cb
 }
