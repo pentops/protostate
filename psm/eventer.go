@@ -72,7 +72,7 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 		}
 	}
 
-	innerEvent := ee.conversions.Unwrap(event)
+	innerEvent := event.UnwrapPSMEvent()
 	typeKey := ee.conversions.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
 		ee.conversions.StateLabel(state),
@@ -108,63 +108,77 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		innerEvent := eventQueue[0]
 		eventQueue = eventQueue[1:]
 
-		baton := &TransitionData[E, IE]{
-			causedBy:    innerEvent,
-			deriveEvent: ee.deriveEvent,
-			err:         nil,
-		}
-
-		unwrapped := ee.conversions.Unwrap(innerEvent)
-
-		typeKey := ee.conversions.EventLabel(unwrapped)
-		stateBefore := ee.conversions.StateLabel(state)
-
-		ctx = log.WithFields(ctx, map[string]interface{}{
-			"eventType":  typeKey,
-			"transition": fmt.Sprintf("%s -> ? : %s", stateBefore, typeKey),
-		})
-
-		transition, err := ee.FindTransition(state, innerEvent)
+		chained, err := ee.runEvent(ctx, tx, state, innerEvent)
 		if err != nil {
 			return err
 		}
-
-		log.Debug(ctx, "Begin Event")
-
-		if err := transition.RunTransition(ctx, baton, state, unwrapped); err != nil {
-			log.WithError(ctx, err).Error("Running Transition")
-			return err
-		}
-
-		if baton.err != nil {
-			return baton.err
-		}
-
-		ctx = log.WithFields(ctx, map[string]interface{}{
-			"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, ee.conversions.StateLabel(state), typeKey),
-		})
-
-		log.Info(ctx, "Event Handled")
-
-		if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
-			return err
-		}
-
-		for _, se := range baton.sideEffects {
-			if err := tx.Outbox(ctx, se); err != nil {
-				return fmt.Errorf("side effect outbox: %w", err)
-			}
-		}
-
-		for _, event := range baton.chainEvents {
-			if err := ee.ValidateEvent(event); err != nil {
-				return fmt.Errorf("validating chained event: %w", err)
-			}
-		}
-		eventQueue = append(eventQueue, baton.chainEvents...)
+		eventQueue = append(eventQueue, chained...)
 	}
 
 	return nil
+}
+
+func (ee Eventer[S, ST, E, IE]) runEvent(
+	ctx context.Context,
+	tx Transaction[S, E],
+	state S,
+	innerEvent E,
+) ([]E, error) {
+
+	baton := &TransitionData[E, IE]{
+		causedBy:    innerEvent,
+		deriveEvent: ee.deriveEvent,
+		err:         nil,
+	}
+
+	unwrapped := innerEvent.UnwrapPSMEvent()
+
+	typeKey := ee.conversions.EventLabel(unwrapped)
+	stateBefore := ee.conversions.StateLabel(state)
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"eventType":  typeKey,
+		"transition": fmt.Sprintf("%s -> ? : %s", stateBefore, typeKey),
+	})
+
+	transition, err := ee.FindTransition(state, innerEvent)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug(ctx, "Begin Event")
+
+	if err := transition.RunTransition(ctx, baton, state, unwrapped); err != nil {
+		log.WithError(ctx, err).Error("Running Transition")
+		return nil, err
+	}
+
+	if baton.err != nil {
+		return nil, baton.err
+	}
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, ee.conversions.StateLabel(state), typeKey),
+	})
+
+	log.Info(ctx, "Event Handled")
+
+	if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
+		return nil, err
+	}
+
+	for _, se := range baton.sideEffects {
+		if err := tx.Outbox(ctx, se); err != nil {
+			return nil, fmt.Errorf("side effect outbox: %w", err)
+		}
+	}
+
+	for _, event := range baton.chainEvents {
+		if err := ee.ValidateEvent(event); err != nil {
+			return nil, fmt.Errorf("validating chained event: %w", err)
+		}
+	}
+	return baton.chainEvents, nil
 }
 
 // deriveEvent returns a new event with metadata derived from the causing
@@ -214,7 +228,7 @@ func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, 
 
 func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE) bool) EventerTransitionBuilder[S, ST, E, IE] {
 	innerFilter := func(fullEvent E) bool {
-		innerEvent := tb.eventer.conversions.Unwrap(fullEvent)
+		innerEvent := fullEvent.UnwrapPSMEvent()
 		return filter(innerEvent)
 	}
 	tb.filters = append(tb.filters, innerFilter)
