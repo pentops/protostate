@@ -12,7 +12,6 @@ import (
 
 func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, error) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	customTableSpec := testpb.DefaultFooPSMTableSpec
 
 	systemActor, err := psm.NewSystemActor(actorID, &testpb.Actor{
 		ActorId: actorID,
@@ -22,8 +21,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	}
 	sm, err := testpb.NewFooPSM(testpb.
 		DefaultFooPSMConfig().
-		WithTableSpec(customTableSpec).
-		WithSystemActor(systemActor))
+		SystemActor(systemActor))
 	if err != nil {
 		return nil, err
 	}
@@ -98,26 +96,21 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 }
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
-	config := testpb.DefaultBarPSMConfig().
-		WithTableSpec(testpb.BarPSMTableSpec{
-			StateTable: "bar",
-			EventTable: "bar_event",
-			PrimaryKey: func(event *testpb.BarEvent) (map[string]interface{}, error) {
-				return map[string]interface{}{
-					"id": event.BarId,
-				}, nil
-			},
-			EventColumns: func(event *testpb.BarEvent) (map[string]interface{}, error) {
-				return map[string]interface{}{
-					"bar_id":    event.BarId,
-					"id":        event.Metadata.EventId,
-					"timestamp": event.Metadata.Timestamp,
-					"data":      event,
-				}, nil
-			},
-		})
-
-	sm, err := testpb.NewBarPSM(config)
+	sm, err := testpb.DefaultBarPSMConfig().
+		StateTableName("bar").
+		EventTableName("bar_event").
+		StoreExtraEventColumns(func(event *testpb.BarEvent) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"bar_id":    event.BarId,
+				"id":        event.Metadata.EventId,
+				"timestamp": event.Metadata.Timestamp,
+			}, nil
+		}).
+		PrimaryKey(func(event *testpb.BarEvent) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"id": event.BarId,
+			}, nil
+		}).NewStateMachine()
 	if err != nil {
 		return nil, err
 	}

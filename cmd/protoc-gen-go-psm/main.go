@@ -123,6 +123,21 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	return g
 }
 
+var (
+	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
+	smEventer               = smImportPath.Ident("Eventer")
+	smStateMachine          = smImportPath.Ident("StateMachine")
+	smDBStateMachine        = smImportPath.Ident("DBStateMachine")
+	smTableSpec             = smImportPath.Ident("TableSpec")
+	smPSMTableSpec          = smImportPath.Ident("PSMTableSpec")
+	smStateMachineConfig    = smImportPath.Ident("StateMachineConfig")
+	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
+	smNewStateMachine       = smImportPath.Ident("NewStateMachine")
+	smTransitionBaton       = smImportPath.Ident("TransitionBaton")
+	smTransitionFunc        = smImportPath.Ident("TransitionFunc")
+	smSystemActor           = smImportPath.Ident("SystemActor")
+)
+
 func addStateQueryService(g *protogen.GeneratedFile, qs *querySet, ss *queryPkFields) error {
 
 	if qs.getMethod == nil && qs.listMethod == nil && qs.listEventsMethod == nil {
@@ -481,8 +496,6 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	g.P("// StateObjectOptions: ", ss.machineName)
 
-	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
-
 	printTypes := func() {
 		g.P("*", ss.stateMessage.GoIdent, ",")
 		g.P(ss.statusFieldInState.Enum.GoIdent.GoName, ",")
@@ -490,15 +503,15 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 		g.P(ss.eventName, ",")
 	}
 
-	g.P("type ", ss.machineName, "Eventer = ", sm.Ident("Eventer"), "[")
+	g.P("type ", ss.machineName, "Eventer = ", smEventer, "[")
 	printTypes()
 	g.P("]")
 	g.P()
-	g.P("type ", ss.machineName, " = ", sm.Ident("StateMachine"), "[")
+	g.P("type ", ss.machineName, " = ", smStateMachine, "[")
 	printTypes()
 	g.P("]")
 	g.P()
-	g.P("type ", ss.machineName, "DB = ", sm.Ident("DBStateMachine"), "[")
+	g.P("type ", ss.machineName, "DB = ", smDBStateMachine, "[")
 	printTypes()
 	g.P("]")
 	g.P()
@@ -509,26 +522,26 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
 
 	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
-	g.P("func Default", ss.machineName, "Config() *", sm.Ident("StateMachineConfig"), "[")
+	g.P("func Default", ss.machineName, "Config() *", smStateMachineConfig, "[")
 	printTypes()
 	g.P("] {")
-	g.P("return ", sm.Ident("NewStateMachineConfig"), "[")
+	g.P("return ", smNewStateMachineConfig, "[")
 	printTypes()
 	g.P("](", FooPSMConverter, "{}, ", DefaultFooPSMTableSpec, ")")
 	g.P("}")
 	g.P()
 
 	// func NewFooPSM(db psm.Transactor, options ...FooPSMOption) (*FooPSM, error) {
-	g.P("func New", ss.machineName, "(config *", sm.Ident("StateMachineConfig"), "[")
+	g.P("func New", ss.machineName, "(config *", smStateMachineConfig, "[")
 	printTypes()
 	g.P("]) (*", FooPSM, ", error) {")
-	g.P("return ", sm.Ident("NewStateMachine"), "[")
+	g.P("return ", smNewStateMachine, "[")
 	printTypes()
 	g.P("](config)")
 	g.P("}")
 	g.P()
 
-	g.P("type ", FooPSMTableSpec, " = ", sm.Ident("PSMTableSpec"), "[")
+	g.P("type ", FooPSMTableSpec, " = ", smPSMTableSpec, "[")
 	printTypes()
 	g.P("]")
 	g.P()
@@ -539,7 +552,7 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 
 	g.P()
 
-	g.P("type ", ss.machineName, "TransitionBaton = ", sm.Ident("TransitionBaton"), "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
+	g.P("type ", ss.machineName, "TransitionBaton = ", smTransitionBaton, "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
 
 	g.P()
 	g.P("func ", ss.machineName,
@@ -547,11 +560,11 @@ func addStateSet(g *protogen.GeneratedFile, ss *stateSet) error {
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		ss.machineName, "TransitionBaton, *",
-		ss.stateMessage.GoIdent, ", SE) error) ", sm.Ident("TransitionFunc"), "[")
+		ss.stateMessage.GoIdent, ", SE) error) ", smTransitionFunc, "[")
 	printTypes()
 	g.P("SE,")
 	g.P("] {")
-	g.P("return ", sm.Ident("TransitionFunc"), "[")
+	g.P("return ", smTransitionFunc, "[")
 	printTypes()
 	g.P("SE,")
 	g.P("](cb)")
@@ -652,8 +665,60 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	// If all the above match, we can automate the ExtractMetadata function
 
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
-	g.P("  StateTable: \"", ss.specifiedName, "\",")
-	g.P("  EventTable: \"", ss.specifiedName, "_event\",")
+	g.P("  State: ", smTableSpec, "[*", ss.stateMessage.GoIdent, "] {")
+	g.P("    TableName: \"", ss.specifiedName, "\",")
+	g.P("    DataColumn: \"state\",")
+	g.P("    StoreExtraColumns: func(state *", ss.stateMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("      return map[string]interface{}{")
+
+	// Assume the NON KEY fields are stored as columns in the state table
+	for _, field := range ss.eventFieldGenerators.eventStateKeyFields {
+		if field.isKey {
+			continue
+		}
+		// stripping the prefix foo_ from the name in the event. In the DB, we
+		// expect the primary key to be called just id, so foo_id -> id
+		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
+		g.P("      \"", keyName, "\": state.", field.eventField.GoName, ",")
+	}
+	g.P("      }, nil")
+	g.P("    },")
+	g.P("    PKFieldPaths: []string{")
+	for _, field := range ss.eventStateKeyFields {
+		if !field.isKey {
+			continue
+		}
+		g.P("\"", field.stateField.Desc.Name(), "\",")
+	}
+	g.P("    },")
+	g.P("  },")
+
+	g.P("  Event: ", smTableSpec, "[*", ss.eventMessage.GoIdent, "] {")
+	g.P("  TableName: \"", ss.specifiedName, "_event\",")
+	g.P("    DataColumn: \"data\",")
+	g.P("    StoreExtraColumns: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("      metadata := event.", ss.metadataField.GoName)
+	g.P("      return map[string]interface{}{")
+	g.P("        \"id\": metadata.", ss.eventIDField.GoName, ",")
+	g.P("        \"timestamp\": metadata.", ss.eventTimestampField.GoName, ",")
+	if ss.eventActorField != nil {
+		g.P("    \"actor\": metadata.", ss.eventActorField.GoName, ",")
+	}
+	// Assumes that all fields in the event marked as state key should be
+	// directly written to the table. If not, they should not be in the
+	// event, i.e. if they are derivable from the state, rather than
+	// identifying the state, there is no need to copy them to the event.
+	for _, field := range ss.eventStateKeyFields {
+		keyName := string(field.stateField.Desc.Name())
+		g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
+	}
+	g.P("      }, nil")
+	g.P("    },")
+	g.P("    PKFieldPaths: []string{")
+	g.P("      \"", ss.metadataField.Desc.Name(), ".", ss.eventIDField.Desc.Name(), "\",")
+	g.P("    },")
+	g.P("  },")
+
 	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
 	for _, field := range ss.eventFieldGenerators.eventStateKeyFields {
@@ -667,50 +732,6 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 	}
 	g.P("    }, nil")
 	g.P("  },")
-	g.P("  StateColumns: func(state *", ss.stateMessage.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("    return map[string]interface{}{")
-
-	for _, field := range ss.eventFieldGenerators.eventStateKeyFields {
-		if field.isKey {
-			continue
-		}
-		// stripping the prefix foo_ from the name in the event. In the DB, we
-		// expect the primary key to be called just id, so foo_id -> id
-		keyName := strings.TrimPrefix(string(field.stateField.Desc.Name()), ss.specifiedName+"_")
-		g.P("      \"", keyName, "\": state.", field.eventField.GoName, ",")
-	}
-	g.P("    }, nil")
-	g.P("  },")
-
-	g.P("  EventColumns: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("    metadata := event.", ss.metadataField.GoName)
-	g.P("    return map[string]interface{}{")
-	g.P("      \"id\": metadata.", ss.eventIDField.GoName, ",")
-	g.P("      \"timestamp\": metadata.", ss.eventTimestampField.GoName, ",")
-	if ss.eventActorField != nil {
-		g.P("      \"actor\": metadata.", ss.eventActorField.GoName, ",")
-	}
-	// Assumes that all fields in the event marked as state key should be
-	// directly written to the table. If not, they should not be in the
-	// event, i.e. if they are derivable from the state, rather than
-	// identifying the state, there is no need to copy them to the event.
-	for _, field := range ss.eventStateKeyFields {
-		keyName := string(field.stateField.Desc.Name())
-		g.P("      \"", keyName, "\": event.", field.eventField.GoName, ",")
-	}
-	g.P("    }, nil")
-	g.P("  },")
-	g.P("  EventPrimaryKeyFieldPaths: []string{")
-	g.P("    \"", ss.metadataField.Desc.Name(), ".", ss.eventIDField.Desc.Name(), "\",")
-	g.P("  },")
-	g.P("  StatePrimaryKeyFieldPaths: []string{")
-	for _, field := range ss.eventStateKeyFields {
-		if !field.isKey {
-			continue
-		}
-		g.P("\"", field.stateField.Desc.Name(), "\",")
-	}
-	g.P("},")
 
 	g.P("}")
 
@@ -718,7 +739,6 @@ func addDefaultTableSpec(g *protogen.GeneratedFile, ss *stateSet) error {
 }
 
 func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
-	sm := protogen.GoImportPath("github.com/pentops/protostate/psm")
 	timestamppb := protogen.GoImportPath("google.golang.org/protobuf/types/known/timestamppb")
 
 	g.P("type ", ss.machineName, "Converter struct {}")
@@ -743,7 +763,7 @@ func addTypeConverter(g *protogen.GeneratedFile, ss *stateSet) error {
 	g.P("}")
 	g.P("}")
 	g.P()
-	g.P("func (c ", ss.machineName, "Converter) DeriveChainEvent(e *", ss.eventMessage.GoIdent, ", systemActor ", sm.Ident("SystemActor"), ", eventKey string) *", ss.eventMessage.GoIdent, " {")
+	g.P("func (c ", ss.machineName, "Converter) DeriveChainEvent(e *", ss.eventMessage.GoIdent, ", systemActor ", smSystemActor, ", eventKey string) *", ss.eventMessage.GoIdent, " {")
 	g.P("  metadata := &", ss.metadataField.Message.GoIdent, "{")
 	g.P("  ", ss.eventIDField.GoName, ": systemActor.NewEventID(e.", ss.metadataField.GoName, ".", ss.eventIDField.GoName, ", eventKey),")
 	g.P("  ", ss.eventTimestampField.GoName, ": ", timestamppb.Ident("Now()"), ",")

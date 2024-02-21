@@ -13,17 +13,20 @@ import (
 // QueryTableSpec is the subset of TableSpec which does not relate to the
 // specific event and state types of the state machine.
 type QueryTableSpec struct {
-	StateTable      string
-	StateDataColumn string
-
-	EventTable      string
-	EventDataColumn string
-
-	StatePrimaryKeyPaths []string
-	EventPrimaryKeyPaths []string
-
 	EventTypeName protoreflect.FullName
 	StateTypeName protoreflect.FullName
+
+	State EntityTableSpec
+	Event EntityTableSpec
+}
+
+type EntityTableSpec struct {
+	TableName  string
+	DataColumn string
+
+	// PKFieldPaths is a list of 'field paths' which constitute the primary key
+	// of the entity, dot-notated protobuf field names.
+	PKFieldPaths []string
 }
 
 // QuerySpec is the configuration for the query service side of the state
@@ -104,8 +107,8 @@ func BuildStateQuerySet[
 ) (*StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES], error) {
 
 	getSpec := pquery.GetSpec[GetREQ, GetRES]{
-		TableName:  smSpec.StateTable,
-		DataColumn: smSpec.StateDataColumn,
+		TableName:  smSpec.State.TableName,
+		DataColumn: smSpec.State.DataColumn,
 		Auth:       options.Auth,
 		AuthJoin:   options.AuthJoin,
 	}
@@ -117,7 +120,7 @@ func BuildStateQuerySet[
 	for i := 0; i < requestReflect.Fields().Len(); i++ {
 		field := requestReflect.Fields().Get(i)
 		fullKey := string(field.Name())
-		rootKey := strings.TrimPrefix(fullKey, smSpec.StateTable+"_")
+		rootKey := strings.TrimPrefix(fullKey, smSpec.State.TableName+"_")
 		pkFields[rootKey] = field
 		eventJoinMap = append(eventJoinMap, pquery.JoinField{
 			RootColumn: rootKey,
@@ -152,15 +155,15 @@ func BuildStateQuerySet[
 	}
 
 	if eventsInGet != "" {
-		if smSpec.EventTable == "" {
-			return nil, fmt.Errorf("missing EventTable in state spec for %s", smSpec.StateTable)
+		if smSpec.Event.TableName == "" {
+			return nil, fmt.Errorf("missing EventTable in state spec for %s", smSpec.State.TableName)
 		}
-		if smSpec.EventDataColumn == "" {
-			return nil, fmt.Errorf("missing EventDataColumn in state spec for %s", smSpec.StateTable)
+		if smSpec.Event.DataColumn == "" {
+			return nil, fmt.Errorf("missing EventDataColumn in state spec for %s", smSpec.State.TableName)
 		}
 		getSpec.Join = &pquery.GetJoinSpec{
-			TableName:     smSpec.EventTable,
-			DataColumn:    smSpec.EventDataColumn,
+			TableName:     smSpec.Event.TableName,
+			DataColumn:    smSpec.Event.DataColumn,
 			FieldInParent: eventsInGet,
 			On:            eventJoinMap,
 		}
@@ -168,12 +171,12 @@ func BuildStateQuerySet[
 
 	getter, err := pquery.NewGetter(getSpec)
 	if err != nil {
-		return nil, fmt.Errorf("build getter for state query '%s': %w", smSpec.StateTable, err)
+		return nil, fmt.Errorf("build getter for state query '%s': %w", smSpec.State.TableName, err)
 	}
 
 	listSpec := pquery.ListSpec[ListREQ, ListRES]{
-		TableName:     smSpec.StateTable,
-		DataColumn:    smSpec.StateDataColumn,
+		TableName:     smSpec.State.TableName,
+		DataColumn:    smSpec.State.DataColumn,
 		Auth:          options.Auth,
 		RequestFilter: smSpec.ListRequestFilter,
 	}
@@ -181,9 +184,9 @@ func BuildStateQuerySet[
 		listSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
-	lister, err := pquery.NewLister(listSpec, pquery.WithTieBreakerFields(smSpec.StatePrimaryKeyPaths...))
+	lister, err := pquery.NewLister(listSpec, pquery.WithTieBreakerFields(smSpec.State.PKFieldPaths...))
 	if err != nil {
-		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.StateTable, err)
+		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.State.TableName, err)
 	}
 
 	querySet := &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
@@ -197,7 +200,7 @@ func BuildStateQuerySet[
 
 	eventsAuthJoin := []*pquery.LeftJoin{{
 		// Main is the events table, joining to the state table
-		TableName: smSpec.StateTable,
+		TableName: smSpec.State.TableName,
 		On:        eventJoinMap.Reverse(),
 	}}
 
@@ -206,16 +209,16 @@ func BuildStateQuerySet[
 	}
 
 	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
-		TableName:     smSpec.EventTable,
-		DataColumn:    smSpec.EventDataColumn,
+		TableName:     smSpec.Event.TableName,
+		DataColumn:    smSpec.Event.DataColumn,
 		Auth:          options.Auth,
 		AuthJoin:      eventsAuthJoin,
 		RequestFilter: smSpec.ListEventsRequestFilter,
 	}
 
-	eventLister, err := pquery.NewLister(eventListSpec, pquery.WithTieBreakerFields(smSpec.EventPrimaryKeyPaths...))
+	eventLister, err := pquery.NewLister(eventListSpec, pquery.WithTieBreakerFields(smSpec.Event.PKFieldPaths...))
 	if err != nil {
-		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.EventTable, err)
+		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.Event.TableName, err)
 	}
 
 	querySet.EventLister = eventLister

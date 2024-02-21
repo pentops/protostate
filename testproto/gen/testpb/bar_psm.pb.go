@@ -68,29 +68,35 @@ type BarPSMTableSpec = psm.PSMTableSpec[
 ]
 
 var DefaultBarPSMTableSpec = BarPSMTableSpec{
-	StateTable: "bar",
-	EventTable: "bar_event",
+	State: psm.TableSpec[*BarState]{
+		TableName:  "bar",
+		DataColumn: "state",
+		StoreExtraColumns: func(state *BarState) (map[string]interface{}, error) {
+			return map[string]interface{}{}, nil
+		},
+		PKFieldPaths: []string{
+			"bar_id",
+		},
+	},
+	Event: psm.TableSpec[*BarEvent]{
+		TableName:  "bar_event",
+		DataColumn: "data",
+		StoreExtraColumns: func(event *BarEvent) (map[string]interface{}, error) {
+			metadata := event.Metadata
+			return map[string]interface{}{
+				"id":        metadata.EventId,
+				"timestamp": metadata.Timestamp,
+				"bar_id":    event.BarId,
+			}, nil
+		},
+		PKFieldPaths: []string{
+			"metadata.event_id",
+		},
+	},
 	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
 			"id": event.BarId,
 		}, nil
-	},
-	StateColumns: func(state *BarState) (map[string]interface{}, error) {
-		return map[string]interface{}{}, nil
-	},
-	EventColumns: func(event *BarEvent) (map[string]interface{}, error) {
-		metadata := event.Metadata
-		return map[string]interface{}{
-			"id":        metadata.EventId,
-			"timestamp": metadata.Timestamp,
-			"bar_id":    event.BarId,
-		}, nil
-	},
-	EventPrimaryKeyFieldPaths: []string{
-		"metadata.event_id",
-	},
-	StatePrimaryKeyFieldPaths: []string{
-		"bar_id",
 	},
 }
 

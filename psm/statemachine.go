@@ -28,45 +28,53 @@ type PSMTableSpec[
 	E IEvent[IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	// Primary Key derives the *State* primary key from the event.
+	// Primary Key derives the *State* primary key, and thus event foreign key
+	// to state, from the event.
 	PrimaryKey func(E) (map[string]interface{}, error)
 
-	// StateColumns stores non-primary-key columns from the state into the
-	// database
-	StateColumns func(S) (map[string]interface{}, error)
-
-	StateTable string
-	EventTable string
-
-	StateDataColumn string // default: state
-	EventDataColumn string // default: data
-	EventColumns    func(E) (map[string]interface{}, error)
-
-	EventPrimaryKeyFieldPaths []string
-	StatePrimaryKeyFieldPaths []string
+	State TableSpec[S]
+	Event TableSpec[E]
 }
 
-func (spec *PSMTableSpec[S, ST, E, IE]) setDefaults() {
-	if spec.StateDataColumn == "" {
-		spec.StateDataColumn = "state"
+type TableSpec[T proto.Message] struct {
+	TableName         string
+	StoreExtraColumns func(T) (map[string]interface{}, error)
+	// DataColumn is the JSONB column which stores the main data chunk
+	DataColumn   string
+	PKFieldPaths []string
+}
+
+func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
+	var columnMap map[string]interface{}
+	if ts.StoreExtraColumns == nil {
+		columnMap = map[string]interface{}{}
+	} else {
+		var err error
+		columnMap, err = ts.StoreExtraColumns(obj)
+		if err != nil {
+			return nil, fmt.Errorf("extra columns: %w", err)
+		}
 	}
-	if spec.EventDataColumn == "" {
-		spec.EventDataColumn = "data"
-	}
+
+	columnMap[ts.DataColumn] = obj
+
+	return dbconvert.FieldsToDBValues(columnMap)
 }
 
 // StateTableSpec derives the Query spec table elements from the StateMachine
 // specs. The Query spec is a subset of the TableSpec
 func (spec PSMTableSpec[S, ST, E, IE]) StateTableSpec() QueryTableSpec {
-	spec.setDefaults()
 	return QueryTableSpec{
-		StateTable:      spec.StateTable,
-		StateDataColumn: spec.StateDataColumn,
-		EventTable:      spec.EventTable,
-		EventDataColumn: spec.EventDataColumn,
-
-		StatePrimaryKeyPaths: spec.StatePrimaryKeyFieldPaths,
-		EventPrimaryKeyPaths: spec.EventPrimaryKeyFieldPaths,
+		State: EntityTableSpec{
+			TableName:    spec.State.TableName,
+			DataColumn:   spec.State.DataColumn,
+			PKFieldPaths: spec.State.PKFieldPaths,
+		},
+		Event: EntityTableSpec{
+			TableName:    spec.Event.TableName,
+			DataColumn:   spec.Event.DataColumn,
+			PKFieldPaths: spec.Event.PKFieldPaths,
+		},
 
 		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
 		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
@@ -78,15 +86,11 @@ func (spec PSMTableSpec[S, ST, E, IE]) Validate() error {
 		return fmt.Errorf("missing PrimaryKey func")
 	}
 
-	if spec.EventColumns == nil {
-		return fmt.Errorf("missing EventColumns func")
-	}
-
-	if spec.StateTable == "" {
+	if spec.State.TableName == "" {
 		return fmt.Errorf("missing StateTable func")
 	}
 
-	if spec.EventTable == "" {
+	if spec.Event.TableName == "" {
 		return fmt.Errorf("missing EventTable func")
 	}
 
@@ -175,59 +179,6 @@ type SystemActor interface {
 	ActorProto() protoreflect.Value
 }
 
-// StateMachineConfig allows the generated code to build a default
-// machine, but expose options to the user to override the defaults
-type StateMachineConfig[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-] struct {
-	conversions EventTypeConverter[S, ST, E, IE]
-	spec        PSMTableSpec[S, ST, E, IE]
-	systemActor *SystemActor
-}
-
-func NewStateMachineConfig[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-](
-	defaultConversions EventTypeConverter[S, ST, E, IE],
-	defaultSpec PSMTableSpec[S, ST, E, IE],
-) *StateMachineConfig[S, ST, E, IE] {
-	return &StateMachineConfig[S, ST, E, IE]{
-		conversions: defaultConversions,
-		spec:        defaultSpec,
-	}
-}
-
-func (cb *StateMachineConfig[S, ST, E, IE]) WithTableSpec(spec PSMTableSpec[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
-	cb.spec = spec
-	return cb
-}
-
-func (cb *StateMachineConfig[S, ST, E, IE]) WithEventTypeConverter(conversions EventTypeConverter[S, ST, E, IE]) *StateMachineConfig[S, ST, E, IE] {
-	cb.conversions = conversions
-	return cb
-}
-
-func (cb *StateMachineConfig[S, ST, E, IE]) WithSystemActor(systemActor SystemActor) *StateMachineConfig[S, ST, E, IE] {
-	cb.systemActor = &systemActor
-	return cb
-}
-
-func (cb *StateMachineConfig[S, ST, E, IE]) WithStateColumns(stateColumns func(S) (map[string]interface{}, error)) *StateMachineConfig[S, ST, E, IE] {
-	cb.spec.StateColumns = stateColumns
-	return cb
-}
-
-func (cb *StateMachineConfig[S, ST, E, IE]) WithEventColumns(eventColumns func(E) (map[string]interface{}, error)) *StateMachineConfig[S, ST, E, IE] {
-	cb.spec.EventColumns = eventColumns
-	return cb
-}
-
 func NewStateMachine[
 	S IState[ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
@@ -240,8 +191,6 @@ func NewStateMachine[
 	if err := cb.spec.Validate(); err != nil {
 		return nil, err
 	}
-
-	(&cb.spec).setDefaults()
 
 	ee := &Eventer[S, ST, E, IE]{
 		conversions: cb.conversions,
@@ -271,8 +220,8 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	}
 
 	selectQuery := sq.
-		Select(sm.spec.StateDataColumn).
-		From(sm.spec.StateTable)
+		Select(sm.spec.State.DataColumn).
+		From(sm.spec.State.TableName)
 	for k, v := range primaryKey {
 		selectQuery = selectQuery.Where(sq.Eq{k: v})
 	}
@@ -305,31 +254,18 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	state S,
 	event E,
 ) error {
+	var err error
 
 	stateSpec := sm.spec
 
-	eventMap, err := sm.spec.EventColumns(event)
+	stateSetMap, err := stateSpec.State.storeDBMap(state)
 	if err != nil {
-		return fmt.Errorf("event columns: %w", err)
+		return fmt.Errorf("state fields: %w", err)
 	}
-	eventMap[stateSpec.EventDataColumn] = event
 
 	primaryKey, err := stateSpec.PrimaryKey(event)
 	if err != nil {
 		return fmt.Errorf("primary key: %w", err)
-	}
-
-	additionalColumns := map[string]interface{}{}
-	if stateSpec.StateColumns != nil {
-		additionalColumns, err = stateSpec.StateColumns(state)
-		if err != nil {
-			return fmt.Errorf("extra state columns: %w", err)
-		}
-	}
-
-	stateJSON, err := dbconvert.MarshalProto(state)
-	if err != nil {
-		return err
 	}
 
 	stateKeyMap, err := dbconvert.FieldsToDBValues(primaryKey)
@@ -337,15 +273,10 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return fmt.Errorf("failed to map state primary key to DB values: %w", err)
 	}
 
-	stateSetMap, err := dbconvert.FieldsToDBValues(additionalColumns)
-	if err != nil {
-		return fmt.Errorf("failed to map state fields to DB values: %w", err)
-	}
-
-	_, err = tx.Insert(ctx, sqrlx.Upsert(sm.spec.StateTable).
+	_, err = tx.Insert(ctx, sqrlx.
+		Upsert(sm.spec.State.TableName).
 		KeyMap(stateKeyMap).
-		SetMap(stateSetMap).
-		Set(sm.spec.StateDataColumn, stateJSON))
+		SetMap(stateSetMap))
 
 	if err != nil {
 		log.WithFields(ctx, map[string]interface{}{
@@ -356,12 +287,14 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return fmt.Errorf("upsert state: %w", err)
 	}
 
-	eventSetMap, err := dbconvert.FieldsToDBValues(eventMap)
+	eventSetMap, err := stateSpec.Event.storeDBMap(event)
 	if err != nil {
-		return fmt.Errorf("failed to map event fields to DB values: %w", err)
+		return fmt.Errorf("event fields: %w", err)
 	}
 
-	_, err = tx.Insert(ctx, sq.Insert(sm.spec.EventTable).SetMap(eventSetMap))
+	_, err = tx.Insert(ctx, sq.
+		Insert(sm.spec.Event.TableName).
+		SetMap(eventSetMap))
 	if err != nil {
 		return fmt.Errorf("insert event: %w", err)
 	}
