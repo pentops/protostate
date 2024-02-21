@@ -72,11 +72,11 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) error {
 	g.P()
 	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySpec", "QuerySpec")
 	g.P()
-	g.P("func Default", qs.GoServiceName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("StateTableSpec"), ") ", qs.GoServiceName, "PSMQuerySpec {")
+	g.P("func Default", qs.GoServiceName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("QueryTableSpec"), ") ", qs.GoServiceName, "PSMQuerySpec {")
 	g.P("  return ", stateMachinePackage.Ident("QuerySpec"), "[")
 	qs.writeGenericTypeSet(g)
 	g.P("  ]{")
-	g.P("    StateTableSpec: tableSpec,")
+	g.P("    QueryTableSpec: tableSpec,")
 	qs.listFilter(g, qs.ListREQ, "ListRequestFilter", qs.ListRequestFilter)
 	if qs.ListEventsREQ != nil {
 		qs.listFilter(g, *qs.ListEventsREQ, "ListEventsRequestFilter", qs.ListEventsRequestFilter)

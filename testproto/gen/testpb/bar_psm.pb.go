@@ -60,7 +60,7 @@ func NewBarPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-type BarPSMTableSpec = psm.TableSpec[
+type BarPSMTableSpec = psm.PSMTableSpec[
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -258,7 +258,7 @@ type BarPSMQuerySpec = psm.QuerySpec[
 	proto.Message,
 ]
 
-func DefaultBarPSMQuerySpec(tableSpec psm.StateTableSpec) BarPSMQuerySpec {
+func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 	return psm.QuerySpec[
 		*GetBarRequest,
 		*GetBarResponse,
@@ -267,7 +267,7 @@ func DefaultBarPSMQuerySpec(tableSpec psm.StateTableSpec) BarPSMQuerySpec {
 		proto.Message,
 		proto.Message,
 	]{
-		StateTableSpec: tableSpec,
+		QueryTableSpec: tableSpec,
 		ListRequestFilter: func(req *ListBarsRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
 			if req.TenantId != nil {

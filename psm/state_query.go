@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// StateTableSpec is the subset of TableSpec which does not relate to the
+// QueryTableSpec is the subset of TableSpec which does not relate to the
 // specific event and state types of the state machine.
-type StateTableSpec struct {
+type QueryTableSpec struct {
 	StateTable      string
 	StateDataColumn string
 
@@ -37,7 +37,7 @@ type QuerySpec[
 	ListEventsREQ pquery.ListRequest,
 	ListEventsRES pquery.ListResponse,
 ] struct {
-	StateTableSpec
+	QueryTableSpec
 
 	ListRequestFilter       func(ListREQ) (map[string]interface{}, error)
 	ListEventsRequestFilter func(ListEventsREQ) (map[string]interface{}, error)

@@ -60,7 +60,7 @@ func NewFooPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-type FooPSMTableSpec = psm.TableSpec[
+type FooPSMTableSpec = psm.PSMTableSpec[
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -276,7 +276,7 @@ type FooPSMQuerySpec = psm.QuerySpec[
 	*ListFooEventsResponse,
 ]
 
-func DefaultFooPSMQuerySpec(tableSpec psm.StateTableSpec) FooPSMQuerySpec {
+func DefaultFooPSMQuerySpec(tableSpec psm.QueryTableSpec) FooPSMQuerySpec {
 	return psm.QuerySpec[
 		*GetFooRequest,
 		*GetFooResponse,
@@ -285,7 +285,7 @@ func DefaultFooPSMQuerySpec(tableSpec psm.StateTableSpec) FooPSMQuerySpec {
 		*ListFooEventsRequest,
 		*ListFooEventsResponse,
 	]{
-		StateTableSpec: tableSpec,
+		QueryTableSpec: tableSpec,
 		ListRequestFilter: func(req *ListFoosRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
 			if req.TenantId != nil {
