@@ -120,6 +120,14 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
 	}
 
+	eventExists, err := tx.CheckEventIdempotency(ctx, outerEvent)
+	if err != nil {
+		return err
+	}
+	if eventExists {
+		return nil
+	}
+
 	eventQueue := []E{outerEvent}
 
 	isInitial := state.GetStatus() == 0
@@ -139,7 +147,22 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		if state.GetStatus() == 0 {
 			return fmt.Errorf("state machine transitioned to zero status")
 		}
-		eventQueue = append(eventQueue, chained...)
+
+		if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
+			return err
+		}
+
+		for _, event := range chained {
+			eventExists, err := tx.CheckEventIdempotency(ctx, event)
+			if err != nil {
+				return err
+			}
+			if eventExists {
+				return fmt.Errorf("chained event already exists")
+			}
+			eventQueue = append(eventQueue, event)
+		}
+
 	}
 
 	return nil
@@ -189,10 +212,6 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 	})
 
 	log.Info(ctx, "Event Handled")
-
-	if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
-		return nil, err
-	}
 
 	for _, se := range baton.sideEffects {
 		if err := tx.Outbox(ctx, se); err != nil {

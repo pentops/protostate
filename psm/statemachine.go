@@ -42,6 +42,7 @@ type TableSpec[T proto.Message] struct {
 	// DataColumn is the JSONB column which stores the main data chunk
 	DataColumn   string
 	PKFieldPaths []string
+	PK           func(T) (map[string]interface{}, error)
 }
 
 func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
@@ -303,6 +304,33 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		}
 	}
 	return nil
+}
+
+func (sm *StateMachine[S, ST, E, IE]) check(ctx context.Context, tx sqrlx.Transaction, event E) (bool, error) {
+	primaryKey, err := sm.spec.Event.PK(event)
+	if err != nil {
+		return false, fmt.Errorf("primary key: %w", err)
+	}
+	pkMap, err := dbconvert.FieldsToDBValues(primaryKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to map event primary key to DB values: %w", err)
+	}
+
+	selectQuery := sq.
+		Select("1").
+		From(sm.spec.Event.TableName).
+		Where(sq.Eq(pkMap))
+
+	var one bool
+	err = tx.SelectRow(ctx, selectQuery).Scan(&one)
+	if errors.Is(sql.ErrNoRows, err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("selecting event: %w", err)
+	}
+
+	return true, nil
 
 }
 
@@ -313,7 +341,7 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		return state, err
 	}
 
-	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store), state, event); err != nil {
+	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store, sm.check), state, event); err != nil {
 		return state, fmt.Errorf("run event: %w", err)
 	}
 

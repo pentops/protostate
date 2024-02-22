@@ -256,4 +256,29 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected derived event to have actor ID %s, got %s", actorID, derivedEvent.Metadata.Actor.ActorId)
 		}
 	})
+
+	t.Run("Idempotency - event 1", func(t *testing.T) {
+		// idempotency test
+		// event 1 should be idempotent
+		_, err = sm.Transition(ctx, event1)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		req := &testpb.ListFooEventsRequest{
+			FooId: fooID,
+		}
+		res := &testpb.ListFooEventsResponse{}
+
+		err = queryer.ListEvents(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Events) != 2 {
+			t.Fatalf("expected 2 events for foo 1, got %d", len(res.Events))
+		}
+
+	})
 }
