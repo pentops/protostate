@@ -46,14 +46,16 @@ type TableSpec[T proto.Message] struct {
 
 func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
 	var columnMap map[string]interface{}
-	if ts.StoreExtraColumns == nil {
-		columnMap = map[string]interface{}{}
-	} else {
+	if ts.StoreExtraColumns != nil {
 		var err error
 		columnMap, err = ts.StoreExtraColumns(obj)
 		if err != nil {
 			return nil, fmt.Errorf("extra columns: %w", err)
 		}
+	}
+
+	if columnMap == nil {
+		columnMap = make(map[string]interface{})
 	}
 
 	columnMap[ts.DataColumn] = obj
