@@ -115,7 +115,6 @@ func (ee Eventer[S, ST, E, IE]) Run(
 	tx Transaction[S, E],
 	state S,
 	outerEvent E,
-	isInitial bool,
 ) error {
 	if err := ee.ValidateEvent(outerEvent); err != nil {
 		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
@@ -123,15 +122,22 @@ func (ee Eventer[S, ST, E, IE]) Run(
 
 	eventQueue := []E{outerEvent}
 
+	isInitial := state.GetStatus() == 0
+
 	for len(eventQueue) > 0 {
 		innerEvent := eventQueue[0]
 		eventQueue = eventQueue[1:]
 
 		trySequence(state, innerEvent, isInitial)
+		isInitial = false
 
 		chained, err := ee.runEvent(ctx, tx, state, innerEvent)
 		if err != nil {
 			return err
+		}
+
+		if state.GetStatus() == 0 {
+			return fmt.Errorf("state machine transitioned to zero status")
 		}
 		eventQueue = append(eventQueue, chained...)
 	}
