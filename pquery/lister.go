@@ -448,8 +448,6 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
-			log.WithField(context.Background(), "message", field.Message().FullName()).Debug("buildDefaultSorts")
-
 			subSort := buildDefaultSorts(field.Message().Fields())
 			for idx, subSortField := range subSort {
 				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
@@ -904,8 +902,6 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 		if err != nil {
 			return nil, fmt.Errorf("requested sort: %w", err)
 		}
-
-		fmt.Println("field: ", nestedField.field)
 
 		if nestedField.field.Cardinality() == protoreflect.Repeated {
 			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
