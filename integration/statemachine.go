@@ -42,7 +42,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.LastEventId = tb.FullCause().Metadata.EventId
 			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			state.Profiles = []*testpb.FooProfile{
 				{
@@ -72,7 +71,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.LastEventId = tb.FullCause().Metadata.EventId
 
 			if event.Delete {
 				tb.ChainDerived(&testpb.FooEventType_Deleted{})
@@ -88,7 +86,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			event *testpb.FooEventType_Deleted,
 		) error {
 			state.Status = testpb.FooStatus_DELETED
-			state.LastEventId = tb.FullCause().Metadata.EventId
 			return nil
 		}))
 

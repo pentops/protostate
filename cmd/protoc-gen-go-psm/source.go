@@ -6,19 +6,7 @@ import (
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
-
-// stateEntityDescriptorSet contains the protoreflect descriptors for the state
-// entity and its events. It cannot be used to generate code, see
-// stateEntityGenerateSet for the wrapped version.
-type stateEntityDescriptorSet struct {
-	name         string
-	stateMessage protoreflect.MessageDescriptor
-	stateOptions *psm_pb.StateObjectOptions
-	eventMessage protoreflect.MessageDescriptor
-	eventOptions *psm_pb.EventObjectOptions
-}
 
 type stateEntityGenerateSet struct {
 	// name of the state machine
@@ -30,24 +18,6 @@ type stateEntityGenerateSet struct {
 	stateOptions *psm_pb.StateObjectOptions
 	eventMessage *protogen.Message
 	eventOptions *psm_pb.EventObjectOptions
-}
-
-func (gs stateEntityGenerateSet) descriptors() stateEntityDescriptorSet {
-	return stateEntityDescriptorSet{
-		name:         gs.name,
-		stateMessage: gs.stateMessage.Desc,
-		stateOptions: gs.stateOptions,
-		eventMessage: gs.eventMessage.Desc,
-		eventOptions: gs.eventOptions,
-	}
-}
-
-// descriptorSet contains the protoreflect descriptors for the query service
-type queryServiceDescriptorSet struct {
-	name             string
-	getMethod        protoreflect.MethodDescriptor
-	listMethod       protoreflect.MethodDescriptor
-	listEventsMethod protoreflect.MethodDescriptor
 }
 
 // generateSet contains the protogen wrapper around the descriptors
@@ -74,18 +44,6 @@ func (qs queryServiceGenerateSet) validate() error {
 
 	return nil
 
-}
-
-func (gs queryServiceGenerateSet) descriptors() queryServiceDescriptorSet {
-	qds := queryServiceDescriptorSet{
-		name:       gs.name,
-		getMethod:  gs.getMethod.Desc,
-		listMethod: gs.listMethod.Desc,
-	}
-	if gs.listEventsMethod != nil {
-		qds.listEventsMethod = gs.listEventsMethod.Desc
-	}
-	return qds
 }
 
 type mappedSourceFile struct {

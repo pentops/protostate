@@ -56,7 +56,7 @@ message FooState {
   string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
   optional string description = 8 [(psm.list.v1.field).string.open_text.searching.searchable = true];
 
-  string last_event_id = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
+  uint64 last_event_sequence = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
 
   google.protobuf.Timestamp created_at = 7 [(psm.list.v1.field).timestamp = {
     filtering: {filterable: true},
@@ -144,6 +144,10 @@ message Metadata {
   }];
 
   Actor actor = 3;
+
+  uint64 sequence = 4 [(psm.list.v1.field).uint64 = {
+    sorting: {sortable: true}
+  }];
 }
 
 message Actor {

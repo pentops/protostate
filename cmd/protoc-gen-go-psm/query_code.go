@@ -55,7 +55,8 @@ func (qs PSMQuerySet) genericTypeAlias(g *protogen.GeneratedFile, typedName stri
 	g.P()
 }
 
-func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) error {
+func (qs PSMQuerySet) write(g *protogen.GeneratedFile) error {
+	g.P("// State Query Service for %s", qs.GoServiceName)
 	g.P("// QuerySet is the query set for the ", qs.GoServiceName, " service.")
 	g.P()
 	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySet", "StateQuerySet")
