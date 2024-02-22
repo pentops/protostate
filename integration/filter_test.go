@@ -73,9 +73,9 @@ func TestDefaultFiltering(t *testing.T) {
 				t.Logf("%d: %s", ii, state.Field)
 			}
 
-			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(12+ii) {
-					t.Fatalf("expected weight %d, got %d", 12+ii, state.Characteristics.Weight)
+			for _, state := range res.Foos {
+				if state.Status != testpb.FooStatus_ACTIVE {
+					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
 				}
 			}
 

@@ -178,8 +178,8 @@ func TestFooStateMachine(t *testing.T) {
 		}
 
 		t.Log(protojson.Format(res))
-		if len(res.Foos) != 2 {
-			t.Fatalf("expected 2 states, got %d", len(res.Foos))
+		if len(res.Foos) != 1 {
+			t.Fatalf("expected 1 states, got %d", len(res.Foos))
 		}
 	})
 
