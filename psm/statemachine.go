@@ -207,12 +207,12 @@ func (sm *StateMachine[S, ST, E, IE]) WithDB(db Transactor) *DBStateMachine[S, S
 	}
 }
 
-func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, event E) (S, bool, error) {
+func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
 	state := sm.conversions.EmptyState(event)
 
 	primaryKey, err := sm.spec.PrimaryKey(event)
 	if err != nil {
-		return state, false, fmt.Errorf("primary key: %w", err)
+		return state, fmt.Errorf("primary key: %w", err)
 	}
 
 	selectQuery := sq.
@@ -226,22 +226,22 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	err = tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		// OK, leave empty state alone
-		return state, true, nil
+		return state, nil
 	}
 	if err != nil {
 		qq, _, _ := selectQuery.ToSql()
-		return state, false, fmt.Errorf("selecting current state (%s): %w", qq, err)
+		return state, fmt.Errorf("selecting current state (%s): %w", qq, err)
 	}
 
 	if err := protojson.Unmarshal(stateJSON, state); err != nil {
-		return state, false, err
+		return state, err
 	}
 
 	if err := sm.conversions.CheckStateKeys(state, event); err != nil {
-		return state, false, err
+		return state, err
 	}
 
-	return state, false, nil
+	return state, nil
 }
 
 func (sm *StateMachine[S, ST, E, IE]) store(
@@ -306,12 +306,12 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
 
-	state, isInitial, err := sm.getCurrentState(ctx, tx, event)
+	state, err := sm.getCurrentState(ctx, tx, event)
 	if err != nil {
 		return state, err
 	}
 
-	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store), state, event, isInitial); err != nil {
+	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store), state, event); err != nil {
 		return state, fmt.Errorf("run event: %w", err)
 	}
 
