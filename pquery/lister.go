@@ -903,8 +903,6 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 			return nil, fmt.Errorf("requested sort: %w", err)
 		}
 
-		fmt.Println("field: ", nestedField.field)
-
 		if nestedField.field.Cardinality() == protoreflect.Repeated {
 			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
 		}
