@@ -515,7 +515,7 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 }
 
 func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterSpec, error) {
-	var defaultFilterFields []filterSpec
+	var filters []filterSpec
 
 	for i := 0; i < messageFields.Len(); i++ {
 		field := messageFields.Get(i)
@@ -689,7 +689,8 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 								return nil, fmt.Errorf("invalid date format for default filter (%s): %s", field.JSONName(), val)
 							}
 
-							// TODO: change to using ranges for date to handle whole year, whole month, whole day
+							// TODO: change to using ranges for date to handle whole
+							// year, whole month, whole day
 							vals = append(vals, val)
 						}
 					}
@@ -739,7 +740,7 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 			}
 
 			if len(vals) > 0 {
-				defaultFilterFields = append(defaultFilterFields, filterSpec{
+				filters = append(filters, filterSpec{
 					jsonPath:   []string{field.JSONName()},
 					filterVals: vals,
 				})
@@ -756,11 +757,11 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 				subFilterField.jsonPath = append([]string{field.JSONName()}, subFilterField.jsonPath...)
 				subFilterField.filterVals = append(vals, subFilterField.filterVals...)
 			}
-			defaultFilterFields = append(defaultFilterFields, subFilter...)
+			filters = append(filters, subFilter...)
 		}
 	}
 
-	return defaultFilterFields, nil
+	return filters, nil
 }
 
 func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
