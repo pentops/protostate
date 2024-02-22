@@ -92,11 +92,30 @@ func (ee *Eventer[S, ST, E, IE]) ValidateEvent(event E) error {
 	return ee.validator.Validate(event)
 }
 
+func trySequence[S any, E any](state S, event E, isInitial bool) {
+	stateSequencer, ok := any(state).(IStateSequencer)
+	if !ok {
+		return
+	}
+	eventSequencer, ok := any(event).(IEventSequencer)
+	if !ok {
+		return
+	}
+
+	seq := uint64(0)
+	if !isInitial {
+		seq = stateSequencer.LastPSMSequence() + 1
+	}
+	eventSequencer.SetPSMSequence(seq)
+	stateSequencer.SetLastPSMSequence(seq)
+}
+
 func (ee Eventer[S, ST, E, IE]) Run(
 	ctx context.Context,
 	tx Transaction[S, E],
 	state S,
 	outerEvent E,
+	isInitial bool,
 ) error {
 	if err := ee.ValidateEvent(outerEvent); err != nil {
 		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
@@ -107,6 +126,8 @@ func (ee Eventer[S, ST, E, IE]) Run(
 	for len(eventQueue) > 0 {
 		innerEvent := eventQueue[0]
 		eventQueue = eventQueue[1:]
+
+		trySequence(state, innerEvent, isInitial)
 
 		chained, err := ee.runEvent(ctx, tx, state, innerEvent)
 		if err != nil {

@@ -11,13 +11,6 @@ import (
 )
 
 // StateObjectOptions: BarPSM
-type BarPSMEventer = psm.Eventer[
-	*BarState,
-	BarStatus,
-	*BarEvent,
-	BarPSMEvent,
-]
-
 type BarPSM = psm.StateMachine[
 	*BarState,
 	BarStatus,
@@ -26,6 +19,13 @@ type BarPSM = psm.StateMachine[
 ]
 
 type BarPSMDB = psm.DBStateMachine[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+]
+
+type BarPSMEventer = psm.Eventer[
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -131,6 +131,7 @@ type BarPSMEvent interface {
 	proto.Message
 	PSMEventKey() BarPSMEventKey
 }
+
 type BarPSMConverter struct{}
 
 func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
@@ -157,11 +158,11 @@ func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
 	return nil
 }
 
-func (ee *BarEventType) UnwrapPSMEvent() BarPSMEvent {
-	if ee == nil {
+func (etw *BarEventType) UnwrapPSMEvent() BarPSMEvent {
+	if etw == nil {
 		return nil
 	}
-	switch v := ee.Type.(type) {
+	switch v := etw.Type.(type) {
 	case *BarEventType_Created_:
 		return v.Created
 	case *BarEventType_Updated_:
@@ -172,34 +173,41 @@ func (ee *BarEventType) UnwrapPSMEvent() BarPSMEvent {
 		return nil
 	}
 }
-func (ee *BarEventType) PSMEventKey() BarPSMEventKey {
-	tt := ee.UnwrapPSMEvent()
+func (etw *BarEventType) PSMEventKey() BarPSMEventKey {
+	tt := etw.UnwrapPSMEvent()
 	if tt == nil {
 		return BarPSMEventNil
 	}
 	return tt.PSMEventKey()
 }
-func (ee *BarEvent) PSMEventKey() BarPSMEventKey {
-	return ee.Event.PSMEventKey()
-}
-func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
-	return ee.Event.UnwrapPSMEvent()
-}
-func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) {
-	if ee.Event == nil {
-		ee.Event = &BarEventType{}
-	}
+func (etw *BarEventType) SetPSMEvent(inner BarPSMEvent) {
 	switch v := inner.(type) {
 	case *BarEventType_Created:
-		ee.Event.Type = &BarEventType_Created_{Created: v}
+		etw.Type = &BarEventType_Created_{Created: v}
 	case *BarEventType_Updated:
-		ee.Event.Type = &BarEventType_Updated_{Updated: v}
+		etw.Type = &BarEventType_Updated_{Updated: v}
 	case *BarEventType_Deleted:
-		ee.Event.Type = &BarEventType_Deleted_{Deleted: v}
+		etw.Type = &BarEventType_Deleted_{Deleted: v}
 	default:
 		panic("invalid type")
 	}
 }
+
+func (ee *BarEvent) PSMEventKey() BarPSMEventKey {
+	return ee.Event.PSMEventKey()
+}
+
+func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
+	return ee.Event.UnwrapPSMEvent()
+}
+
+func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) {
+	if ee.Event == nil {
+		ee.Event = &BarEventType{}
+	}
+	ee.Event.SetPSMEvent(inner)
+}
+
 func (*BarEventType_Created) PSMEventKey() BarPSMEventKey {
 	return BarPSMEventCreated
 }
@@ -210,7 +218,7 @@ func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 	return BarPSMEventDeleted
 }
 
-// State Query Service for %sbar
+// State Query Service for %sBar
 // QuerySet is the query set for the Bar service.
 
 type BarPSMQuerySet = psm.StateQuerySet[

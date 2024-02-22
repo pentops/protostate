@@ -1,109 +1,61 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// attempts to walk through the query methods to find the descriptors for the
-// state and event messages.
-func deriveStateDescriptorFromQueryDescriptor(src queryServiceDescriptorSet) (*stateEntityDescriptorSet, error) {
+type metadataDescriptor struct {
+	id        protoreflect.FieldDescriptor
+	timestamp protoreflect.FieldDescriptor
+	sequence  protoreflect.FieldDescriptor
+	actor     protoreflect.FieldDescriptor
+}
 
-	out := &stateEntityDescriptorSet{
-		name: src.name,
-	}
-
-	if src.getMethod == nil {
-		return nil, fmt.Errorf("no get nethod, cannot derive state fields")
-	}
-	var repeatedEventMessage protoreflect.MessageDescriptor
-	getOutFields := src.getMethod.Output().Fields()
-	for idx := 0; idx < getOutFields.Len(); idx++ {
-		field := getOutFields.Get(idx)
-		if field.Kind() != protoreflect.MessageKind {
-			continue
-
-		}
-		if field.Cardinality() == protoreflect.Repeated {
-			if repeatedEventMessage != nil {
-				return nil, fmt.Errorf("state get response %s should have exactly one repeated field", src.getMethod.FullName())
-			}
-			repeatedEventMessage = field.Message()
-			continue
-		}
-
-		if out.stateMessage != nil {
-			return nil, fmt.Errorf("state get response %s should have exactly one field", src.getMethod.FullName())
-		}
-		out.stateMessage = field.Message()
-	}
-	if out.stateMessage == nil {
-		return nil, fmt.Errorf("state get response should have exactly one field, which is a message")
-	}
-	out.stateOptions = proto.GetExtension(out.stateMessage.Options(), psm_pb.E_State).(*psm_pb.StateObjectOptions)
-	if out.stateOptions == nil {
-		// No state, can't add fallbacks.
-		return nil, nil
-	}
-
-	if repeatedEventMessage != nil {
-		eventOptions := proto.GetExtension(repeatedEventMessage.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
-			return nil, nil
-		}
-
-		out.eventMessage = repeatedEventMessage
-		out.eventOptions = eventOptions
-
-		return out, nil
-	}
-
-	if src.listEventsMethod != nil {
-		// derive from the list response if available
-		listOutFields := src.listEventsMethod.Output().Fields()
-		for idx := 0; idx < listOutFields.Len(); idx++ {
-			field := listOutFields.Get(idx)
+func metadataFields(md protoreflect.MessageDescriptor) metadataDescriptor {
+	out := metadataDescriptor{}
+	for idx := 0; idx < md.Fields().Len(); idx++ {
+		field := md.Fields().Get(idx)
+		switch field.Name() {
+		case "actor":
 			if field.Kind() != protoreflect.MessageKind {
-				continue
+				break // This will not match
 			}
-			if field.Cardinality() != protoreflect.Repeated {
-				continue
+			out.actor = field
+		case "timestamp":
+			if field.Kind() != protoreflect.MessageKind || field.Message().FullName() != protoreflect.FullName("google.protobuf.Timestamp") {
+				break // This will not match
 			}
-			repeatedEventMessage = field.Message()
-			break
-		}
-		if repeatedEventMessage == nil {
-			return nil, nil
-		}
-		eventOptions := proto.GetExtension(repeatedEventMessage.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
-			return nil, nil
-		}
+			out.timestamp = field
 
-		out.eventMessage = repeatedEventMessage
-		out.eventOptions = eventOptions
+		case "event_id", "message_id", "id":
+			if field.Kind() != protoreflect.StringKind {
+				break // This will not match
+			}
+			out.id = field
 
-		return out, nil
+		case "sequence":
+			if field.Kind() != protoreflect.Uint64Kind {
+				break // This will not match
+			}
+			out.sequence = field
+		}
 	}
+	return out
+}
 
-	// Last ditch effort, try to find the event message in the file
-	stateFileMessages := out.stateMessage.ParentFile().Messages()
-	for i := 0; i < stateFileMessages.Len(); i++ {
-		msg := stateFileMessages.Get(i)
-		eventOptions := proto.GetExtension(msg.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
-			continue
-		}
-		if eventOptions.Name != out.stateOptions.Name {
-			continue
-		}
-		out.eventMessage = msg
-		out.eventOptions = eventOptions
-		return out, nil
+type metadataGenerators struct {
+	id        *protogen.Field
+	timestamp *protogen.Field
+	sequence  *protogen.Field
+	actor     *protogen.Field
+}
+
+func (md metadataDescriptor) toGenerators(mdMsg *protogen.Message) metadataGenerators {
+	return metadataGenerators{
+		actor:     mapGenField(mdMsg, md.actor),
+		timestamp: mapGenField(mdMsg, md.timestamp),
+		id:        mapGenField(mdMsg, md.id),
+		sequence:  mapGenField(mdMsg, md.sequence),
 	}
-
-	return nil, nil
 }

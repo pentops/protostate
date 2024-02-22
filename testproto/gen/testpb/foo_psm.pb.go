@@ -11,13 +11,6 @@ import (
 )
 
 // StateObjectOptions: FooPSM
-type FooPSMEventer = psm.Eventer[
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-]
-
 type FooPSM = psm.StateMachine[
 	*FooState,
 	FooStatus,
@@ -26,6 +19,13 @@ type FooPSM = psm.StateMachine[
 ]
 
 type FooPSMDB = psm.DBStateMachine[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
+type FooPSMEventer = psm.Eventer[
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -135,6 +135,7 @@ type FooPSMEvent interface {
 	proto.Message
 	PSMEventKey() FooPSMEventKey
 }
+
 type FooPSMConverter struct{}
 
 func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
@@ -175,11 +176,11 @@ func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
 	return nil
 }
 
-func (ee *FooEventType) UnwrapPSMEvent() FooPSMEvent {
-	if ee == nil {
+func (etw *FooEventType) UnwrapPSMEvent() FooPSMEvent {
+	if etw == nil {
 		return nil
 	}
-	switch v := ee.Type.(type) {
+	switch v := etw.Type.(type) {
 	case *FooEventType_Created_:
 		return v.Created
 	case *FooEventType_Updated_:
@@ -190,34 +191,41 @@ func (ee *FooEventType) UnwrapPSMEvent() FooPSMEvent {
 		return nil
 	}
 }
-func (ee *FooEventType) PSMEventKey() FooPSMEventKey {
-	tt := ee.UnwrapPSMEvent()
+func (etw *FooEventType) PSMEventKey() FooPSMEventKey {
+	tt := etw.UnwrapPSMEvent()
 	if tt == nil {
 		return FooPSMEventNil
 	}
 	return tt.PSMEventKey()
 }
-func (ee *FooEvent) PSMEventKey() FooPSMEventKey {
-	return ee.Event.PSMEventKey()
-}
-func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
-	return ee.Event.UnwrapPSMEvent()
-}
-func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) {
-	if ee.Event == nil {
-		ee.Event = &FooEventType{}
-	}
+func (etw *FooEventType) SetPSMEvent(inner FooPSMEvent) {
 	switch v := inner.(type) {
 	case *FooEventType_Created:
-		ee.Event.Type = &FooEventType_Created_{Created: v}
+		etw.Type = &FooEventType_Created_{Created: v}
 	case *FooEventType_Updated:
-		ee.Event.Type = &FooEventType_Updated_{Updated: v}
+		etw.Type = &FooEventType_Updated_{Updated: v}
 	case *FooEventType_Deleted:
-		ee.Event.Type = &FooEventType_Deleted_{Deleted: v}
+		etw.Type = &FooEventType_Deleted_{Deleted: v}
 	default:
 		panic("invalid type")
 	}
 }
+
+func (ee *FooEvent) PSMEventKey() FooPSMEventKey {
+	return ee.Event.PSMEventKey()
+}
+
+func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
+	return ee.Event.UnwrapPSMEvent()
+}
+
+func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) {
+	if ee.Event == nil {
+		ee.Event = &FooEventType{}
+	}
+	ee.Event.SetPSMEvent(inner)
+}
+
 func (*FooEventType_Created) PSMEventKey() FooPSMEventKey {
 	return FooPSMEventCreated
 }
@@ -227,8 +235,23 @@ func (*FooEventType_Updated) PSMEventKey() FooPSMEventKey {
 func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
 	return FooPSMEventDeleted
 }
+func (ee *FooEvent) PSMSequence() uint64 {
+	return ee.Metadata.Sequence
+}
 
-// State Query Service for %sfoo
+func (ee *FooEvent) SetPSMSequence(seq uint64) {
+	ee.Metadata.Sequence = seq
+}
+
+func (st *FooState) LastPSMSequence() uint64 {
+	return st.LastEventSequence
+}
+
+func (st *FooState) SetLastPSMSequence(seq uint64) {
+	st.LastEventSequence = seq
+}
+
+// State Query Service for %sFoo
 // QuerySet is the query set for the Foo service.
 
 type FooPSMQuerySet = psm.StateQuerySet[

@@ -195,10 +195,6 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if res.State.LastEventId != event2.Metadata.EventId {
-			t.Fatalf("event ID not passed, want %s, got %s", event2.Metadata.EventId, res.State.LastEventId)
-		}
-
 		if !proto.Equal(res.State, statesOut[fooID]) {
 			t.Fatalf("expected %v, got %v", statesOut[fooID], res.State)
 		}
@@ -223,6 +219,14 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(protojson.Format(res))
 		if len(res.Events) != 2 {
 			t.Fatalf("expected 2 events for foo 1, got %d", len(res.Events))
+		}
+
+		for idx, event := range res.Events {
+			// events are returned in reverse order
+			expect := uint64(len(res.Events) - idx - 1)
+			if event.Metadata.Sequence != expect {
+				t.Fatalf("expected sequence %d (idx %d), got %d", expect, idx, event.Metadata.Sequence)
+			}
 		}
 	})
 

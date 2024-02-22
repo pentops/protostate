@@ -47,8 +47,12 @@ type IStatusEnum interface {
 type IState[Status IStatusEnum] interface {
 	proto.Message
 	GetStatus() Status
-	//GetLastPSMEventID() uint64
-	//SetLastPSMEventID(uint64)
+}
+
+// IStateSequence is *optionally* implemented by the IState Entity
+type IStateSequencer interface {
+	LastPSMSequence() uint64
+	SetLastPSMSequence(uint64)
 }
 
 // The Event Wrapper, the top level which has metadata, foreign keys to the state, and the event itself.
@@ -57,6 +61,12 @@ type IEvent[Inner any] interface {
 	proto.Message
 	UnwrapPSMEvent() Inner
 	SetPSMEvent(Inner)
+}
+
+// IEventSequencer is *optionally* implemented by the IEvent Entity
+type IEventSequencer interface {
+	PSMSequence() uint64
+	SetPSMSequence(uint64)
 }
 
 // IInnerEvent is the typed event *interface* which is the set of all possible events for the state machine
