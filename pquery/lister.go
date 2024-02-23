@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -13,6 +15,7 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
+	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -26,6 +29,8 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var dateRegex = regexp.MustCompile(`^\d{4}(-\d{2}(-\d{2})?)?$`)
 
 type ListRequest interface {
 	proto.Message
@@ -53,6 +58,49 @@ type sortSpec struct {
 	desc bool
 }
 
+type nestedField struct {
+	jsonPath  []string
+	fieldPath []protoreflect.FieldDescriptor
+	field     protoreflect.FieldDescriptor
+}
+
+func (nf nestedField) jsonbPath() string {
+	out := strings.Builder{}
+	last := len(nf.jsonPath) - 1
+	for idx, part := range nf.jsonPath {
+		// last part gets a double >
+		if idx == last {
+			out.WriteString("->>")
+		} else {
+			out.WriteString("->")
+		}
+		out.WriteString(fmt.Sprintf("'%s'", part))
+	}
+
+	return out.String()
+}
+
+type filterSpec struct {
+	jsonPath   []string
+	filterVals []interface{}
+}
+
+func (fs filterSpec) jsonbPath() string {
+	out := strings.Builder{}
+	last := len(fs.jsonPath) - 1
+	for idx, part := range fs.jsonPath {
+		// last part gets a double >
+		if idx == last {
+			out.WriteString("->>")
+		} else {
+			out.WriteString("->")
+		}
+		out.WriteString(fmt.Sprintf("'%s'", part))
+	}
+
+	return out.String()
+}
+
 type ListerOption func(*listerOptions)
 
 type listerOptions struct {
@@ -78,7 +126,7 @@ type ListReflectionSet struct {
 	defaultSortFields []sortSpec
 	tieBreakerFields  []sortSpec
 
-	defaultFilterFields []protoreflect.FieldDescriptor
+	defaultFilterFields []filterSpec
 	RequestFilterFields []protoreflect.FieldDescriptor
 }
 
@@ -153,7 +201,12 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, err
 	}
 
-	ll.defaultFilterFields = buildDefaultFilters(ll.arrayField.Message().Fields())
+	f, err := buildDefaultFilters(ll.arrayField.Message().Fields())
+	if err != nil {
+		return nil, err
+	}
+
+	ll.defaultFilterFields = f
 
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
@@ -461,10 +514,254 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 	return defaultSortFields
 }
 
-func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) []protoreflect.FieldDescriptor {
-	var defaultFilterFields []protoreflect.FieldDescriptor
+func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterSpec, error) {
+	var filters []filterSpec
 
-	return defaultFilterFields
+	for i := 0; i < messageFields.Len(); i++ {
+		field := messageFields.Get(i)
+		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		vals := []interface{}{}
+
+		if fieldOpts != nil {
+			switch fieldOps := fieldOpts.Type.(type) {
+			case *psml_pb.FieldConstraint_Float:
+				if fieldOps.Float.Filtering != nil && fieldOps.Float.Filtering.Filterable {
+					for _, val := range fieldOps.Float.Filtering.DefaultFilters {
+						v, err := strconv.ParseFloat(val, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Double:
+				if fieldOps.Double.Filtering != nil && fieldOps.Double.Filtering.Filterable {
+					for _, val := range fieldOps.Double.Filtering.DefaultFilters {
+						v, err := strconv.ParseFloat(val, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Fixed32:
+				if fieldOps.Fixed32.Filtering != nil && fieldOps.Fixed32.Filtering.Filterable {
+					for _, val := range fieldOps.Fixed32.Filtering.DefaultFilters {
+						v, err := strconv.ParseUint(val, 10, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Fixed64:
+				if fieldOps.Fixed64.Filtering != nil && fieldOps.Fixed64.Filtering.Filterable {
+					for _, val := range fieldOps.Fixed64.Filtering.DefaultFilters {
+						v, err := strconv.ParseUint(val, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Int32:
+				if fieldOps.Int32.Filtering != nil && fieldOps.Int32.Filtering.Filterable {
+					for _, val := range fieldOps.Int32.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Int64:
+				if fieldOps.Int64.Filtering != nil && fieldOps.Int64.Filtering.Filterable {
+					for _, val := range fieldOps.Int64.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Sfixed32:
+				if fieldOps.Sfixed32.Filtering != nil && fieldOps.Sfixed32.Filtering.Filterable {
+					for _, val := range fieldOps.Sfixed32.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Sfixed64:
+				if fieldOps.Sfixed64.Filtering != nil && fieldOps.Sfixed64.Filtering.Filterable {
+					for _, val := range fieldOps.Sfixed64.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Sint32:
+				if fieldOps.Sint32.Filtering != nil && fieldOps.Sint32.Filtering.Filterable {
+					for _, val := range fieldOps.Sint32.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Sint64:
+				if fieldOps.Sint64.Filtering != nil && fieldOps.Sint64.Filtering.Filterable {
+					for _, val := range fieldOps.Sint64.Filtering.DefaultFilters {
+						v, err := strconv.ParseInt(val, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Uint32:
+				if fieldOps.Uint32.Filtering != nil && fieldOps.Uint32.Filtering.Filterable {
+					for _, val := range fieldOps.Uint32.Filtering.DefaultFilters {
+						v, err := strconv.ParseUint(val, 10, 32)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Uint64:
+				if fieldOps.Uint64.Filtering != nil && fieldOps.Uint64.Filtering.Filterable {
+					for _, val := range fieldOps.Uint64.Filtering.DefaultFilters {
+						v, err := strconv.ParseUint(val, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Bool:
+				if fieldOps.Bool.Filtering != nil && fieldOps.Bool.Filtering.Filterable {
+					for _, val := range fieldOps.Bool.Filtering.DefaultFilters {
+						v, err := strconv.ParseBool(val)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, v)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_String_:
+				switch fieldOps := fieldOps.String_.WellKnown.(type) {
+				case *psml_pb.StringRules_Date:
+					if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
+						for _, val := range fieldOps.Date.Filtering.DefaultFilters {
+							if !dateRegex.MatchString(val) {
+								return nil, fmt.Errorf("invalid date format for default filter (%s): %s", field.JSONName(), val)
+							}
+
+							// TODO: change to using ranges for date to handle whole
+							// year, whole month, whole day
+							vals = append(vals, val)
+						}
+					}
+
+				case *psml_pb.StringRules_ForeignKey:
+					switch fieldOps := fieldOps.ForeignKey.Type.(type) {
+					case *psml_pb.ForeignKeyRules_UniqueString:
+						if fieldOps.UniqueString.Filtering != nil && fieldOps.UniqueString.Filtering.Filterable {
+							for _, val := range fieldOps.UniqueString.Filtering.DefaultFilters {
+								vals = append(vals, val)
+							}
+						}
+
+					case *psml_pb.ForeignKeyRules_Uuid:
+						if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
+							for _, val := range fieldOps.Uuid.Filtering.DefaultFilters {
+								_, err := uuid.Parse(val)
+								if err != nil {
+									return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+								}
+
+								vals = append(vals, val)
+							}
+						}
+
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Enum:
+				if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
+					for _, val := range fieldOps.Enum.Filtering.DefaultFilters {
+						vals = append(vals, val)
+					}
+				}
+
+			case *psml_pb.FieldConstraint_Timestamp:
+				if fieldOps.Timestamp.Filtering != nil && fieldOps.Timestamp.Filtering.Filterable {
+					for _, val := range fieldOps.Timestamp.Filtering.DefaultFilters {
+						t, err := time.Parse(time.RFC3339, val)
+						if err != nil {
+							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+						}
+
+						vals = append(vals, timestamppb.New(t))
+					}
+				}
+			}
+
+			if len(vals) > 0 {
+				filters = append(filters, filterSpec{
+					jsonPath:   []string{field.JSONName()},
+					filterVals: vals,
+				})
+			}
+		} else if field.Kind() == protoreflect.MessageKind {
+			log.WithField(context.Background(), "message", field.Message().FullName()).Debug("buildDefaultFilters")
+
+			subFilter, err := buildDefaultFilters(field.Message().Fields())
+			if err != nil {
+				return nil, err
+			}
+
+			for _, subFilterField := range subFilter {
+				subFilterField.jsonPath = append([]string{field.JSONName()}, subFilterField.jsonPath...)
+				subFilterField.filterVals = append(vals, subFilterField.filterVals...)
+			}
+			filters = append(filters, subFilter...)
+		}
+	}
+
+	return filters, nil
 }
 
 func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
@@ -581,6 +878,12 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		for k := range filter {
 			filters[k] = filter[k]
+		}
+	}
+
+	if ll.defaultFilterFields != nil {
+		for _, spec := range ll.defaultFilterFields {
+			filters[fmt.Sprintf("%s%s", ll.dataColumn, spec.jsonbPath())] = spec.filterVals
 		}
 	}
 
@@ -794,12 +1097,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	return selectQuery, nil
 }
 
-type nestedField struct {
-	jsonPath  []string
-	fieldPath []protoreflect.FieldDescriptor
-	field     protoreflect.FieldDescriptor
-}
-
 func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescriptor) (protoreflect.Value, error) {
 	if len(path) == 0 {
 		return protoreflect.Value{}, fmt.Errorf("empty path")
@@ -820,22 +1117,6 @@ func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescripto
 	}
 
 	return walkProtoValue(val.Message(), path[1:])
-}
-
-func (nf nestedField) jsonbPath() string {
-	out := strings.Builder{}
-	last := len(nf.jsonPath) - 1
-	for idx, part := range nf.jsonPath {
-		// last part gets a double >
-		if idx == last {
-			out.WriteString("->>")
-		} else {
-			out.WriteString("->")
-		}
-		out.WriteString(fmt.Sprintf("'%s'", part))
-	}
-
-	return out.String()
 }
 
 func camelToSnake(jsonName string) string {
