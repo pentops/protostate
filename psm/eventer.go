@@ -120,7 +120,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
 	}
 
-	eventExists, err := tx.CheckEventIdempotency(ctx, outerEvent)
+	eventExists, err := tx.CheckEventExists(ctx, outerEvent)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 		}
 
 		for _, event := range chained {
-			eventExists, err := tx.CheckEventIdempotency(ctx, event)
+			eventExists, err := tx.CheckEventExists(ctx, event)
 			if err != nil {
 				return err
 			}

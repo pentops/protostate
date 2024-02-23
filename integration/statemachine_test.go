@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	sq "github.com/elgris/sqrl"
@@ -278,6 +279,21 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(protojson.Format(res))
 		if len(res.Events) != 2 {
 			t.Fatalf("expected 2 events for foo 1, got %d", len(res.Events))
+		}
+
+	})
+
+	t.Run("Idempotency - diffs", func(t *testing.T) {
+		// idempotency test
+		// event 1 should be idempotent
+		event1.Event.Type.(*testpb.FooEventType_Created_).Created.Name = "foo2"
+		_, err = sm.Transition(ctx, event1)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		if !errors.Is(err, psm.ErrDuplicateEventID) {
+			t.Fatalf("expected duplicate event ID, got %v", err)
 		}
 
 	})
