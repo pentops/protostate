@@ -8,7 +8,6 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
-	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -42,6 +41,7 @@ type TableSpec[T proto.Message] struct {
 	// DataColumn is the JSONB column which stores the main data chunk
 	DataColumn   string
 	PKFieldPaths []string
+	PK           func(T) (map[string]interface{}, error)
 }
 
 func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
@@ -246,66 +246,6 @@ func (sm *StateMachine[S, ST, E, IE]) getCurrentState(ctx context.Context, tx sq
 	return state, nil
 }
 
-func (sm *StateMachine[S, ST, E, IE]) store(
-	ctx context.Context,
-	tx sqrlx.Transaction,
-	state S,
-	event E,
-) error {
-	var err error
-
-	stateSpec := sm.spec
-
-	stateSetMap, err := stateSpec.State.storeDBMap(state)
-	if err != nil {
-		return fmt.Errorf("state fields: %w", err)
-	}
-
-	primaryKey, err := stateSpec.PrimaryKey(event)
-	if err != nil {
-		return fmt.Errorf("primary key: %w", err)
-	}
-
-	stateKeyMap, err := dbconvert.FieldsToDBValues(primaryKey)
-	if err != nil {
-		return fmt.Errorf("failed to map state primary key to DB values: %w", err)
-	}
-
-	_, err = tx.Insert(ctx, sqrlx.
-		Upsert(sm.spec.State.TableName).
-		KeyMap(stateKeyMap).
-		SetMap(stateSetMap))
-
-	if err != nil {
-		log.WithFields(ctx, map[string]interface{}{
-			"stateKeyMap": stateKeyMap,
-			"stateSetMap": stateSetMap,
-			"error":       err.Error(),
-		}).Error("failed to upsert state")
-		return fmt.Errorf("upsert state: %w", err)
-	}
-
-	eventSetMap, err := stateSpec.Event.storeDBMap(event)
-	if err != nil {
-		return fmt.Errorf("event fields: %w", err)
-	}
-
-	_, err = tx.Insert(ctx, sq.
-		Insert(sm.spec.Event.TableName).
-		SetMap(eventSetMap))
-	if err != nil {
-		return fmt.Errorf("insert event: %w", err)
-	}
-
-	for _, hook := range sm.hooks {
-		if err := hook(ctx, tx, state, event); err != nil {
-			return fmt.Errorf("hook: %w", err)
-		}
-	}
-	return nil
-
-}
-
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
 
 	state, err := sm.getCurrentState(ctx, tx, event)
@@ -313,8 +253,16 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		return state, err
 	}
 
-	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store), state, event); err != nil {
+	sqtx := NewSqrlxTransaction(tx, sm.spec)
+
+	if err := sm.Eventer.Run(ctx, sqtx, state, event); err != nil {
 		return state, fmt.Errorf("run event: %w", err)
+	}
+
+	for _, hook := range sm.hooks {
+		if err := hook(ctx, tx, state, event); err != nil {
+			return state, fmt.Errorf("hook: %w", err)
+		}
 	}
 
 	return state, nil
