@@ -122,11 +122,15 @@ func SkipTestDynamicFiltering(t *testing.T) {
 			Query: &psml_pb.QueryRequest{
 				Filters: []*psml_pb.Filter{
 					{
-						Field: "characteristics.weight",
-						Type: &psml_pb.Filter_Range{
-							Range: &psml_pb.Range{
-								Min: "12",
-								Max: "15",
+						Type: &psml_pb.Filter_Field{
+							Field: &psml_pb.Field{
+								Name: "characteristics.weight",
+								Type: &psml_pb.Field_Range{
+									Range: &psml_pb.Range{
+										Min: "12",
+										Max: "15",
+									},
+								},
 							},
 						},
 					},
