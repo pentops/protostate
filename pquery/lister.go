@@ -81,7 +81,7 @@ func (nf nestedField) jsonbPath() string {
 }
 
 type filterSpec struct {
-	jsonPath   []string
+	nestedField
 	filterVals []interface{}
 }
 
@@ -741,7 +741,11 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 
 			if len(vals) > 0 {
 				filters = append(filters, filterSpec{
-					jsonPath:   []string{field.JSONName()},
+					nestedField: nestedField{
+						jsonPath:  []string{field.JSONName()},
+						fieldPath: []protoreflect.FieldDescriptor{field},
+						field:     field,
+					},
 					filterVals: vals,
 				})
 			}
