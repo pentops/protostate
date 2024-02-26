@@ -16,6 +16,7 @@ import (
 	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -919,13 +920,13 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
 	}
 
-	if len(filters) > 0 {
-		filterMapped, err := dbconvert.FieldsToEqMap(tableAlias, filters)
-		if err != nil {
-			return nil, err
+	for field, val := range filters {
+		switch v := val.(type) {
+		case []interface{}:
+			selectQuery = selectQuery.Where(fmt.Sprintf("%s = ANY(?)", field), pq.Array(v))
+		default:
+			selectQuery.Where(fmt.Sprintf("%s = ?", field), val)
 		}
-
-		selectQuery.Where(filterMapped)
 	}
 
 	if ll.auth != nil {
