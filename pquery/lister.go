@@ -1260,6 +1260,8 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 }
 
 func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
+	out := []sq.Sqlizer{}
+
 	for i := range filters {
 		switch filters[i].GetType().(type) {
 		case *psml_pb.Filter_Field:
@@ -1277,7 +1279,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 					return nil, fmt.Errorf("dynamic filter: value validation: %w", err)
 				}
 
-				return sq.And{sq.Expr(fmt.Sprintf("%s = ?", fullField), val)}, nil
+				out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s = ?", fullField), val)})
 			case *psml_pb.Field_Range:
 				min, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMin())
 				if err != nil {
@@ -1291,23 +1293,35 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 
 				switch {
 				case min != "" && max != "":
-					return sq.And{sq.Expr(fmt.Sprintf("%s BETWEEN ? AND ?", fullField), min, max)}, nil
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s BETWEEN ? AND ?", fullField), min, max)})
 				case min != "":
-					return sq.And{sq.Expr(fmt.Sprintf("%s >= ?", fullField), min)}, nil
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s >= ?", fullField), min)})
 				case max != "":
-					return sq.And{sq.Expr(fmt.Sprintf("%s <= ?", fullField), max)}, nil
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s <= ?", fullField), max)})
 				}
 			}
 		case *psml_pb.Filter_And:
 			f, err := ll.buildDynamicFilter(filters[i].GetAnd().GetFilters())
-			return append(sq.And{}, f...), err
+			if err != nil {
+				return nil, fmt.Errorf("dynamic filter: and: %w", err)
+			}
+			and := sq.And{}
+			and = append(and, f...)
+
+			out = append(out, and)
 		case *psml_pb.Filter_Or:
 			f, err := ll.buildDynamicFilter(filters[i].GetOr().GetFilters())
-			return append(sq.Or{}, f...), err
+			if err != nil {
+				return nil, fmt.Errorf("dynamic filter: or: %w", err)
+			}
+			or := sq.Or{}
+			or = append(or, f...)
+
+			out = append(out, or)
 		}
 	}
 
-	return nil, nil
+	return out, nil
 }
 
 func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string) (interface{}, error) {
