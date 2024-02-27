@@ -871,8 +871,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields
-	filters := map[string]interface{}{}
-
 	sortFields = append(sortFields, ll.tieBreakerFields...)
 
 	if ll.requestFilter != nil {
@@ -881,12 +879,17 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			return nil, err
 		}
 
+		and := sq.And{}
 		for k := range filter {
-			filters[k] = filter[k]
+			and = append(and, sq.Expr(fmt.Sprintf("%s = ?", k), filter[k]))
+		}
+
+		if len(and) > 0 {
+			selectQuery.Where(and)
 		}
 	}
 
-	dynFilters := map[string]interface{}{}
+	dynFilters := []sq.Sqlizer{}
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
 		dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
@@ -903,13 +906,17 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	}
 
 	if ll.defaultFilterFields != nil && len(dynFilters) == 0 {
+		and := sq.And{}
 		for _, spec := range ll.defaultFilterFields {
-			filters[fmt.Sprintf("%s%s", ll.dataColumn, spec.jsonbPath())] = spec.filterVals
+			field := ll.dataColumn + spec.jsonbPath()
+			and = append(and, sq.Expr(fmt.Sprintf("%s = ANY(?)", field), pq.Array(spec.filterVals)))
 		}
-	} else {
-		for k := range dynFilters {
-			filters[k] = dynFilters[k]
+
+		if len(and) > 0 {
+			selectQuery.Where(and)
 		}
+	} else if len(dynFilters) > 0 {
+		selectQuery.Where(dynFilters)
 	}
 
 	for _, sortField := range sortFields {
@@ -918,15 +925,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			direction = "DESC"
 		}
 		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
-	}
-
-	for field, val := range filters {
-		switch v := val.(type) {
-		case []interface{}:
-			selectQuery = selectQuery.Where(fmt.Sprintf("%s = ANY(?)", field), pq.Array(v))
-		default:
-			selectQuery.Where(fmt.Sprintf("%s = ?", field), val)
-		}
 	}
 
 	if ll.auth != nil {
