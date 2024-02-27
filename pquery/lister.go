@@ -916,7 +916,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			selectQuery.Where(and)
 		}
 	} else if len(dynFilters) > 0 {
-		selectQuery.Where(dynFilters)
+		for i := range dynFilters {
+			selectQuery.Where(dynFilters[i])
+		}
 	}
 
 	for _, sortField := range sortFields {
@@ -1257,8 +1259,251 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 	return results, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) (map[string]interface{}, error) {
-	results := map[string]interface{}{}
+func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
+	for i := range filters {
+		switch filters[i].GetType().(type) {
+		case *psml_pb.Filter_Field:
+			field, err := findField(ll.arrayField.Message(), filters[i].GetField().GetName())
+			if err != nil {
+				return nil, fmt.Errorf("dynamic filter: %w", err)
+			}
 
-	return results, nil
+			fullField := ll.dataColumn + field.jsonbPath()
+
+			switch filters[i].GetField().GetType().(type) {
+			case *psml_pb.Field_Value:
+				val, err := validateFilterableField(field.field, filters[i].GetField().GetValue())
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: value validation: %w", err)
+				}
+
+				return sq.And{sq.Expr(fmt.Sprintf("%s = ?", fullField), val)}, nil
+			case *psml_pb.Field_Range:
+				min, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMin())
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: range min validation: %w", err)
+				}
+
+				max, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMax())
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: range max validation: %w", err)
+				}
+
+				switch {
+				case min != "" && max != "":
+					return sq.And{sq.Expr(fmt.Sprintf("%s BETWEEN ? AND ?", fullField), min, max)}, nil
+				case min != "":
+					return sq.And{sq.Expr(fmt.Sprintf("%s >= ?", fullField), min)}, nil
+				case max != "":
+					return sq.And{sq.Expr(fmt.Sprintf("%s <= ?", fullField), max)}, nil
+				}
+			}
+		case *psml_pb.Filter_And:
+			f, err := ll.buildDynamicFilter(filters[i].GetAnd().GetFilters())
+			return append(sq.And{}, f...), err
+		case *psml_pb.Filter_Or:
+			f, err := ll.buildDynamicFilter(filters[i].GetOr().GetFilters())
+			return append(sq.Or{}, f...), err
+		}
+	}
+
+	return nil, nil
+}
+
+func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string) (interface{}, error) {
+	filterable := false
+	val := interface{}(nil)
+
+	switch fieldOps := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint).Type.(type) {
+	case *psml_pb.FieldConstraint_Double:
+		if fieldOps.Double.Filtering != nil && fieldOps.Double.Filtering.Filterable {
+			v, err := strconv.ParseFloat(reqValue, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing double: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Fixed32:
+		if fieldOps.Fixed32.Filtering != nil && fieldOps.Fixed32.Filtering.Filterable {
+			v, err := strconv.ParseUint(reqValue, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing fixed32: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Fixed64:
+		if fieldOps.Fixed64.Filtering != nil && fieldOps.Fixed64.Filtering.Filterable {
+			v, err := strconv.ParseUint(reqValue, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing fixed64: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Float:
+		if fieldOps.Float.Filtering != nil && fieldOps.Float.Filtering.Filterable {
+			v, err := strconv.ParseFloat(reqValue, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing float: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Int32:
+		if fieldOps.Int32.Filtering != nil && fieldOps.Int32.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing int32: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Int64:
+		if fieldOps.Int64.Filtering != nil && fieldOps.Int64.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing int64: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Sfixed32:
+		if fieldOps.Sfixed32.Filtering != nil && fieldOps.Sfixed32.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing sfixed32: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Sfixed64:
+		if fieldOps.Sfixed64.Filtering != nil && fieldOps.Sfixed64.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing sfixed64: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Sint32:
+		if fieldOps.Sint32.Filtering != nil && fieldOps.Sint32.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing sint32: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Sint64:
+		if fieldOps.Sint64.Filtering != nil && fieldOps.Sint64.Filtering.Filterable {
+			v, err := strconv.ParseInt(reqValue, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing sint64: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Uint32:
+		if fieldOps.Uint32.Filtering != nil && fieldOps.Uint32.Filtering.Filterable {
+			v, err := strconv.ParseUint(reqValue, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parsing uint32: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Uint64:
+		if fieldOps.Uint64.Filtering != nil && fieldOps.Uint64.Filtering.Filterable {
+			v, err := strconv.ParseUint(reqValue, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parsing uint64: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Bool:
+		if fieldOps.Bool.Filtering != nil && fieldOps.Bool.Filtering.Filterable {
+			v, err := strconv.ParseBool(reqValue)
+			if err != nil {
+				return nil, fmt.Errorf("parsing bool: %w", err)
+			}
+
+			val = v
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_String_:
+		switch fieldOps := fieldOps.String_.WellKnown.(type) {
+		case *psml_pb.StringRules_Date:
+			if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
+				_, err := time.Parse("2006-01-02", reqValue)
+				if err != nil {
+					_, err = time.Parse("2006-01", reqValue)
+					if err != nil {
+						_, err = time.Parse("2006", reqValue)
+						if err != nil {
+							return nil, fmt.Errorf("parsing date: %w", err)
+						}
+					}
+				}
+
+				val = reqValue
+				filterable = true
+			}
+		case *psml_pb.StringRules_ForeignKey:
+			switch fieldOps := fieldOps.ForeignKey.Type.(type) {
+			case *psml_pb.ForeignKeyRules_UniqueString:
+				if fieldOps.UniqueString.Filtering != nil && fieldOps.UniqueString.Filtering.Filterable {
+					val = reqValue
+					filterable = true
+				}
+			case *psml_pb.ForeignKeyRules_Uuid:
+				if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
+					_, err := uuid.Parse(reqValue)
+					if err != nil {
+						return nil, fmt.Errorf("parsing uuid: %w", err)
+					}
+
+					val = reqValue
+					filterable = true
+				}
+			}
+		}
+	case *psml_pb.FieldConstraint_Enum:
+		if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
+			val = reqValue
+			filterable = true
+		}
+	case *psml_pb.FieldConstraint_Timestamp:
+		if fieldOps.Timestamp.Filtering != nil && fieldOps.Timestamp.Filtering.Filterable {
+			t, err := time.Parse(time.RFC3339, reqValue)
+			if err != nil {
+				return nil, fmt.Errorf("parsing timestamp: %w", err)
+			}
+
+			val = t
+			filterable = true
+		}
+	default:
+		return nil, fmt.Errorf("field %s of unsupported filtering type", field.JSONName())
+	}
+
+	if !filterable {
+		return nil, fmt.Errorf("field %s is not filterable", field.JSONName())
+	}
+
+	return val, nil
 }
