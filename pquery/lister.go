@@ -751,8 +751,6 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
-			log.WithField(context.Background(), "message", field.Message().FullName()).Debug("buildDefaultFilters")
-
 			subFilter, err := buildDefaultFilters(field.Message().Fields())
 			if err != nil {
 				return nil, err
