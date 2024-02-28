@@ -873,6 +873,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	sortFields := ll.defaultSortFields
 	sortFields = append(sortFields, ll.tieBreakerFields...)
 
+	filterFields := []sq.Sqlizer{}
 	if ll.requestFilter != nil {
 		filter, err := ll.requestFilter(req.Interface().(REQ))
 		if err != nil {
@@ -889,7 +890,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 	}
 
-	dynFilters := []sq.Sqlizer{}
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
 		dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
@@ -899,13 +899,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		sortFields = dynSorts
 
-		dynFilters, err = ll.buildDynamicFilter(reqQuery.GetFilters())
+		dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
 		}
+
+		filterFields = append(filterFields, dynFilters...)
 	}
 
-	if ll.defaultFilterFields != nil && len(dynFilters) == 0 {
+	if ll.defaultFilterFields != nil && len(filterFields) == 0 {
 		and := sq.And{}
 		for _, spec := range ll.defaultFilterFields {
 			field := ll.dataColumn + spec.jsonbPath()
@@ -915,9 +917,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if len(and) > 0 {
 			selectQuery.Where(and)
 		}
-	} else if len(dynFilters) > 0 {
-		for i := range dynFilters {
-			selectQuery.Where(dynFilters[i])
+	} else if len(filterFields) > 0 {
+		for i := range filterFields {
+			selectQuery.Where(filterFields[i])
 		}
 	}
 
