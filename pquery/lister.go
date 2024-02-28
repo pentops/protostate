@@ -892,12 +892,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
-		dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "sort validation: %s", err)
-		}
+		if len(reqQuery.GetSorts()) > 0 {
+			dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "sort validation: %s", err)
+			}
 
-		sortFields = dynSorts
+			sortFields = dynSorts
+		}
 
 		dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
 		if err != nil {
