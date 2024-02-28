@@ -1276,6 +1276,10 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 
 			fullField := ll.dataColumn + field.jsonbPath()
 
+			if filters[i].GetField() == nil {
+				return nil, fmt.Errorf("dynamic filter: field is nil")
+			}
+
 			switch filters[i].GetField().GetType().(type) {
 			case *psml_pb.Field_Value:
 				val, err := validateFilterableField(field.field, filters[i].GetField().GetValue())
@@ -1330,7 +1334,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 
 func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string) (interface{}, error) {
 	filterable := false
-	val := interface{}(nil)
+	var val interface{}
 
 	switch fieldOps := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint).Type.(type) {
 	case *psml_pb.FieldConstraint_Double:
