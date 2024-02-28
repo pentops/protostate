@@ -154,8 +154,8 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(12+ii) {
-					t.Fatalf("expected weight %d, got %d", 12+ii, state.Characteristics.Weight)
+				if state.Characteristics.Weight != int64(15-ii) {
+					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
 				}
 			}
 
@@ -231,14 +231,16 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatalf("expected %d states, got %d", 10, len(res.Foos))
 			}
 
-			for ii, state := range res.Foos[:9] {
-				if state.Characteristics.Weight != int64(12+ii) {
-					t.Fatalf("expected weight %d, got %d", 12+ii, state.Characteristics.Weight)
+			for ii, state := range res.Foos[:3] {
+				if state.Characteristics.Weight != int64(44-ii) {
+					t.Fatalf("expected weight %d, got %d", 44-ii, state.Characteristics.Weight)
 				}
 			}
 
-			if res.Foos[9].Characteristics.Weight != int64(42) {
-				t.Fatalf("expected weight %d, got %d", 42, res.Foos[9].Characteristics.Weight)
+			for ii, state := range res.Foos[3:] {
+				if state.Characteristics.Weight != int64(20-ii) {
+					t.Fatalf("expected weight %d, got %d", 20-ii, state.Characteristics.Weight)
+				}
 			}
 
 			pageResp := res.Page
@@ -314,8 +316,8 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(43+ii) {
-					t.Fatalf("expected weight %d, got %d", 43+ii, state.Characteristics.Weight)
+				if state.Characteristics.Weight != int64(13-ii) {
+					t.Fatalf("expected weight %d, got %d", 13-ii, state.Characteristics.Weight)
 				}
 			}
 
