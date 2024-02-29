@@ -899,12 +899,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			sortFields = dynSorts
 		}
 
-		dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
-		}
+		if len(reqQuery.GetFilters()) > 0 {
+			dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
+			}
 
-		filterFields = append(filterFields, dynFilters...)
+			filterFields = append(filterFields, dynFilters...)
+		}
 	}
 
 	if ll.defaultFilterFields != nil && len(filterFields) == 0 {
