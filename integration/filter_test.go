@@ -361,4 +361,118 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Enum values", func(t *testing.T) {
+		ss.StepC("List Page short enum name", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "status",
+									Type: &psml_pb.Field_Value{
+										Value: "active",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err := queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for _, state := range res.Foos {
+				if state.Status != testpb.FooStatus_ACTIVE {
+					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
+				}
+			}
+		})
+
+		ss.StepC("List Page full enum name", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "status",
+									Type: &psml_pb.Field_Value{
+										Value: "FOO_STATUS_ACTIVE",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err := queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(res.Foos) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for _, state := range res.Foos {
+				if state.Status != testpb.FooStatus_ACTIVE {
+					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
+				}
+			}
+		})
+
+		ss.StepC("List Page bad enum name", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "status",
+									Type: &psml_pb.Field_Value{
+										Value: "FOO_STATUS_UNUSED",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err := queryer.List(ctx, db, req, res)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+		})
+	})
 }
