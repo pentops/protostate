@@ -880,7 +880,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		and := sq.And{}
 		for k := range filter {
-			and = append(and, sq.Expr(fmt.Sprintf("%s = ?", k), filter[k]))
+			and = append(and, sq.Expr(fmt.Sprintf("%s.%s = ?", tableAlias, k), filter[k]))
 		}
 
 		if len(and) > 0 {
