@@ -88,15 +88,14 @@ type filterSpec struct {
 
 func (fs filterSpec) jsonbPath() string {
 	out := strings.Builder{}
-	last := len(fs.jsonPath) - 1
-	for idx, part := range fs.jsonPath {
-		// last part gets a double >
-		if idx == last {
-			out.WriteString("->>")
-		} else {
-			out.WriteString("->")
+	out.WriteString("$")
+
+	for idx := range fs.fieldPath {
+		out.WriteString(fmt.Sprintf(".%s", fs.fieldPath[idx].JSONName()))
+
+		if fs.fieldPath[idx].Cardinality() == protoreflect.Repeated {
+			out.WriteString("[*]")
 		}
-		out.WriteString(fmt.Sprintf("'%s'", part))
 	}
 
 	return out.String()
