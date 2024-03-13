@@ -911,8 +911,12 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	if ll.defaultFilterFields != nil && len(filterFields) == 0 {
 		and := sq.And{}
 		for _, spec := range ll.defaultFilterFields {
-			field := ll.dataColumn + spec.jsonbPath()
-			and = append(and, sq.Expr(fmt.Sprintf("%s = ANY(?)", field), pq.Array(spec.filterVals)))
+			or := sq.Or{}
+			for _, val := range spec.filterVals {
+				and = append(and, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, spec.jsonbPath()), pg.JSONB(val)))
+			}
+
+			and = append(and, or)
 		}
 
 		if len(and) > 0 {
