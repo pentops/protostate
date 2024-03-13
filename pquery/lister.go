@@ -899,7 +899,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 
 		if len(reqQuery.GetFilters()) > 0 {
-			dynFilters, err := ll.buildDynamicFilter(reqQuery.GetFilters())
+			dynFilters, err := ll.buildDynamicFilter(tableAlias, reqQuery.GetFilters())
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
 			}
@@ -1262,7 +1262,7 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 	return results, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
+func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range filters {
@@ -1308,7 +1308,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 				}
 			}
 		case *psml_pb.Filter_And:
-			f, err := ll.buildDynamicFilter(filters[i].GetAnd().GetFilters())
+			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetAnd().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: and: %w", err)
 			}
@@ -1317,7 +1317,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(filters []*psml_pb.Filter) ([]sq.
 
 			out = append(out, and)
 		case *psml_pb.Filter_Or:
-			f, err := ll.buildDynamicFilter(filters[i].GetOr().GetFilters())
+			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetOr().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: or: %w", err)
 			}
