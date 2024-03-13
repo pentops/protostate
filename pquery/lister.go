@@ -15,8 +15,8 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
+	"github.com/elgris/sqrl/pg"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -1272,12 +1272,14 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 	for i := range filters {
 		switch filters[i].GetType().(type) {
 		case *psml_pb.Filter_Field:
-			field, err := findField(ll.arrayField.Message(), filters[i].GetField().GetName())
+			f, err := findField(ll.arrayField.Message(), filters[i].GetField().GetName())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: %w", err)
 			}
 
-			fullField := ll.dataColumn + field.jsonbPath()
+			field := &filterSpec{
+				nestedField: *f,
+			}
 
 			if filters[i].GetField() == nil {
 				return nil, fmt.Errorf("dynamic filter: field is nil")
@@ -1290,7 +1292,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 					return nil, fmt.Errorf("dynamic filter: value validation: %w", err)
 				}
 
-				out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s = ?", fullField), val)})
+				out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, field.jsonbPath()), pg.JSONB(val))})
 			case *psml_pb.Field_Range:
 				min, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMin())
 				if err != nil {
@@ -1304,11 +1306,11 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 
 				switch {
 				case min != "" && max != "":
-					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s BETWEEN ? AND ?", fullField), min, max)})
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ >= $min && @ <= $max)', jsonb_build_object('min', ?, 'max', ?)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath()), min, max)})
 				case min != "":
-					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s >= ?", fullField), min)})
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? @ >= ?')", tableAlias, ll.dataColumn, field.jsonbPath()), pg.JSONB(min))})
 				case max != "":
-					out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s <= ?", fullField), max)})
+					out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? @ <= ?')", tableAlias, ll.dataColumn, field.jsonbPath()), pg.JSONB(max))})
 				}
 			}
 		case *psml_pb.Filter_And:
