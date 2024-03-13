@@ -566,4 +566,60 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Single Complex Range Filter", func(t *testing.T) {
+		ss.StepC("List Pages", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "profiles.place",
+									Type: &psml_pb.Field_Range{
+										Range: &psml_pb.Range{
+											Min: "12",
+											Max: "13",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) == 0 {
+				t.Fatalf("expected states, got none")
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Profiles)
+			}
+
+			for _, state := range res.Foos {
+				if len(state.Profiles) == 0 {
+					t.Fatalf("expected profiles, got none")
+				}
+
+				matched := false
+				for _, profile := range state.Profiles {
+					if profile.Place >= 12 && profile.Place <= 13 {
+						matched = true
+						break
+					}
+				}
+
+				if !matched {
+					t.Fatalf("expected at least one profile to match the filter")
+				}
+			}
+		})
+	})
 }
