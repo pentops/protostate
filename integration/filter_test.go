@@ -568,8 +568,12 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Single Complex Range Filter", func(t *testing.T) {
-		ss.StepC("List Pages", func(ctx context.Context, t flowtest.Asserter) {
+		nextToken := ""
+		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
 				Query: &psml_pb.QueryRequest{
 					Filters: []*psml_pb.Filter{
 						{
@@ -578,8 +582,8 @@ func TestDynamicFiltering(t *testing.T) {
 									Name: "profiles.place",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
-											Min: "12",
-											Max: "13",
+											Min: "15",
+											Max: "21",
 										},
 									},
 								},
@@ -595,22 +599,83 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) == 0 {
-				t.Fatalf("expected states, got none")
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Profiles)
+			}
+
+			if len(res.Foos) != 5 {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			}
+
+			for _, state := range res.Foos {
+				matched := false
+				for _, profile := range state.Profiles {
+					if profile.Place >= 17 && profile.Place <= 21 {
+						matched = true
+						break
+					}
+				}
+
+				if !matched {
+					t.Fatalf("expected at least one profile to match the filter")
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() == "" {
+				t.Fatalf("NextToken should not be empty")
+			}
+			if pageResp.NextToken == nil {
+				t.Fatalf("Should not be the final page")
+			}
+
+			nextToken = pageResp.GetNextToken()
+		})
+
+		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+					Token:    &nextToken,
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "profiles.place",
+									Type: &psml_pb.Field_Range{
+										Range: &psml_pb.Range{
+											Min: "15",
+											Max: "21",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
 			}
 
 			for ii, state := range res.Foos {
 				t.Logf("%d: %s", ii, state.Profiles)
 			}
 
-			for _, state := range res.Foos {
-				if len(state.Profiles) == 0 {
-					t.Fatalf("expected profiles, got none")
-				}
+			if len(res.Foos) != 2 {
+				t.Fatalf("expected %d states, got %d", 2, len(res.Foos))
+			}
 
+			for _, state := range res.Foos {
 				matched := false
 				for _, profile := range state.Profiles {
-					if profile.Place >= 12 && profile.Place <= 13 {
+					if profile.Place >= 15 && profile.Place <= 16 {
 						matched = true
 						break
 					}
