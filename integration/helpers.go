@@ -102,7 +102,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 					c.Profiles = []*testpb.FooProfile{
 						{
 							Name:  fmt.Sprintf("profile %d", ii),
-							Place: int64(ii),
+							Place: int64(ii) + 50,
 						},
 						{
 							Name:  fmt.Sprintf("profile %d", ii),
