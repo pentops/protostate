@@ -20,12 +20,10 @@ type SqrlxTransaction[State proto.Message, WrappedEvent proto.Message] struct {
 }
 
 func (st *SqrlxTransaction[State, WrappedEvent]) StoreEvent(ctx context.Context, state State, event WrappedEvent) error {
-
 	return st.callback(ctx, st.Transaction, state, event)
 }
 
 func (st *SqrlxTransaction[State, WrappedEvent]) Outbox(ctx context.Context, msg outbox.OutboxMessage) error {
-
 	return outbox.Send(ctx, st.Transaction, msg)
 }
 
