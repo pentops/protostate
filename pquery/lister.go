@@ -1294,14 +1294,24 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 
 				out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, field.jsonbPath()), pg.JSONB(val))})
 			case *psml_pb.Field_Range:
-				min, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMin())
-				if err != nil {
-					return nil, fmt.Errorf("dynamic filter: range min validation: %w", err)
+				var min, max interface{}
+				min = ""
+				max = ""
+				rawMin := filters[i].GetField().GetRange().GetMin()
+				rawMax := filters[i].GetField().GetRange().GetMax()
+
+				if rawMin != "" {
+					min, err = validateFilterableField(field.field, rawMin)
+					if err != nil {
+						return nil, fmt.Errorf("dynamic filter: range min validation: %w", err)
+					}
 				}
 
-				max, err := validateFilterableField(field.field, filters[i].GetField().GetRange().GetMax())
-				if err != nil {
-					return nil, fmt.Errorf("dynamic filter: range max validation: %w", err)
+				if rawMax != "" {
+					max, err = validateFilterableField(field.field, rawMax)
+					if err != nil {
+						return nil, fmt.Errorf("dynamic filter: range max validation: %w", err)
+					}
 				}
 
 				switch {
