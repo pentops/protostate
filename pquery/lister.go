@@ -1518,8 +1518,10 @@ func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string
 		case *psml_pb.FieldConstraint_Enum:
 			if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
 				name := strings.ToTitle(reqValue)
-				if !strings.HasPrefix(reqValue, enumPrefix(field.Enum().Name())) {
-					name = enumPrefix(field.Enum().Name()) + "_" + name
+				prefix := strings.TrimSuffix(string(field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
+
+				if !strings.HasPrefix(reqValue, prefix) {
+					name = prefix + "_" + name
 				}
 				eval := field.Enum().Values().ByName(protoreflect.Name(name))
 
@@ -1550,19 +1552,4 @@ func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string
 	}
 
 	return val, nil
-}
-
-func enumPrefix(name protoreflect.Name) string {
-	var out strings.Builder
-	for i, r := range name {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				out.WriteRune('_')
-			}
-			out.WriteRune(unicode.ToUpper(r))
-		} else {
-			out.WriteRune(unicode.ToUpper(r))
-		}
-	}
-	return out.String()
 }
