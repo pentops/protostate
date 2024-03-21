@@ -1152,7 +1152,7 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 	var furtherPath string
 	parts := strings.SplitN(path, ".", 2)
 	if len(parts) == 2 {
-		fieldName = protoreflect.Name(parts[0])
+		fieldName = protoreflect.Name(camelToSnake(parts[0]))
 		furtherPath = parts[1]
 	} else {
 		fieldName = protoreflect.Name(camelToSnake(path))
