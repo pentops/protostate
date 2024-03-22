@@ -203,7 +203,7 @@ func TestDynamicFiltering(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	setupFooListableData(t, ss, sm, tenants, 60)
+	ids := setupFooListableData(t, ss, sm, tenants, 60)
 
 	t.Run("Single Range Filter", func(t *testing.T) {
 		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
@@ -776,6 +776,74 @@ func TestDynamicFiltering(t *testing.T) {
 				if !matched {
 					t.Fatalf("expected at least one profile to match the filter")
 				}
+			}
+		})
+	})
+
+	t.Run("Oneof filter", func(t *testing.T) {
+		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFooEventsRequest{
+				FooId: ids[tenants[0]][0],
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "event.type",
+									Type: &psml_pb.Field_Value{
+										Value: "created",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFooEventsResponse{}
+
+			err := queryer.EventLister.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(res.Events) != 5 {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Events))
+			}
+
+			for ii, event := range res.Events {
+				t.Logf("%d: %s", ii, event.Event)
+			}
+		})
+
+		ss.StepC("List Page bad name", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFooEventsRequest{
+				FooId: ids[tenants[0]][0],
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "event.type",
+									Type: &psml_pb.Field_Value{
+										Value: "damaged",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFooEventsResponse{}
+
+			err := queryer.EventLister.List(ctx, db, req, res)
+			if err == nil {
+				t.Fatal("expected error, got nil")
 			}
 		})
 	})
