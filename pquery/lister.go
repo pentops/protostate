@@ -65,10 +65,10 @@ type nestedField struct {
 	field     protoreflect.FieldDescriptor
 }
 
-func (nf nestedField) jsonbPath() string {
+func (ss sortSpec) jsonbPath() string {
 	out := strings.Builder{}
-	last := len(nf.jsonPath) - 1
-	for idx, part := range nf.jsonPath {
+	last := len(ss.jsonPath) - 1
+	for idx, part := range ss.jsonPath {
 		// last part gets a double >
 		if idx == last {
 			out.WriteString("->>")
