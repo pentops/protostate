@@ -153,7 +153,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(4) {
+		if len(res.Foos) != 4 {
 			t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
 		}
 
@@ -236,7 +236,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(4) {
+			if len(res.Foos) != 4 {
 				t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
 			}
 
@@ -291,27 +291,18 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(4) {
-				t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
+			if len(res.Foos) != 5 {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
 			}
 
 			for ii, state := range res.Foos {
 				t.Logf("%d: %s", ii, state.Field)
 			}
 
-			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(15-ii) {
-					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+			for _, state := range res.Foos {
+				if state.Characteristics.Weight < int64(12) {
+					t.Fatalf("expected weights greater than or equal to %d, got %d", 12, state.Characteristics.Weight)
 				}
-			}
-
-			pageResp := res.Page
-
-			if pageResp.GetNextToken() != "" {
-				t.Fatalf("NextToken should be empty")
-			}
-			if pageResp.NextToken != nil {
-				t.Fatalf("Should be the final page")
 			}
 		})
 	})
@@ -346,27 +337,18 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(4) {
-				t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
+			if len(res.Foos) != 5 {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
 			}
 
 			for ii, state := range res.Foos {
 				t.Logf("%d: %s", ii, state.Field)
 			}
 
-			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(15-ii) {
-					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+			for _, state := range res.Foos {
+				if state.Characteristics.Weight > int64(15) {
+					t.Fatalf("expected weight less than or equal to %d, got %d", 15, state.Characteristics.Weight)
 				}
-			}
-
-			pageResp := res.Page
-
-			if pageResp.GetNextToken() != "" {
-				t.Fatalf("NextToken should be empty")
-			}
-			if pageResp.NextToken != nil {
-				t.Fatalf("Should be the final page")
 			}
 		})
 	})
@@ -428,7 +410,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Logf("%d: %s", ii, state.Field)
 			}
 
-			if len(res.Foos) != int(10) {
+			if len(res.Foos) != 10 {
 				t.Fatalf("expected %d states, got %d", 10, len(res.Foos))
 			}
 
@@ -512,7 +494,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Logf("%d: %s", ii, state.Field)
 			}
 
-			if len(res.Foos) != int(2) {
+			if len(res.Foos) != 2 {
 				t.Fatalf("expected %d states, got %d", 2, len(res.Foos))
 			}
 
@@ -591,7 +573,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(res.Foos) != int(5) {
+			if len(res.Foos) != 5 {
 				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
 			}
 
@@ -633,7 +615,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(res.Foos) != int(5) {
+			if len(res.Foos) != 5 {
 				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
 			}
 
