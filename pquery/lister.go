@@ -1319,10 +1319,10 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ >= $min && @ <= $max)', jsonb_build_object('min', ?::text, 'max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
 					out = append(out, sq.And{sq.Expr(exprStr, min, max)})
 				case min != "":
-					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? @ >= $min', jsonb_build_object('min', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
+					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ >= $min)', jsonb_build_object('min', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
 					out = append(out, sq.And{sq.Expr(exprStr, min)})
 				case max != "":
-					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? @ <= $max', jsonb_build_object('max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
+					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ <= $max)', jsonb_build_object('max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
 					out = append(out, sq.And{sq.Expr(exprStr, max)})
 				}
 			}
