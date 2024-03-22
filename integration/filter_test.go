@@ -121,7 +121,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		tenantID: tenantID1,
 	}
 
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+	ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -220,6 +220,116 @@ func TestDynamicFiltering(t *testing.T) {
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Min: "12",
+											Max: "15",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) != int(4) {
+				t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(15-ii) {
+					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() != "" {
+				t.Fatalf("NextToken should be empty")
+			}
+			if pageResp.NextToken != nil {
+				t.Fatalf("Should be the final page")
+			}
+		})
+	})
+
+	t.Run("Min Range Filter", func(t *testing.T) {
+		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "characteristics.weight",
+									Type: &psml_pb.Field_Range{
+										Range: &psml_pb.Range{
+											Min: "12",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(res.Foos) != int(4) {
+				t.Fatalf("expected %d states, got %d", 4, len(res.Foos))
+			}
+
+			for ii, state := range res.Foos {
+				t.Logf("%d: %s", ii, state.Field)
+			}
+
+			for ii, state := range res.Foos {
+				if state.Characteristics.Weight != int64(15-ii) {
+					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+				}
+			}
+
+			pageResp := res.Page
+
+			if pageResp.GetNextToken() != "" {
+				t.Fatalf("NextToken should be empty")
+			}
+			if pageResp.NextToken != nil {
+				t.Fatalf("Should be the final page")
+			}
+		})
+	})
+
+	t.Run("Max Range Filter", func(t *testing.T) {
+		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &testpb.ListFoosRequest{
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "characteristics.weight",
+									Type: &psml_pb.Field_Range{
+										Range: &psml_pb.Range{
 											Max: "15",
 										},
 									},
