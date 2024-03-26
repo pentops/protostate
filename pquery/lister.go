@@ -134,6 +134,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 			ll.arrayField = field
 			continue
 		}
+
 		return nil, fmt.Errorf("unknown field in response: '%s' of type %s", field.Name(), field.Kind())
 	}
 
@@ -194,7 +195,6 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		default:
 			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.Name(), field.Kind())
 		}
-
 	}
 
 	if ll.pageRequestField == nil {
@@ -321,18 +321,21 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			if err != nil {
 				return fmt.Errorf("marshalling final row: %w", err)
 			}
+
 			nextToken = base64.StdEncoding.EncodeToString(lastBytes)
 			break
 		}
+
 		list.Append(protoreflect.ValueOf(rowMessage))
 	}
 
-	pageResponse := &psml_pb.PageResponse{}
 	if nextToken != "" {
-		pageResponse.NextToken = &nextToken
-	}
+		pageResponse := &psml_pb.PageResponse{
+			NextToken: &nextToken,
+		}
 
-	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
+		res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
+	}
 
 	return nil
 }
@@ -550,7 +553,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			lhsFields = append(lhsFields, rowSelecter)
 			rhsValues = append(rhsValues, dbVal)
 			rhsPlaceholders = append(rhsPlaceholders, valuePlaceholder)
-
 		}
 
 		// From https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
