@@ -40,11 +40,13 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 			if err != nil {
 				return nil, err
 			}
+
 			tieBreakerFields = append(tieBreakerFields, sortSpec{
 				nestedField: *field,
 				desc:        false,
 			})
 		}
+
 		return tieBreakerFields, nil
 	}
 
@@ -58,11 +60,13 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 		if err != nil {
 			return nil, err
 		}
+
 		tieBreakerFields = append(tieBreakerFields, sortSpec{
 			nestedField: *field,
 			desc:        false,
 		})
 	}
+
 	return tieBreakerFields, nil
 }
 
@@ -147,6 +151,7 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 				subSortField.fieldPath = append([]protoreflect.FieldDescriptor{field}, subSortField.fieldPath...)
 				subSort[idx] = subSortField
 			}
+
 			defaultSortFields = append(defaultSortFields, subSort...)
 		}
 	}
@@ -168,6 +173,7 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 			desc:        sort.Descending,
 		})
 
+		// TODO: Remove this constraint, we can sort by different directions once we have the reversal logic in place
 		// validate direction of all the fields is the same
 		if direction == "" {
 			direction = "ASC"
@@ -210,7 +216,6 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 				}
 			}
 		} else {
-			fmt.Println(field.Name())
 			if field.Cardinality() == protoreflect.Repeated {
 				// check options of parent field for sorting
 				fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
