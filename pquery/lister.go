@@ -277,12 +277,14 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		return err
 	}
 
-	var jsonRows = make([][]byte, 0, pageSize)
-	if err := db.Transact(ctx, &sqrlx.TxOptions{
+	txOpts := &sqrlx.TxOptions{
 		ReadOnly:  true,
 		Retryable: true,
 		Isolation: sql.LevelReadCommitted,
-	}, func(ctx context.Context, tx sqrlx.Transaction) error {
+	}
+
+	var jsonRows = make([][]byte, 0, pageSize)
+	err = db.Transact(ctx, txOpts, func(ctx context.Context, tx sqrlx.Transaction) error {
 		rows, err := tx.Query(ctx, selectQuery)
 		if err != nil {
 			return fmt.Errorf("run select: %w", err)
@@ -294,10 +296,13 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			if err := rows.Scan(&json); err != nil {
 				return err
 			}
+
 			jsonRows = append(jsonRows, json)
 		}
+
 		return rows.Err()
-	}); err != nil {
+	})
+	if err != nil {
 		stmt, _, _ := selectQuery.ToSql()
 		log.WithField(ctx, "query", stmt).Error("list query")
 		return fmt.Errorf("list query: %w", err)
@@ -309,9 +314,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	var nextToken string
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
-		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
+
+		err := protojson.Unmarshal(rowBytes, rowMessage.Interface())
+		if err != nil {
 			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
+
 		if idx >= int(pageSize) {
 			// TODO: This works but the token is huge.
 			// The eventual solution will need to look at
