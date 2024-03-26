@@ -164,10 +164,6 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 			return nil, fmt.Errorf("requested sort: %w", err)
 		}
 
-		if nestedField.field.Cardinality() == protoreflect.Repeated {
-			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
-		}
-
 		// validate the fields requested are marked as sortable
 		sortOpts, ok := proto.GetExtension(nestedField.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 		if !ok {
@@ -250,73 +246,89 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 					}
 				} else {
 					if field.Cardinality() == protoreflect.Repeated {
+						// check options of subfield for sorting
 						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-						if fieldOpts != nil {
-							invalid := false
-							switch fieldOpts.Type.(type) {
-							case *psml_pb.FieldConstraint_Double:
-								if fieldOpts.GetDouble().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Fixed32:
-								if fieldOpts.GetFixed32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Fixed64:
-								if fieldOpts.GetFixed64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Float:
-								if fieldOpts.GetFloat().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Int32:
-								if fieldOpts.GetInt32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Int64:
-								if fieldOpts.GetInt64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sfixed32:
-								if fieldOpts.GetSfixed32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sfixed64:
-								if fieldOpts.GetSfixed64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sint32:
-								if fieldOpts.GetSint32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sint64:
-								if fieldOpts.GetSint64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Uint32:
-								if fieldOpts.GetUint32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Uint64:
-								if fieldOpts.GetUint64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Timestamp:
-								if fieldOpts.GetTimestamp().Sorting != nil {
-									invalid = true
-								}
-							}
-
-							if invalid {
-								return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
-							}
+						if isSortingAnnotated(fieldOpts) {
+							return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
 						}
 					}
 				}
 			}
+		} else {
+			fmt.Println(field.Name())
+			if field.Cardinality() == protoreflect.Repeated {
+				// check options of parent field for sorting
+				fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+				if isSortingAnnotated(fieldOpts) {
+					return fmt.Errorf("sorting not allowed on repeated field, must be a scalar: %s", field.Name())
+				}
+			}
+
 		}
 	}
 
 	return nil
+}
+
+func isSortingAnnotated(opts *psml_pb.FieldConstraint) bool {
+	annotated := false
+
+	if opts != nil {
+		switch opts.Type.(type) {
+		case *psml_pb.FieldConstraint_Double:
+			if opts.GetDouble().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Fixed32:
+			if opts.GetFixed32().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Fixed64:
+			if opts.GetFixed64().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Float:
+			if opts.GetFloat().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Int32:
+			if opts.GetInt32().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Int64:
+			if opts.GetInt64().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Sfixed32:
+			if opts.GetSfixed32().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Sfixed64:
+			if opts.GetSfixed64().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Sint32:
+			if opts.GetSint32().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Sint64:
+			if opts.GetSint64().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Uint32:
+			if opts.GetUint32().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Uint64:
+			if opts.GetUint64().Sorting != nil {
+				annotated = true
+			}
+		case *psml_pb.FieldConstraint_Timestamp:
+			if opts.GetTimestamp().Sorting != nil {
+				annotated = true
+			}
+		}
+	}
+
+	return annotated
 }
