@@ -399,8 +399,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 			filterFields = append(filterFields, dynFilters...)
 		}
+
+		// TODO: searches
 	}
 
+	for i := range filterFields {
+		selectQuery.Where(filterFields[i])
+	}
+
+	// apply default filters if no filters have been requested
 	if ll.defaultFilterFields != nil && len(filterFields) == 0 {
 		and := sq.And{}
 		for _, spec := range ll.defaultFilterFields {
@@ -414,10 +421,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		if len(and) > 0 {
 			selectQuery.Where(and)
-		}
-	} else if len(filterFields) > 0 {
-		for i := range filterFields {
-			selectQuery.Where(filterFields[i])
 		}
 	}
 
@@ -557,6 +560,8 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					dbVal = !dbVal.(bool)
 					rowSelecter = fmt.Sprintf("NOT (%s)::boolean", rowSelecter)
 				}
+
+			// TODO: Reversals for the other types that are sortable
 
 			default:
 				return nil, fmt.Errorf("sort field %s is of type %T", sortField.field.Name(), dbVal)
