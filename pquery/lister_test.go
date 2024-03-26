@@ -58,7 +58,140 @@ func TestFieldPath(t *testing.T) {
 
 		})
 	}
+}
 
+func TestValidateFieldName(t *testing.T) {
+	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
+		"test.proto": `
+		syntax = "proto3";
+
+		import "psm/list/v1/page.proto";
+		import "psm/list/v1/query.proto";
+
+		package test;
+
+		message Foo {
+			string id = 1;
+			Profile profile = 2;
+		}
+
+		message Profile {
+			int64 weight = 1;
+
+			oneof type {
+				Card card = 2;
+			}
+		}
+
+		message Card {
+			int64 size = 1;
+		}
+	`})
+
+	fooDesc := descFiles.MessageByName(t, "test.Foo")
+
+	tcs := []struct {
+		name string
+	}{
+		{name: "id"},
+		{name: "profile.weight"},
+		{name: "profile.type"},
+		{name: "profile.card.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateFieldName(fooDesc, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	tcs = []struct {
+		name string
+	}{
+		{name: "foo"},
+		{name: "profile.weight.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateFieldName(fooDesc, tc.name)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestFindFieldDescriptor(t *testing.T) {
+	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
+		"test.proto": `
+		syntax = "proto3";
+
+		import "psm/list/v1/page.proto";
+		import "psm/list/v1/query.proto";
+
+		package test;
+
+		message Foo {
+			string id = 1;
+			Profile profile = 2;
+		}
+
+		message Profile {
+			int64 weight = 1;
+
+			oneof type {
+				Card card = 2;
+			}
+		}
+
+		message Card {
+			int64 size = 1;
+		}
+	`})
+
+	fooDesc := descFiles.MessageByName(t, "test.Foo")
+
+	tcs := []struct {
+		name string
+	}{
+		{name: "id"},
+		{name: "profile.weight"},
+		{name: "profile.card.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			field := findFieldDescriptor(fooDesc, tc.name)
+			if field == nil {
+				t.Fatal("expected field")
+			}
+
+			parts := strings.Split(tc.name, ".")
+			name := parts[len(parts)-1]
+			assert.Equal(t, string(field.Name()), name)
+		})
+	}
+
+	tcs = []struct {
+		name string
+	}{
+		{name: "foo"},
+		{name: "profile.type"},
+		{name: "profile.weight.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			field := findFieldDescriptor(fooDesc, tc.name)
+			if field != nil {
+				t.Fatal("expected no field")
+			}
+		})
+	}
 }
 
 type composed struct {

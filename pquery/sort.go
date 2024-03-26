@@ -158,54 +158,9 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
-		// validate the fields requested exist
 		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
 		if err != nil {
 			return nil, fmt.Errorf("requested sort: %w", err)
-		}
-
-		// validate the fields requested are marked as sortable
-		sortOpts, ok := proto.GetExtension(nestedField.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-		if !ok {
-			return nil, fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
-		}
-
-		sortable := false
-		if sortOpts != nil {
-			switch nestedField.field.Kind() {
-			case protoreflect.DoubleKind:
-				sortable = sortOpts.GetDouble().GetSorting().Sortable
-			case protoreflect.Fixed32Kind:
-				sortable = sortOpts.GetFixed32().GetSorting().Sortable
-			case protoreflect.Fixed64Kind:
-				sortable = sortOpts.GetFixed64().GetSorting().Sortable
-			case protoreflect.FloatKind:
-				sortable = sortOpts.GetFloat().GetSorting().Sortable
-			case protoreflect.Int32Kind:
-				sortable = sortOpts.GetInt32().GetSorting().Sortable
-			case protoreflect.Int64Kind:
-				sortable = sortOpts.GetInt64().GetSorting().Sortable
-			case protoreflect.Sfixed32Kind:
-				sortable = sortOpts.GetSfixed32().GetSorting().Sortable
-			case protoreflect.Sfixed64Kind:
-				sortable = sortOpts.GetSfixed64().GetSorting().Sortable
-			case protoreflect.Sint32Kind:
-				sortable = sortOpts.GetSint32().GetSorting().Sortable
-			case protoreflect.Sint64Kind:
-				sortable = sortOpts.GetSint64().GetSorting().Sortable
-			case protoreflect.Uint32Kind:
-				sortable = sortOpts.GetUint32().GetSorting().Sortable
-			case protoreflect.Uint64Kind:
-				sortable = sortOpts.GetUint64().GetSorting().Sortable
-			case protoreflect.MessageKind:
-				if nestedField.field.Message().FullName() == "google.protobuf.Timestamp" {
-					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
-				}
-			}
-		}
-
-		if !sortable {
-			return nil, fmt.Errorf("requested sort field '%s' is not sortable", sort.Field)
 		}
 
 		results = append(results, sortSpec{
