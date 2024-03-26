@@ -79,13 +79,8 @@ func TestDefaultFiltering(t *testing.T) {
 				}
 			}
 
-			pageResp := res.Page
-
-			if pageResp.GetNextToken() != "" {
-				t.Fatalf("NextToken should be empty")
-			}
-			if pageResp.NextToken != nil {
-				t.Fatalf("Should be the final page")
+			if res.Page != nil {
+				t.Fatalf("page response should be empty")
 			}
 		})
 	})
@@ -171,13 +166,8 @@ func TestFilteringWithAuthScope(t *testing.T) {
 			}
 		}
 
-		pageResp := res.Page
-
-		if pageResp.GetNextToken() != "" {
-			t.Fatalf("NextToken should be empty")
-		}
-		if pageResp.NextToken != nil {
-			t.Fatalf("Should be the final page")
+		if res.Page != nil {
+			t.Fatalf("page response should be empty")
 		}
 	})
 }
@@ -250,13 +240,8 @@ func TestDynamicFiltering(t *testing.T) {
 				}
 			}
 
-			pageResp := res.Page
-
-			if pageResp.GetNextToken() != "" {
-				t.Fatalf("NextToken should be empty")
-			}
-			if pageResp.NextToken != nil {
-				t.Fatalf("Should be the final page")
+			if res.Page != nil {
+				t.Fatalf("page response should be empty")
 			}
 		})
 	})
@@ -504,13 +489,8 @@ func TestDynamicFiltering(t *testing.T) {
 				}
 			}
 
-			pageResp := res.Page
-
-			if pageResp.GetNextToken() != "" {
-				t.Fatalf("NextToken should be empty")
-			}
-			if pageResp.NextToken != nil {
-				t.Fatalf("Should be the final page")
+			if res.Page != nil {
+				t.Fatalf("page response should be empty")
 			}
 		})
 	})
