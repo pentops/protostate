@@ -378,10 +378,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
+		if err := ll.validateQueryRequest(reqQuery); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "query validation: %s", err)
+		}
+
 		if len(reqQuery.GetSorts()) > 0 {
 			dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "sort validation: %s", err)
+				return nil, status.Errorf(codes.InvalidArgument, "build sorts: %s", err)
 			}
 
 			sortFields = dynSorts
@@ -390,7 +394,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if len(reqQuery.GetFilters()) > 0 {
 			dynFilters, err := ll.buildDynamicFilter(tableAlias, reqQuery.GetFilters())
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
+				return nil, status.Errorf(codes.InvalidArgument, "build filters: %s", err)
 			}
 
 			filterFields = append(filterFields, dynFilters...)
@@ -692,10 +696,257 @@ func findField(message protoreflect.MessageDescriptor, path string) (*nestedFiel
 	}, nil
 }
 
-func findOneOfField(message protoreflect.MessageDescriptor, path string) (*nestedOneof, error) {
-	return nil, nil
+func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) error {
+	err := validateQueryRequestSorts(ll.arrayField.Message(), query.GetSorts())
+	if err != nil {
+		return fmt.Errorf("sort validation: %w", err)
+	}
+
+	err = validateQueryRequestFilters(ll.arrayField.Message(), query.GetFilters())
+	if err != nil {
+		return fmt.Errorf("filter validation: %w", err)
+	}
+
+	err = validateQueryRequestSearches(ll.arrayField.Message(), query.GetSearches())
+	if err != nil {
+		return fmt.Errorf("search validation: %w", err)
+	}
+
+	return nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, f *nestedOneof, filter *psml_pb.Filter) (sq.Sqlizer, error) {
-	return nil, nil
+func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*psml_pb.Sort) error {
+	for _, sort := range sorts {
+		// validate fields exist from the request query
+		err := validateFieldName(message, sort.GetField())
+		if err != nil {
+			return fmt.Errorf("field name: %w", err)
+		}
+
+		field := findFieldDescriptor(message, sort.GetField())
+
+		// validate the fields are annotated correctly for the request query
+		sortOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
+		}
+
+		sortable := false
+		if sortOpts != nil {
+			switch field.Kind() {
+			case protoreflect.DoubleKind:
+				sortable = sortOpts.GetDouble().GetSorting().Sortable
+			case protoreflect.Fixed32Kind:
+				sortable = sortOpts.GetFixed32().GetSorting().Sortable
+			case protoreflect.Fixed64Kind:
+				sortable = sortOpts.GetFixed64().GetSorting().Sortable
+			case protoreflect.FloatKind:
+				sortable = sortOpts.GetFloat().GetSorting().Sortable
+			case protoreflect.Int32Kind:
+				sortable = sortOpts.GetInt32().GetSorting().Sortable
+			case protoreflect.Int64Kind:
+				sortable = sortOpts.GetInt64().GetSorting().Sortable
+			case protoreflect.Sfixed32Kind:
+				sortable = sortOpts.GetSfixed32().GetSorting().Sortable
+			case protoreflect.Sfixed64Kind:
+				sortable = sortOpts.GetSfixed64().GetSorting().Sortable
+			case protoreflect.Sint32Kind:
+				sortable = sortOpts.GetSint32().GetSorting().Sortable
+			case protoreflect.Sint64Kind:
+				sortable = sortOpts.GetSint64().GetSorting().Sortable
+			case protoreflect.Uint32Kind:
+				sortable = sortOpts.GetUint32().GetSorting().Sortable
+			case protoreflect.Uint64Kind:
+				sortable = sortOpts.GetUint64().GetSorting().Sortable
+			case protoreflect.MessageKind:
+				if field.Message().FullName() == "google.protobuf.Timestamp" {
+					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
+				}
+			}
+		}
+
+		if !sortable {
+			return fmt.Errorf("requested sort field '%s' is not sortable", sort.Field)
+		}
+	}
+
+	return nil
+}
+
+func validateQueryRequestFilters(message protoreflect.MessageDescriptor, filters []*psml_pb.Filter) error {
+	for i := range filters {
+		switch filters[i].GetType().(type) {
+		case *psml_pb.Filter_Field:
+			return validateQueryRequestFilterField(message, filters[i].GetField())
+		case *psml_pb.Filter_And:
+			return validateQueryRequestFilters(message, filters[i].GetAnd().GetFilters())
+		case *psml_pb.Filter_Or:
+			return validateQueryRequestFilters(message, filters[i].GetOr().GetFilters())
+		}
+	}
+
+	return nil
+}
+
+func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, filterField *psml_pb.Field) error {
+	// validate fields exist from the request query
+	err := validateFieldName(message, filterField.GetName())
+	if err != nil {
+		return fmt.Errorf("field name: %w", err)
+	}
+
+	field := findFieldDescriptor(message, filterField.GetName())
+
+	// validate the fields are annotated correctly for the request query
+	filterOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+	if !ok {
+		return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
+	}
+
+	filterable := false
+	if filterOpts != nil {
+		switch field.Kind() {
+		case protoreflect.DoubleKind:
+			filterable = filterOpts.GetDouble().GetFiltering().Filterable
+		case protoreflect.Fixed32Kind:
+			filterable = filterOpts.GetFixed32().GetFiltering().Filterable
+		case protoreflect.Fixed64Kind:
+			filterable = filterOpts.GetFixed64().GetFiltering().Filterable
+		case protoreflect.FloatKind:
+			filterable = filterOpts.GetFloat().GetFiltering().Filterable
+		case protoreflect.Int32Kind:
+			filterable = filterOpts.GetInt32().GetFiltering().Filterable
+		case protoreflect.Int64Kind:
+			filterable = filterOpts.GetInt64().GetFiltering().Filterable
+		case protoreflect.Sfixed32Kind:
+			filterable = filterOpts.GetSfixed32().GetFiltering().Filterable
+		case protoreflect.Sfixed64Kind:
+			filterable = filterOpts.GetSfixed64().GetFiltering().Filterable
+		case protoreflect.Sint32Kind:
+			filterable = filterOpts.GetSint32().GetFiltering().Filterable
+		case protoreflect.Sint64Kind:
+			filterable = filterOpts.GetSint64().GetFiltering().Filterable
+		case protoreflect.Uint32Kind:
+			filterable = filterOpts.GetUint32().GetFiltering().Filterable
+		case protoreflect.Uint64Kind:
+			filterable = filterOpts.GetUint64().GetFiltering().Filterable
+		case protoreflect.BoolKind:
+			filterable = filterOpts.GetBool().GetFiltering().Filterable
+		case protoreflect.EnumKind:
+			filterable = filterOpts.GetEnum().GetFiltering().Filterable
+		case protoreflect.StringKind:
+			switch filterOpts.GetString_().WellKnown.(type) {
+			case *psml_pb.StringRules_Date:
+				filterable = filterOpts.GetString_().GetDate().Filtering.Filterable
+			case *psml_pb.StringRules_ForeignKey:
+				switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
+				case *psml_pb.ForeignKeyRules_UniqueString:
+					filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
+				case *psml_pb.ForeignKeyRules_Uuid:
+					filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
+				}
+			}
+		case protoreflect.MessageKind:
+			if field.Message().FullName() == "google.protobuf.Timestamp" {
+				filterable = filterOpts.GetTimestamp().GetFiltering().Filterable
+			}
+		}
+	}
+
+	if !filterable {
+		return fmt.Errorf("requested filter field '%s' is not filterable", filterField.Name)
+	}
+
+	return nil
+}
+
+func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*psml_pb.Search) error {
+	for _, search := range searches {
+		// validate fields exist from the request query
+		err := validateFieldName(message, search.GetField())
+		if err != nil {
+			return fmt.Errorf("field name: %w", err)
+		}
+
+		field := findFieldDescriptor(message, search.GetField())
+
+		// validate the fields are annotated correctly for the request query
+		searchOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
+		}
+
+		searchable := false
+		if searchOpts != nil {
+			switch field.Kind() {
+			case protoreflect.StringKind:
+				switch searchOpts.GetString_().WellKnown.(type) {
+				case *psml_pb.StringRules_OpenText:
+					searchable = searchOpts.GetString_().GetOpenText().GetSearching().Searchable
+				}
+			}
+		}
+
+		if !searchable {
+			return fmt.Errorf("requested search field '%s' is not searchable", search.Field)
+		}
+	}
+
+	return nil
+}
+
+func validateFieldName(message protoreflect.MessageDescriptor, path string) error {
+	var name protoreflect.Name
+	var remainder string
+
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		name = protoreflect.Name(camelToSnake(parts[0]))
+		remainder = parts[1]
+	} else {
+		name = protoreflect.Name(camelToSnake(path))
+	}
+
+	field := message.Fields().ByName(name)
+	if field == nil {
+		oneof := message.Oneofs().ByName(name)
+		if oneof == nil {
+			return fmt.Errorf("no field named '%s' in %s", name, message.FullName())
+		}
+	}
+
+	if remainder != "" {
+		if field.Kind() != protoreflect.MessageKind {
+			return fmt.Errorf("field %s is not a message", name)
+		}
+
+		return validateFieldName(field.Message(), remainder)
+	}
+
+	return nil
+}
+
+func findFieldDescriptor(message protoreflect.MessageDescriptor, path string) protoreflect.FieldDescriptor {
+	var name protoreflect.Name
+	var remainder string
+
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		name = protoreflect.Name(camelToSnake(parts[0]))
+		remainder = parts[1]
+	} else {
+		name = protoreflect.Name(camelToSnake(path))
+	}
+
+	field := message.Fields().ByName(name)
+
+	if remainder != "" {
+		if field.Kind() != protoreflect.MessageKind {
+			return nil
+		}
+
+		return findFieldDescriptor(field.Message(), remainder)
+	}
+
+	return field
 }
