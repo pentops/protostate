@@ -31,6 +31,9 @@ import (
 
 var dateRegex = regexp.MustCompile(`^\d{4}(-\d{2}(-\d{2})?)?$`)
 
+var ErrOneof = fmt.Errorf("field is a oneof")
+var ErrField = fmt.Errorf("field is a field")
+
 type ListRequest interface {
 	proto.Message
 }
@@ -51,6 +54,11 @@ type ListSpec[REQ ListRequest, RES ListResponse] struct {
 
 type fieldSpec struct {
 	field     protoreflect.FieldDescriptor
+	fieldPath []protoreflect.FieldDescriptor
+}
+
+type oneofSpec struct {
+	oneof     protoreflect.OneofDescriptor
 	fieldPath []protoreflect.FieldDescriptor
 }
 
@@ -734,6 +742,11 @@ func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldS
 
 	field := message.Fields().ByName(name)
 	if field == nil {
+		oneof := message.Oneofs().ByName(name)
+		if oneof != nil {
+			return nil, ErrOneof
+		}
+
 		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
 	}
 
@@ -755,6 +768,56 @@ func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldS
 
 	return &fieldSpec{
 		field:     spec.field,
+		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
+	}, nil
+}
+
+func findOneofSpec(message protoreflect.MessageDescriptor, path string) (*oneofSpec, error) {
+	var name protoreflect.Name
+	var remainder string
+
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		name = protoreflect.Name(camelToSnake(parts[0]))
+		remainder = parts[1]
+	} else {
+		name = protoreflect.Name(camelToSnake(path))
+	}
+
+	if remainder == "" {
+		oneof := message.Oneofs().ByName(name)
+
+		if oneof == nil {
+			field := message.Fields().ByName(name)
+			if field != nil {
+				return nil, ErrField
+			}
+
+			return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
+		}
+
+		return &oneofSpec{
+			oneof: oneof,
+		}, nil
+	}
+
+	field := message.Fields().ByName(name)
+
+	if field == nil {
+		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
+	}
+
+	if field.Kind() != protoreflect.MessageKind {
+		return nil, fmt.Errorf("field %s is not a message", name)
+	}
+
+	spec, err := findOneofSpec(field.Message(), remainder)
+	if err != nil {
+		return nil, err
+	}
+
+	return &oneofSpec{
+		oneof:     spec.oneof,
 		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
 	}, nil
 }
