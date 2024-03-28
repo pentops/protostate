@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -16,7 +15,6 @@ import (
 	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
-	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -41,10 +39,7 @@ type ListResponse interface {
 	proto.Message
 }
 
-type ListSpec[
-	REQ ListRequest,
-	RES ListResponse,
-] struct {
+type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	TableName  string
 	DataColumn string
 
@@ -54,51 +49,9 @@ type ListSpec[
 	RequestFilter func(REQ) (map[string]interface{}, error)
 }
 
-type sortSpec struct {
-	nestedField
-	desc bool
-}
-
-type nestedField struct {
-	jsonPath  []string
-	fieldPath []protoreflect.FieldDescriptor
+type fieldSpec struct {
 	field     protoreflect.FieldDescriptor
-}
-
-func (nf nestedField) jsonbPath() string {
-	out := strings.Builder{}
-	last := len(nf.jsonPath) - 1
-	for idx, part := range nf.jsonPath {
-		// last part gets a double >
-		if idx == last {
-			out.WriteString("->>")
-		} else {
-			out.WriteString("->")
-		}
-		out.WriteString(fmt.Sprintf("'%s'", part))
-	}
-
-	return out.String()
-}
-
-type filterSpec struct {
-	nestedField
-	filterVals []interface{}
-}
-
-func (fs filterSpec) jsonbPath() string {
-	out := strings.Builder{}
-	out.WriteString("$")
-
-	for idx := range fs.fieldPath {
-		out.WriteString(fmt.Sprintf(".%s", fs.fieldPath[idx].JSONName()))
-
-		if fs.fieldPath[idx].Cardinality() == protoreflect.Repeated {
-			out.WriteString("[*]")
-		}
-	}
-
-	return out.String()
+	fieldPath []protoreflect.FieldDescriptor
 }
 
 type ListerOption func(*listerOptions)
@@ -174,6 +127,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 			ll.arrayField = field
 			continue
 		}
+
 		return nil, fmt.Errorf("unknown field in response: '%s' of type %s", field.Name(), field.Kind())
 	}
 
@@ -200,6 +154,8 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: validate other annotations
 
 	f, err := buildDefaultFilters(ll.arrayField.Message().Fields())
 	if err != nil {
@@ -234,7 +190,6 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		default:
 			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.Name(), field.Kind())
 		}
-
 	}
 
 	if ll.pageRequestField == nil {
@@ -256,98 +211,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	return &ll, nil
 }
 
-func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
-	for i := 0; i < fields.Len(); i++ {
-		field := fields.Get(i)
-
-		if field.Kind() == protoreflect.MessageKind {
-			subFields := field.Message().Fields()
-
-			for i := 0; i < subFields.Len(); i++ {
-				subField := subFields.Get(i)
-
-				if subField.Kind() == protoreflect.MessageKind {
-					err := validateSortsAnnotations(subField.Message().Fields())
-					if err != nil {
-						return err
-					}
-				} else {
-					if field.Cardinality() == protoreflect.Repeated {
-						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-						if fieldOpts != nil {
-							invalid := false
-							switch fieldOpts.Type.(type) {
-							case *psml_pb.FieldConstraint_Double:
-								if fieldOpts.GetDouble().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Fixed32:
-								if fieldOpts.GetFixed32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Fixed64:
-								if fieldOpts.GetFixed64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Float:
-								if fieldOpts.GetFloat().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Int32:
-								if fieldOpts.GetInt32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Int64:
-								if fieldOpts.GetInt64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sfixed32:
-								if fieldOpts.GetSfixed32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sfixed64:
-								if fieldOpts.GetSfixed64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sint32:
-								if fieldOpts.GetSint32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Sint64:
-								if fieldOpts.GetSint64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Uint32:
-								if fieldOpts.GetUint32().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Uint64:
-								if fieldOpts.GetUint64().Sorting != nil {
-									invalid = true
-								}
-							case *psml_pb.FieldConstraint_Timestamp:
-								if fieldOpts.GetTimestamp().Sorting != nil {
-									invalid = true
-								}
-							}
-
-							if invalid {
-								return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-type Lister[
-	REQ ListRequest,
-	RES ListResponse,
-] struct {
+type Lister[REQ ListRequest, RES ListResponse] struct {
 	ListReflectionSet
 
 	tableName  string
@@ -390,397 +254,6 @@ func NewLister[
 	return ll, nil
 }
 
-func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []string) ([]sortSpec, error) {
-	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
-	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
-		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
-		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
-			field, err := findField(arrayField, tieBreaker)
-			if err != nil {
-				return nil, err
-			}
-			tieBreakerFields = append(tieBreakerFields, sortSpec{
-				nestedField: *field,
-				desc:        false,
-			})
-		}
-		return tieBreakerFields, nil
-	}
-
-	if len(fallback) == 0 {
-		return []sortSpec{}, nil
-	}
-
-	tieBreakerFields := make([]sortSpec, 0, len(fallback))
-	for _, tieBreaker := range fallback {
-		field, err := findField(arrayField, tieBreaker)
-		if err != nil {
-			return nil, err
-		}
-		tieBreakerFields = append(tieBreakerFields, sortSpec{
-			nestedField: *field,
-			desc:        false,
-		})
-	}
-	return tieBreakerFields, nil
-
-}
-
-func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
-	var defaultSortFields []sortSpec
-
-	for i := 0; i < messageFields.Len(); i++ {
-		field := messageFields.Get(i)
-		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-
-		if fieldOpts != nil {
-			isDefaultSort := false
-
-			switch fieldOps := fieldOpts.Type.(type) {
-			case *psml_pb.FieldConstraint_Double:
-				if fieldOps.Double.Sorting != nil && fieldOps.Double.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Fixed32:
-				if fieldOps.Fixed32.Sorting != nil && fieldOps.Fixed32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Fixed64:
-				if fieldOps.Fixed64.Sorting != nil && fieldOps.Fixed64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Float:
-				if fieldOps.Float.Sorting != nil && fieldOps.Float.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Int32:
-				if fieldOps.Int32.Sorting != nil && fieldOps.Int32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Int64:
-				if fieldOps.Int64.Sorting != nil && fieldOps.Int64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sfixed32:
-				if fieldOps.Sfixed32.Sorting != nil && fieldOps.Sfixed32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sfixed64:
-				if fieldOps.Sfixed64.Sorting != nil && fieldOps.Sfixed64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sint32:
-				if fieldOps.Sint32.Sorting != nil && fieldOps.Sint32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sint64:
-				if fieldOps.Sint64.Sorting != nil && fieldOps.Sint64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Uint32:
-				if fieldOps.Uint32.Sorting != nil && fieldOps.Uint32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Uint64:
-				if fieldOps.Uint64.Sorting != nil && fieldOps.Uint64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Timestamp:
-				if fieldOps.Timestamp.Sorting != nil && fieldOps.Timestamp.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			}
-			if isDefaultSort {
-				defaultSortFields = append(defaultSortFields, sortSpec{
-					nestedField: nestedField{
-						field:     field,
-						fieldPath: []protoreflect.FieldDescriptor{field},
-						jsonPath:  []string{field.JSONName()},
-					},
-					desc: true,
-				})
-			}
-		} else if field.Kind() == protoreflect.MessageKind {
-			subSort := buildDefaultSorts(field.Message().Fields())
-			for idx, subSortField := range subSort {
-				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
-				subSortField.fieldPath = append([]protoreflect.FieldDescriptor{field}, subSortField.fieldPath...)
-				subSort[idx] = subSortField
-			}
-			defaultSortFields = append(defaultSortFields, subSort...)
-		}
-	}
-
-	return defaultSortFields
-}
-
-func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterSpec, error) {
-	var filters []filterSpec
-
-	for i := 0; i < messageFields.Len(); i++ {
-		field := messageFields.Get(i)
-		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-		vals := []interface{}{}
-
-		if fieldOpts != nil {
-			switch fieldOps := fieldOpts.Type.(type) {
-			case *psml_pb.FieldConstraint_Float:
-				if fieldOps.Float.Filtering != nil && fieldOps.Float.Filtering.Filterable {
-					for _, val := range fieldOps.Float.Filtering.DefaultFilters {
-						v, err := strconv.ParseFloat(val, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Double:
-				if fieldOps.Double.Filtering != nil && fieldOps.Double.Filtering.Filterable {
-					for _, val := range fieldOps.Double.Filtering.DefaultFilters {
-						v, err := strconv.ParseFloat(val, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Fixed32:
-				if fieldOps.Fixed32.Filtering != nil && fieldOps.Fixed32.Filtering.Filterable {
-					for _, val := range fieldOps.Fixed32.Filtering.DefaultFilters {
-						v, err := strconv.ParseUint(val, 10, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Fixed64:
-				if fieldOps.Fixed64.Filtering != nil && fieldOps.Fixed64.Filtering.Filterable {
-					for _, val := range fieldOps.Fixed64.Filtering.DefaultFilters {
-						v, err := strconv.ParseUint(val, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Int32:
-				if fieldOps.Int32.Filtering != nil && fieldOps.Int32.Filtering.Filterable {
-					for _, val := range fieldOps.Int32.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Int64:
-				if fieldOps.Int64.Filtering != nil && fieldOps.Int64.Filtering.Filterable {
-					for _, val := range fieldOps.Int64.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Sfixed32:
-				if fieldOps.Sfixed32.Filtering != nil && fieldOps.Sfixed32.Filtering.Filterable {
-					for _, val := range fieldOps.Sfixed32.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Sfixed64:
-				if fieldOps.Sfixed64.Filtering != nil && fieldOps.Sfixed64.Filtering.Filterable {
-					for _, val := range fieldOps.Sfixed64.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Sint32:
-				if fieldOps.Sint32.Filtering != nil && fieldOps.Sint32.Filtering.Filterable {
-					for _, val := range fieldOps.Sint32.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Sint64:
-				if fieldOps.Sint64.Filtering != nil && fieldOps.Sint64.Filtering.Filterable {
-					for _, val := range fieldOps.Sint64.Filtering.DefaultFilters {
-						v, err := strconv.ParseInt(val, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Uint32:
-				if fieldOps.Uint32.Filtering != nil && fieldOps.Uint32.Filtering.Filterable {
-					for _, val := range fieldOps.Uint32.Filtering.DefaultFilters {
-						v, err := strconv.ParseUint(val, 10, 32)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Uint64:
-				if fieldOps.Uint64.Filtering != nil && fieldOps.Uint64.Filtering.Filterable {
-					for _, val := range fieldOps.Uint64.Filtering.DefaultFilters {
-						v, err := strconv.ParseUint(val, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Bool:
-				if fieldOps.Bool.Filtering != nil && fieldOps.Bool.Filtering.Filterable {
-					for _, val := range fieldOps.Bool.Filtering.DefaultFilters {
-						v, err := strconv.ParseBool(val)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, v)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_String_:
-				switch fieldOps := fieldOps.String_.WellKnown.(type) {
-				case *psml_pb.StringRules_Date:
-					if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
-						for _, val := range fieldOps.Date.Filtering.DefaultFilters {
-							if !dateRegex.MatchString(val) {
-								return nil, fmt.Errorf("invalid date format for default filter (%s): %s", field.JSONName(), val)
-							}
-
-							// TODO: change to using ranges for date to handle whole
-							// year, whole month, whole day
-							vals = append(vals, val)
-						}
-					}
-
-				case *psml_pb.StringRules_ForeignKey:
-					switch fieldOps := fieldOps.ForeignKey.Type.(type) {
-					case *psml_pb.ForeignKeyRules_UniqueString:
-						if fieldOps.UniqueString.Filtering != nil && fieldOps.UniqueString.Filtering.Filterable {
-							for _, val := range fieldOps.UniqueString.Filtering.DefaultFilters {
-								vals = append(vals, val)
-							}
-						}
-
-					case *psml_pb.ForeignKeyRules_Uuid:
-						if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
-							for _, val := range fieldOps.Uuid.Filtering.DefaultFilters {
-								_, err := uuid.Parse(val)
-								if err != nil {
-									return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-								}
-
-								vals = append(vals, val)
-							}
-						}
-
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Enum:
-				if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
-					for _, val := range fieldOps.Enum.Filtering.DefaultFilters {
-						vals = append(vals, val)
-					}
-				}
-
-			case *psml_pb.FieldConstraint_Timestamp:
-				if fieldOps.Timestamp.Filtering != nil && fieldOps.Timestamp.Filtering.Filterable {
-					for _, val := range fieldOps.Timestamp.Filtering.DefaultFilters {
-						t, err := time.Parse(time.RFC3339, val)
-						if err != nil {
-							return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
-						}
-
-						vals = append(vals, timestamppb.New(t))
-					}
-				}
-			}
-
-			if len(vals) > 0 {
-				filters = append(filters, filterSpec{
-					nestedField: nestedField{
-						jsonPath:  []string{field.JSONName()},
-						fieldPath: []protoreflect.FieldDescriptor{field},
-						field:     field,
-					},
-					filterVals: vals,
-				})
-			}
-		} else if field.Kind() == protoreflect.MessageKind {
-			subFilter, err := buildDefaultFilters(field.Message().Fields())
-			if err != nil {
-				return nil, err
-			}
-
-			for _, subFilterField := range subFilter {
-				subFilterField.jsonPath = append([]string{field.JSONName()}, subFilterField.jsonPath...)
-				subFilterField.filterVals = append(vals, subFilterField.filterVals...)
-			}
-			filters = append(filters, subFilter...)
-		}
-	}
-
-	return filters, nil
-}
-
-func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
-	pageSize := ll.defaultPageSize
-
-	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
-	if ok && pageReq != nil && pageReq.PageSize != nil {
-		pageSize = uint64(*pageReq.PageSize)
-
-		if pageSize > ll.defaultPageSize {
-			return 0, fmt.Errorf("page size exceeds the maximum allowed size of %d", ll.defaultPageSize)
-		}
-	}
-
-	return pageSize, nil
-}
-
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 	if err := ll.validator.Validate(reqMsg); err != nil {
 		return fmt.Errorf("validating request %s: %w", reqMsg.ProtoReflect().Descriptor().FullName(), err)
@@ -799,12 +272,14 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		return err
 	}
 
-	var jsonRows = make([][]byte, 0, pageSize)
-	if err := db.Transact(ctx, &sqrlx.TxOptions{
+	txOpts := &sqrlx.TxOptions{
 		ReadOnly:  true,
 		Retryable: true,
 		Isolation: sql.LevelReadCommitted,
-	}, func(ctx context.Context, tx sqrlx.Transaction) error {
+	}
+
+	var jsonRows = make([][]byte, 0, pageSize)
+	err = db.Transact(ctx, txOpts, func(ctx context.Context, tx sqrlx.Transaction) error {
 		rows, err := tx.Query(ctx, selectQuery)
 		if err != nil {
 			return fmt.Errorf("run select: %w", err)
@@ -816,10 +291,13 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			if err := rows.Scan(&json); err != nil {
 				return err
 			}
+
 			jsonRows = append(jsonRows, json)
 		}
+
 		return rows.Err()
-	}); err != nil {
+	})
+	if err != nil {
 		stmt, _, _ := selectQuery.ToSql()
 		log.WithField(ctx, "query", stmt).Error("list query")
 		return fmt.Errorf("list query: %w", err)
@@ -831,9 +309,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	var nextToken string
 	for idx, rowBytes := range jsonRows {
 		rowMessage := list.NewElement().Message()
-		if err := protojson.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
+
+		err := protojson.Unmarshal(rowBytes, rowMessage.Interface())
+		if err != nil {
 			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
 		}
+
 		if idx >= int(pageSize) {
 			// TODO: This works but the token is huge.
 			// The eventual solution will need to look at
@@ -843,18 +324,21 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			if err != nil {
 				return fmt.Errorf("marshalling final row: %w", err)
 			}
+
 			nextToken = base64.StdEncoding.EncodeToString(lastBytes)
 			break
 		}
+
 		list.Append(protoreflect.ValueOf(rowMessage))
 	}
 
-	pageResponse := &psml_pb.PageResponse{}
 	if nextToken != "" {
-		pageResponse.NextToken = &nextToken
-	}
+		pageResponse := &psml_pb.PageResponse{
+			NextToken: &nextToken,
+		}
 
-	res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
+		res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
+	}
 
 	return nil
 }
@@ -889,10 +373,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
 	if ok && reqQuery != nil {
+		if err := ll.validateQueryRequest(reqQuery); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "query validation: %s", err)
+		}
+
 		if len(reqQuery.GetSorts()) > 0 {
 			dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "sort validation: %s", err)
+				return nil, status.Errorf(codes.InvalidArgument, "build sorts: %s", err)
 			}
 
 			sortFields = dynSorts
@@ -901,13 +389,20 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if len(reqQuery.GetFilters()) > 0 {
 			dynFilters, err := ll.buildDynamicFilter(tableAlias, reqQuery.GetFilters())
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "filter validation: %s", err)
+				return nil, status.Errorf(codes.InvalidArgument, "build filters: %s", err)
 			}
 
 			filterFields = append(filterFields, dynFilters...)
 		}
+
+		// TODO: searches
 	}
 
+	for i := range filterFields {
+		selectQuery.Where(filterFields[i])
+	}
+
+	// apply default filters if no filters have been requested
 	if ll.defaultFilterFields != nil && len(filterFields) == 0 {
 		and := sq.And{}
 		for _, spec := range ll.defaultFilterFields {
@@ -921,10 +416,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		if len(and) > 0 {
 			selectQuery.Where(and)
-		}
-	} else if len(filterFields) > 0 {
-		for i := range filterFields {
-			selectQuery.Where(filterFields[i])
 		}
 	}
 
@@ -996,9 +487,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			)
 			valuePlaceholder := "?"
 
-			fieldVal, err := walkProtoValue(rowMessage, sortField.fieldPath)
+			fieldVal, err := findFieldValue(rowMessage, sortField.fieldPath)
 			if err != nil {
-				return nil, fmt.Errorf("sort field %s: %w", strings.Join(sortField.jsonPath, "."), err)
+				return nil, fmt.Errorf("sort field %s: %w", sortField.fieldName(), err)
 			}
 
 			dbVal := fieldVal.Interface()
@@ -1065,6 +556,8 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					rowSelecter = fmt.Sprintf("NOT (%s)::boolean", rowSelecter)
 				}
 
+			// TODO: Reversals for the other types that are sortable
+
 			default:
 				return nil, fmt.Errorf("sort field %s is of type %T", sortField.field.Name(), dbVal)
 			}
@@ -1072,7 +565,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			lhsFields = append(lhsFields, rowSelecter)
 			rhsValues = append(rhsValues, dbVal)
 			rhsPlaceholders = append(rhsPlaceholders, valuePlaceholder)
-
 		}
 
 		// From https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
@@ -1110,7 +602,164 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	return selectQuery, nil
 }
 
-func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescriptor) (protoreflect.Value, error) {
+func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
+	pageSize := ll.defaultPageSize
+
+	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
+	if ok && pageReq != nil && pageReq.PageSize != nil {
+		pageSize = uint64(*pageReq.PageSize)
+
+		if pageSize > ll.defaultPageSize {
+			return 0, fmt.Errorf("page size exceeds the maximum allowed size of %d", ll.defaultPageSize)
+		}
+	}
+
+	return pageSize, nil
+}
+
+func camelToSnake(jsonName string) string {
+	var out strings.Builder
+	for i, r := range jsonName {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				out.WriteRune('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+		} else {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) error {
+	err := validateQueryRequestSorts(ll.arrayField.Message(), query.GetSorts())
+	if err != nil {
+		return fmt.Errorf("sort validation: %w", err)
+	}
+
+	err = validateQueryRequestFilters(ll.arrayField.Message(), query.GetFilters())
+	if err != nil {
+		return fmt.Errorf("filter validation: %w", err)
+	}
+
+	err = validateQueryRequestSearches(ll.arrayField.Message(), query.GetSearches())
+	if err != nil {
+		return fmt.Errorf("search validation: %w", err)
+	}
+
+	return nil
+}
+
+func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*psml_pb.Search) error {
+	for _, search := range searches {
+		// validate fields exist from the request query
+		err := validateFieldName(message, search.GetField())
+		if err != nil {
+			return fmt.Errorf("field name: %w", err)
+		}
+
+		spec, err := findFieldSpec(message, search.GetField())
+		if err != nil {
+			return err
+		}
+
+		// validate the fields are annotated correctly for the request query
+		searchOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
+		}
+
+		searchable := false
+		if searchOpts != nil {
+			switch spec.field.Kind() {
+			case protoreflect.StringKind:
+				switch searchOpts.GetString_().WellKnown.(type) {
+				case *psml_pb.StringRules_OpenText:
+					searchable = searchOpts.GetString_().GetOpenText().GetSearching().Searchable
+				}
+			}
+		}
+
+		if !searchable {
+			return fmt.Errorf("requested search field '%s' is not searchable", search.Field)
+		}
+	}
+
+	return nil
+}
+
+func validateFieldName(message protoreflect.MessageDescriptor, path string) error {
+	var name protoreflect.Name
+	var remainder string
+
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		name = protoreflect.Name(camelToSnake(parts[0]))
+		remainder = parts[1]
+	} else {
+		name = protoreflect.Name(camelToSnake(path))
+	}
+
+	field := message.Fields().ByName(name)
+	if field == nil {
+		oneof := message.Oneofs().ByName(name)
+		if oneof == nil {
+			return fmt.Errorf("no field named '%s' in %s", name, message.FullName())
+		}
+	}
+
+	if remainder != "" {
+		if field.Kind() != protoreflect.MessageKind {
+			return fmt.Errorf("field %s is not a message", name)
+		}
+
+		return validateFieldName(field.Message(), remainder)
+	}
+
+	return nil
+}
+
+func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldSpec, error) {
+	var name protoreflect.Name
+	var remainder string
+
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 2 {
+		name = protoreflect.Name(camelToSnake(parts[0]))
+		remainder = parts[1]
+	} else {
+		name = protoreflect.Name(camelToSnake(path))
+	}
+
+	field := message.Fields().ByName(name)
+	if field == nil {
+		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
+	}
+
+	if remainder == "" {
+		return &fieldSpec{
+			field:     field,
+			fieldPath: []protoreflect.FieldDescriptor{field},
+		}, nil
+	}
+
+	if field.Kind() != protoreflect.MessageKind {
+		return nil, fmt.Errorf("field %s is not a message", name)
+	}
+
+	spec, err := findFieldSpec(field.Message(), remainder)
+	if err != nil {
+		return nil, err
+	}
+
+	return &fieldSpec{
+		field:     spec.field,
+		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
+	}, nil
+}
+
+func findFieldValue(msg protoreflect.Message, path []protoreflect.FieldDescriptor) (protoreflect.Value, error) {
 	if len(path) == 0 {
 		return protoreflect.Value{}, fmt.Errorf("empty path")
 	}
@@ -1129,437 +778,5 @@ func walkProtoValue(msg protoreflect.Message, path []protoreflect.FieldDescripto
 		return protoreflect.Value{}, fmt.Errorf("field %s is not a message", field.Name())
 	}
 
-	return walkProtoValue(val.Message(), path[1:])
-}
-
-func camelToSnake(jsonName string) string {
-	var out strings.Builder
-	for i, r := range jsonName {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				out.WriteRune('_')
-			}
-			out.WriteRune(unicode.ToLower(r))
-		} else {
-			out.WriteRune(r)
-		}
-	}
-	return out.String()
-}
-
-func findField(message protoreflect.MessageDescriptor, path string) (*nestedField, error) {
-	var fieldName protoreflect.Name
-	var furtherPath string
-	parts := strings.SplitN(path, ".", 2)
-	if len(parts) == 2 {
-		fieldName = protoreflect.Name(camelToSnake(parts[0]))
-		furtherPath = parts[1]
-	} else {
-		fieldName = protoreflect.Name(camelToSnake(path))
-	}
-
-	field := message.Fields().ByName(fieldName)
-	if field == nil {
-		return nil, fmt.Errorf("no field named '%s' in %s", fieldName, message.FullName())
-	}
-
-	if furtherPath == "" {
-		return &nestedField{
-			field:     field,
-			fieldPath: []protoreflect.FieldDescriptor{field},
-			jsonPath:  []string{field.JSONName()},
-		}, nil
-	}
-
-	if field.Kind() != protoreflect.MessageKind {
-		return nil, fmt.Errorf("field %s is not a message", fieldName)
-	}
-	spec, err := findField(field.Message(), furtherPath)
-	if err != nil {
-		return nil, fmt.Errorf("field %s: %w", parts[0], err)
-	}
-
-	return &nestedField{
-		field:     spec.field,
-		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
-		jsonPath:  append([]string{field.JSONName()}, spec.jsonPath...),
-	}, nil
-
-}
-
-func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortSpec, error) {
-	results := []sortSpec{}
-	direction := ""
-	for _, sort := range sorts {
-		// validate the fields requested exist
-		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
-		if err != nil {
-			return nil, fmt.Errorf("requested sort: %w", err)
-		}
-
-		if nestedField.field.Cardinality() == protoreflect.Repeated {
-			return nil, fmt.Errorf("requested sort field '%s' is a repeated field, it must be a scalar", sort.Field)
-		}
-
-		// validate the fields requested are marked as sortable
-		sortOpts, ok := proto.GetExtension(nestedField.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-		if !ok {
-			return nil, fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
-		}
-
-		sortable := false
-		if sortOpts != nil {
-			switch nestedField.field.Kind() {
-			case protoreflect.DoubleKind:
-				sortable = sortOpts.GetDouble().GetSorting().Sortable
-			case protoreflect.Fixed32Kind:
-				sortable = sortOpts.GetFixed32().GetSorting().Sortable
-			case protoreflect.Fixed64Kind:
-				sortable = sortOpts.GetFixed64().GetSorting().Sortable
-			case protoreflect.FloatKind:
-				sortable = sortOpts.GetFloat().GetSorting().Sortable
-			case protoreflect.Int32Kind:
-				sortable = sortOpts.GetInt32().GetSorting().Sortable
-			case protoreflect.Int64Kind:
-				sortable = sortOpts.GetInt64().GetSorting().Sortable
-			case protoreflect.Sfixed32Kind:
-				sortable = sortOpts.GetSfixed32().GetSorting().Sortable
-			case protoreflect.Sfixed64Kind:
-				sortable = sortOpts.GetSfixed64().GetSorting().Sortable
-			case protoreflect.Sint32Kind:
-				sortable = sortOpts.GetSint32().GetSorting().Sortable
-			case protoreflect.Sint64Kind:
-				sortable = sortOpts.GetSint64().GetSorting().Sortable
-			case protoreflect.Uint32Kind:
-				sortable = sortOpts.GetUint32().GetSorting().Sortable
-			case protoreflect.Uint64Kind:
-				sortable = sortOpts.GetUint64().GetSorting().Sortable
-			case protoreflect.MessageKind:
-				if nestedField.field.Message().FullName() == "google.protobuf.Timestamp" {
-					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
-				}
-			}
-		}
-
-		if !sortable {
-			return nil, fmt.Errorf("requested sort field '%s' is not sortable", sort.Field)
-		}
-
-		results = append(results, sortSpec{
-			nestedField: *nestedField,
-			desc:        sort.Descending,
-		})
-
-		// validate direction of all the fields is the same
-		if direction == "" {
-			direction = "ASC"
-			if sort.Descending {
-				direction = "DESC"
-			}
-		} else {
-			if (direction == "DESC" && !sort.Descending) || (direction == "ASC" && sort.Descending) {
-				return nil, fmt.Errorf("requested sorts have conflicting directions, they must all be the same")
-			}
-		}
-	}
-
-	return results, nil
-}
-
-func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
-	out := []sq.Sqlizer{}
-
-	for i := range filters {
-		switch filters[i].GetType().(type) {
-		case *psml_pb.Filter_Field:
-			f, err := findField(ll.arrayField.Message(), filters[i].GetField().GetName())
-			if err != nil {
-				return nil, fmt.Errorf("dynamic filter: %w", err)
-			}
-
-			field := &filterSpec{
-				nestedField: *f,
-			}
-
-			if filters[i].GetField() == nil {
-				return nil, fmt.Errorf("dynamic filter: field is nil")
-			}
-
-			switch filters[i].GetField().GetType().(type) {
-			case *psml_pb.Field_Value:
-				val, err := validateFilterableField(field.field, filters[i].GetField().GetValue())
-				if err != nil {
-					return nil, fmt.Errorf("dynamic filter: value validation: %w", err)
-				}
-
-				out = append(out, sq.And{sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, field.jsonbPath()), pg.JSONB(val))})
-			case *psml_pb.Field_Range:
-				var min, max interface{}
-				min = ""
-				max = ""
-				rawMin := filters[i].GetField().GetRange().GetMin()
-				rawMax := filters[i].GetField().GetRange().GetMax()
-
-				if rawMin != "" {
-					min, err = validateFilterableField(field.field, rawMin)
-					if err != nil {
-						return nil, fmt.Errorf("dynamic filter: range min validation: %w", err)
-					}
-				}
-
-				if rawMax != "" {
-					max, err = validateFilterableField(field.field, rawMax)
-					if err != nil {
-						return nil, fmt.Errorf("dynamic filter: range max validation: %w", err)
-					}
-				}
-
-				switch {
-				case min != "" && max != "":
-					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ >= $min && @ <= $max)', jsonb_build_object('min', ?::text, 'max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
-					out = append(out, sq.And{sq.Expr(exprStr, min, max)})
-				case min != "":
-					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ >= $min)', jsonb_build_object('min', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
-					out = append(out, sq.And{sq.Expr(exprStr, min)})
-				case max != "":
-					exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ <= $max)', jsonb_build_object('max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
-					out = append(out, sq.And{sq.Expr(exprStr, max)})
-				}
-			}
-		case *psml_pb.Filter_And:
-			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetAnd().GetFilters())
-			if err != nil {
-				return nil, fmt.Errorf("dynamic filter: and: %w", err)
-			}
-			and := sq.And{}
-			and = append(and, f...)
-
-			out = append(out, and)
-		case *psml_pb.Filter_Or:
-			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetOr().GetFilters())
-			if err != nil {
-				return nil, fmt.Errorf("dynamic filter: or: %w", err)
-			}
-			or := sq.Or{}
-			or = append(or, f...)
-
-			out = append(out, or)
-		}
-	}
-
-	return out, nil
-}
-
-func validateFilterableField(field protoreflect.FieldDescriptor, reqValue string) (interface{}, error) {
-	filterable := false
-	var val interface{}
-
-	fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-
-	if fieldOpts != nil {
-		switch fieldOps := fieldOpts.Type.(type) {
-		case *psml_pb.FieldConstraint_Double:
-			if fieldOps.Double.Filtering != nil && fieldOps.Double.Filtering.Filterable {
-				v, err := strconv.ParseFloat(reqValue, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing double: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Fixed32:
-			if fieldOps.Fixed32.Filtering != nil && fieldOps.Fixed32.Filtering.Filterable {
-				v, err := strconv.ParseUint(reqValue, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing fixed32: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Fixed64:
-			if fieldOps.Fixed64.Filtering != nil && fieldOps.Fixed64.Filtering.Filterable {
-				v, err := strconv.ParseUint(reqValue, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing fixed64: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Float:
-			if fieldOps.Float.Filtering != nil && fieldOps.Float.Filtering.Filterable {
-				v, err := strconv.ParseFloat(reqValue, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing float: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Int32:
-			if fieldOps.Int32.Filtering != nil && fieldOps.Int32.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing int32: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Int64:
-			if fieldOps.Int64.Filtering != nil && fieldOps.Int64.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing int64: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Sfixed32:
-			if fieldOps.Sfixed32.Filtering != nil && fieldOps.Sfixed32.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing sfixed32: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Sfixed64:
-			if fieldOps.Sfixed64.Filtering != nil && fieldOps.Sfixed64.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing sfixed64: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Sint32:
-			if fieldOps.Sint32.Filtering != nil && fieldOps.Sint32.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing sint32: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Sint64:
-			if fieldOps.Sint64.Filtering != nil && fieldOps.Sint64.Filtering.Filterable {
-				v, err := strconv.ParseInt(reqValue, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing sint64: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Uint32:
-			if fieldOps.Uint32.Filtering != nil && fieldOps.Uint32.Filtering.Filterable {
-				v, err := strconv.ParseUint(reqValue, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("parsing uint32: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Uint64:
-			if fieldOps.Uint64.Filtering != nil && fieldOps.Uint64.Filtering.Filterable {
-				v, err := strconv.ParseUint(reqValue, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parsing uint64: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Bool:
-			if fieldOps.Bool.Filtering != nil && fieldOps.Bool.Filtering.Filterable {
-				v, err := strconv.ParseBool(reqValue)
-				if err != nil {
-					return nil, fmt.Errorf("parsing bool: %w", err)
-				}
-
-				val = v
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_String_:
-			switch fieldOps := fieldOps.String_.WellKnown.(type) {
-			case *psml_pb.StringRules_Date:
-				if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
-					_, err := time.Parse("2006-01-02", reqValue)
-					if err != nil {
-						_, err = time.Parse("2006-01", reqValue)
-						if err != nil {
-							_, err = time.Parse("2006", reqValue)
-							if err != nil {
-								return nil, fmt.Errorf("parsing date: %w", err)
-							}
-						}
-					}
-
-					val = reqValue
-					filterable = true
-				}
-			case *psml_pb.StringRules_ForeignKey:
-				switch fieldOps := fieldOps.ForeignKey.Type.(type) {
-				case *psml_pb.ForeignKeyRules_UniqueString:
-					if fieldOps.UniqueString.Filtering != nil && fieldOps.UniqueString.Filtering.Filterable {
-						val = reqValue
-						filterable = true
-					}
-				case *psml_pb.ForeignKeyRules_Uuid:
-					if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
-						_, err := uuid.Parse(reqValue)
-						if err != nil {
-							return nil, fmt.Errorf("parsing uuid: %w", err)
-						}
-
-						val = reqValue
-						filterable = true
-					}
-				}
-			}
-		case *psml_pb.FieldConstraint_Enum:
-			if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
-				name := strings.ToTitle(reqValue)
-				prefix := strings.TrimSuffix(string(field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
-
-				if !strings.HasPrefix(reqValue, prefix) {
-					name = prefix + "_" + name
-				}
-				eval := field.Enum().Values().ByName(protoreflect.Name(name))
-
-				if eval == nil {
-					return nil, fmt.Errorf("enum value %s is not a valid enum value for field", reqValue)
-				}
-
-				val = eval.Name()
-				filterable = true
-			}
-		case *psml_pb.FieldConstraint_Timestamp:
-			if fieldOps.Timestamp.Filtering != nil && fieldOps.Timestamp.Filtering.Filterable {
-				t, err := time.Parse(time.RFC3339, reqValue)
-				if err != nil {
-					return nil, fmt.Errorf("parsing timestamp: %w", err)
-				}
-
-				val = t
-				filterable = true
-			}
-		default:
-			return nil, fmt.Errorf("field %s of unsupported filtering type", field.JSONName())
-		}
-	}
-
-	if !filterable {
-		return nil, fmt.Errorf("field %s is not filterable", field.JSONName())
-	}
-
-	return val, nil
+	return findFieldValue(val.Message(), path[1:])
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFieldPath(t *testing.T) {
+func TestValidateFieldName(t *testing.T) {
 	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
 		"test.proto": `
 		syntax = "proto3";
@@ -20,45 +20,134 @@ func TestFieldPath(t *testing.T) {
 
 		message Foo {
 			string id = 1;
-			Bar bar = 2;
+			Profile profile = 2;
 		}
 
-		message Bar {
-			string id = 1;
+		message Profile {
+			int64 weight = 1;
+
+			oneof type {
+				Card card = 2;
+			}
+		}
+
+		message Card {
+			int64 size = 1;
 		}
 	`})
 
 	fooDesc := descFiles.MessageByName(t, "test.Foo")
 
-	for _, tc := range []struct {
+	tcs := []struct {
 		name string
-		path []string
 	}{
-		{
-			name: "id",
-			path: []string{"id"},
-		},
-		{
-			name: "bar.id",
-			path: []string{"bar", "id"},
-		},
-	} {
+		{name: "id"},
+		{name: "profile.weight"},
+		{name: "profile.type"},
+		{name: "profile.card.size"},
+	}
+
+	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			field, err := findField(fooDesc, tc.name)
+			err := validateFieldName(fooDesc, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	tcs = []struct {
+		name string
+	}{
+		{name: "foo"},
+		{name: "profile.weight.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateFieldName(fooDesc, tc.name)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestFindFieldSpec(t *testing.T) {
+	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
+		"test.proto": `
+		syntax = "proto3";
+
+		import "psm/list/v1/page.proto";
+		import "psm/list/v1/query.proto";
+
+		package test;
+
+		message Foo {
+			string id = 1;
+			Profile profile = 2;
+		}
+
+		message Profile {
+			int64 weight = 1;
+
+			oneof type {
+				Card card = 2;
+			}
+		}
+
+		message Card {
+			int64 size = 1;
+		}
+	`})
+
+	fooDesc := descFiles.MessageByName(t, "test.Foo")
+
+	tcs := []struct {
+		name string
+	}{
+		{name: "id"},
+		{name: "profile.weight"},
+		{name: "profile.card.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := findFieldSpec(fooDesc, tc.name)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, tc.path, field.jsonPath)
-			namedFieldPath := make([]string, len(field.fieldPath))
-			for i, field := range field.fieldPath {
-				namedFieldPath[i] = string(field.Name())
+			if spec.field == nil {
+				t.Fatal("expected field")
 			}
-			assert.Equal(t, tc.path, namedFieldPath)
 
+			parts := strings.Split(tc.name, ".")
+			name := parts[len(parts)-1]
+			assert.Equal(t, string(spec.field.Name()), name)
 		})
 	}
 
+	tcs = []struct {
+		name string
+	}{
+		{name: "foo"},
+		{name: "profile.type"},
+		{name: "profile.weight.size"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := findFieldSpec(fooDesc, tc.name)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+
+			if spec != nil {
+				t.Fatal("expected no spec")
+			}
+		})
+	}
 }
 
 type composed struct {
@@ -413,6 +502,27 @@ func TestBuildListReflection(t *testing.T) {
 	}.toString(),
 		listerOptions{},
 		"no query field in request",
+	)
+
+	runSad("repeated field sort", `
+		message ListFoosRequest {
+			psm.list.v1.PageRequest page = 1;
+			psm.list.v1.QueryRequest query = 2;
+		}
+
+		message ListFoosResponse {
+			repeated Foo foos = 1;
+			psm.list.v1.PageResponse page = 2;
+		}
+
+		message Foo {
+			string id = 1;
+			int64 seq = 2 [(psm.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
+			repeated int64 weight = 3 [(psm.list.v1.field).int64.sorting.sortable = true];
+		}
+		`,
+		listerOptions{},
+		"sorting not allowed on repeated field",
 	)
 
 	runSad("repeated sub field sort", `
