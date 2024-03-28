@@ -1,6 +1,7 @@
 package pquery
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -398,18 +399,64 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 	}
 
 	spec, err := findFieldSpec(message, filterField.GetName())
-	if err != nil {
-		return err
+	if err != nil && !errors.Is(err, ErrOneof) {
+		return fmt.Errorf("find field: %w", err)
 	}
 
 	// validate the fields are annotated correctly for the request query
 	// and the values are valid for the field
+
+	filterable := false
+
+	if errors.Is(err, ErrOneof) {
+		ospec, err := findOneofSpec(message, filterField.GetName())
+		if err != nil {
+			return fmt.Errorf("find field: %w", err)
+		}
+
+		filterOpts, ok := proto.GetExtension(ospec.oneof.Options().(*descriptorpb.OneofOptions), psml_pb.E_Oneof).(*psml_pb.OneofConstraint)
+		if !ok {
+			return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
+		}
+
+		if filterOpts != nil {
+			filterable = filterOpts.GetFiltering().Filterable
+
+			if filterable {
+				switch filterField.Type.(type) {
+				case *psml_pb.Field_Value:
+					val := filterField.GetValue()
+
+					found := false
+					for i := 0; i < ospec.oneof.Fields().Len(); i++ {
+						f := ospec.oneof.Fields().Get(i)
+						if strings.EqualFold(string(f.Name()), val) {
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						return fmt.Errorf("filter value '%s' is not found in oneof '%s'", val, filterField.Name)
+					}
+				case *psml_pb.Field_Range:
+					return fmt.Errorf("oneofs cannot be filtered by range")
+				}
+			}
+		}
+
+		if !filterable {
+			return fmt.Errorf("requested filter field '%s' is not filterable", filterField.Name)
+		}
+
+		return nil
+	}
+
 	filterOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 	if !ok {
 		return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
 	}
 
-	filterable := false
 	if filterOpts != nil {
 		switch spec.field.Kind() {
 		case protoreflect.DoubleKind:
