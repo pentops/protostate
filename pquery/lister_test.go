@@ -8,58 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFieldPath(t *testing.T) {
-	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
-		"test.proto": `
-		syntax = "proto3";
-
-		import "psm/list/v1/page.proto";
-		import "psm/list/v1/query.proto";
-
-		package test;
-
-		message Foo {
-			string id = 1;
-			Bar bar = 2;
-		}
-
-		message Bar {
-			string id = 1;
-		}
-	`})
-
-	fooDesc := descFiles.MessageByName(t, "test.Foo")
-
-	for _, tc := range []struct {
-		name string
-		path []string
-	}{
-		{
-			name: "id",
-			path: []string{"id"},
-		},
-		{
-			name: "bar.id",
-			path: []string{"bar", "id"},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			field, err := findField(fooDesc, tc.name)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, tc.path, field.jsonPath)
-			namedFieldPath := make([]string, len(field.fieldPath))
-			for i, field := range field.fieldPath {
-				namedFieldPath[i] = string(field.Name())
-			}
-			assert.Equal(t, tc.path, namedFieldPath)
-
-		})
-	}
-}
-
 func TestValidateFieldName(t *testing.T) {
 	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
 		"test.proto": `
@@ -125,7 +73,7 @@ func TestValidateFieldName(t *testing.T) {
 	}
 }
 
-func TestFindFieldDescriptor(t *testing.T) {
+func TestFindFieldSpec(t *testing.T) {
 	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
 		"test.proto": `
 		syntax = "proto3";
@@ -165,14 +113,18 @@ func TestFindFieldDescriptor(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			field := findFieldDescriptor(fooDesc, tc.name)
-			if field == nil {
+			spec, err := findFieldSpec(fooDesc, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if spec.field == nil {
 				t.Fatal("expected field")
 			}
 
 			parts := strings.Split(tc.name, ".")
 			name := parts[len(parts)-1]
-			assert.Equal(t, string(field.Name()), name)
+			assert.Equal(t, string(spec.field.Name()), name)
 		})
 	}
 
@@ -186,9 +138,13 @@ func TestFindFieldDescriptor(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			field := findFieldDescriptor(fooDesc, tc.name)
-			if field != nil {
-				t.Fatal("expected no field")
+			spec, err := findFieldSpec(fooDesc, tc.name)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+
+			if spec != nil {
+				t.Fatal("expected no spec")
 			}
 		})
 	}

@@ -11,21 +11,35 @@ import (
 )
 
 type sortSpec struct {
-	nestedField
-	desc bool
+	field     protoreflect.FieldDescriptor
+	fieldPath []protoreflect.FieldDescriptor
+	desc      bool
 }
 
 func (ss sortSpec) jsonbPath() string {
 	out := strings.Builder{}
-	last := len(ss.jsonPath) - 1
-	for idx, part := range ss.jsonPath {
+	last := len(ss.fieldPath) - 1
+	for idx, part := range ss.fieldPath {
 		// last part gets a double >
 		if idx == last {
 			out.WriteString("->>")
 		} else {
 			out.WriteString("->")
 		}
-		out.WriteString(fmt.Sprintf("'%s'", part))
+		out.WriteString(fmt.Sprintf("'%s'", part.JSONName()))
+	}
+
+	return out.String()
+}
+
+func (ss sortSpec) fieldName() string {
+	out := strings.Builder{}
+	last := len(ss.fieldPath) - 1
+	for idx, part := range ss.fieldPath {
+		out.WriteString(part.JSONName())
+		if idx != last {
+			out.WriteString(".")
+		}
 	}
 
 	return out.String()
@@ -36,14 +50,15 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
 		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
-			field, err := findField(arrayField, tieBreaker)
+			spec, err := findFieldSpec(arrayField, tieBreaker)
 			if err != nil {
 				return nil, err
 			}
 
 			tieBreakerFields = append(tieBreakerFields, sortSpec{
-				nestedField: *field,
-				desc:        false,
+				field:     spec.field,
+				fieldPath: spec.fieldPath,
+				desc:      false,
 			})
 		}
 
@@ -56,14 +71,15 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 
 	tieBreakerFields := make([]sortSpec, 0, len(fallback))
 	for _, tieBreaker := range fallback {
-		field, err := findField(arrayField, tieBreaker)
+		spec, err := findFieldSpec(arrayField, tieBreaker)
 		if err != nil {
 			return nil, err
 		}
 
 		tieBreakerFields = append(tieBreakerFields, sortSpec{
-			nestedField: *field,
-			desc:        false,
+			field:     spec.field,
+			fieldPath: spec.fieldPath,
+			desc:      false,
 		})
 	}
 
@@ -136,18 +152,14 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 			}
 			if isDefaultSort {
 				defaultSortFields = append(defaultSortFields, sortSpec{
-					nestedField: nestedField{
-						field:     field,
-						fieldPath: []protoreflect.FieldDescriptor{field},
-						jsonPath:  []string{field.JSONName()},
-					},
-					desc: true,
+					field:     field,
+					fieldPath: []protoreflect.FieldDescriptor{field},
+					desc:      true,
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
 			subSort := buildDefaultSorts(field.Message().Fields())
 			for idx, subSortField := range subSort {
-				subSortField.jsonPath = append([]string{field.JSONName()}, subSortField.jsonPath...)
 				subSortField.fieldPath = append([]protoreflect.FieldDescriptor{field}, subSortField.fieldPath...)
 				subSort[idx] = subSortField
 			}
@@ -163,14 +175,15 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortS
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
-		nestedField, err := findField(ll.arrayField.Message(), sort.Field)
+		spec, err := findFieldSpec(ll.arrayField.Message(), sort.Field)
 		if err != nil {
-			return nil, fmt.Errorf("requested sort: %w", err)
+			return nil, err
 		}
 
 		results = append(results, sortSpec{
-			nestedField: *nestedField,
-			desc:        sort.Descending,
+			field:     spec.field,
+			fieldPath: spec.fieldPath,
+			desc:      sort.Descending,
 		})
 
 		// TODO: Remove this constraint, we can sort by different directions once we have the reversal logic in place
@@ -291,4 +304,65 @@ func isSortingAnnotated(opts *psml_pb.FieldConstraint) bool {
 	}
 
 	return annotated
+}
+
+func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*psml_pb.Sort) error {
+	for _, sort := range sorts {
+		// validate fields exist from the request query
+		err := validateFieldName(message, sort.GetField())
+		if err != nil {
+			return fmt.Errorf("field name: %w", err)
+		}
+
+		spec, err := findFieldSpec(message, sort.GetField())
+		if err != nil {
+			return err
+		}
+
+		// validate the fields are annotated correctly for the request query
+		sortOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		if !ok {
+			return fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
+		}
+
+		sortable := false
+		if sortOpts != nil {
+			switch spec.field.Kind() {
+			case protoreflect.DoubleKind:
+				sortable = sortOpts.GetDouble().GetSorting().Sortable
+			case protoreflect.Fixed32Kind:
+				sortable = sortOpts.GetFixed32().GetSorting().Sortable
+			case protoreflect.Fixed64Kind:
+				sortable = sortOpts.GetFixed64().GetSorting().Sortable
+			case protoreflect.FloatKind:
+				sortable = sortOpts.GetFloat().GetSorting().Sortable
+			case protoreflect.Int32Kind:
+				sortable = sortOpts.GetInt32().GetSorting().Sortable
+			case protoreflect.Int64Kind:
+				sortable = sortOpts.GetInt64().GetSorting().Sortable
+			case protoreflect.Sfixed32Kind:
+				sortable = sortOpts.GetSfixed32().GetSorting().Sortable
+			case protoreflect.Sfixed64Kind:
+				sortable = sortOpts.GetSfixed64().GetSorting().Sortable
+			case protoreflect.Sint32Kind:
+				sortable = sortOpts.GetSint32().GetSorting().Sortable
+			case protoreflect.Sint64Kind:
+				sortable = sortOpts.GetSint64().GetSorting().Sortable
+			case protoreflect.Uint32Kind:
+				sortable = sortOpts.GetUint32().GetSorting().Sortable
+			case protoreflect.Uint64Kind:
+				sortable = sortOpts.GetUint64().GetSorting().Sortable
+			case protoreflect.MessageKind:
+				if spec.field.Message().FullName() == "google.protobuf.Timestamp" {
+					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
+				}
+			}
+		}
+
+		if !sortable {
+			return fmt.Errorf("requested sort field '%s' is not sortable", sort.Field)
+		}
+	}
+
+	return nil
 }
