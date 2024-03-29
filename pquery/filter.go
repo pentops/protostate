@@ -27,13 +27,11 @@ func (fs filterSpec) jsonbPath() string {
 	out := strings.Builder{}
 	out.WriteString("$")
 
-	if fs.field != nil {
-		for idx := range fs.fieldPath {
-			out.WriteString(fmt.Sprintf(".%s", fs.fieldPath[idx].JSONName()))
+	for idx := range fs.fieldPath {
+		out.WriteString(fmt.Sprintf(".%s", fs.fieldPath[idx].JSONName()))
 
-			if fs.fieldPath[idx].Cardinality() == protoreflect.Repeated {
-				out.WriteString("[*]")
-			}
+		if fs.fieldPath[idx].Cardinality() == protoreflect.Repeated {
+			out.WriteString("[*]")
 		}
 	}
 
@@ -295,13 +293,26 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 		switch filters[i].GetType().(type) {
 		case *psml_pb.Filter_Field:
 			spec, err := findFieldSpec(ll.arrayField.Message(), filters[i].GetField().GetName())
-			if err != nil {
+			if err != nil && !errors.Is(err, ErrOneof) {
 				return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 			}
 
-			o, err := ll.buildDynamicFilterField(tableAlias, spec, filters[i])
-			if err != nil {
-				return nil, fmt.Errorf("dynamic filter: build field: %w", err)
+			var o sq.Sqlizer
+			if errors.Is(err, ErrOneof) {
+				ospec, err := findOneofSpec(ll.arrayField.Message(), filters[i].GetField().GetName())
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: find oneof: %w", err)
+				}
+
+				o, err = ll.buildDynamicFilterOneof(tableAlias, ospec, filters[i])
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: build oneof: %w", err)
+				}
+			} else {
+				o, err = ll.buildDynamicFilterField(tableAlias, spec, filters[i])
+				if err != nil {
+					return nil, fmt.Errorf("dynamic filter: build field: %w", err)
+				}
 			}
 
 			out = append(out, o)
@@ -333,7 +344,6 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *fie
 	var out sq.And
 
 	field := &filterSpec{
-		field:     spec.field,
 		fieldPath: spec.fieldPath,
 	}
 
@@ -344,7 +354,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *fie
 	switch filter.GetField().GetType().(type) {
 	case *psml_pb.Field_Value:
 		val := filter.GetField().GetValue()
-		if field.field.Kind() == protoreflect.EnumKind {
+		if spec.field.Kind() == protoreflect.EnumKind {
 			name := strings.ToTitle(val)
 			prefix := strings.TrimSuffix(string(spec.field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
 
@@ -371,6 +381,33 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *fie
 			exprStr := fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s ?? (@ <= $max)', jsonb_build_object('max', ?::text)) <> '[]'::jsonb", tableAlias, ll.dataColumn, field.jsonbPath())
 			out = sq.And{sq.Expr(exprStr, max)}
 		}
+	}
+
+	return out, nil
+}
+
+func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *oneofSpec, filter *psml_pb.Filter) (sq.Sqlizer, error) {
+	var out sq.And
+
+	field := &filterSpec{
+		fieldPath: ospec.fieldPath,
+	}
+
+	if filter.GetField() == nil {
+		return nil, fmt.Errorf("dynamic filter: field is nil")
+	}
+
+	switch filter.GetField().GetType().(type) {
+	case *psml_pb.Field_Value:
+		val := filter.GetField().GetValue()
+
+		// Val is used directly here instead of passed in as an expression
+		// parameter. It has been sanitized by validation against the oneof
+		// field names.
+		exprStr := fmt.Sprintf("jsonb_array_length(jsonb_path_query_array(%s.%s, '%s ?? (exists(@.%s))')) > 0", tableAlias, ll.dataColumn, field.jsonbPath(), val)
+		out = sq.And{sq.Expr(exprStr)}
+	case *psml_pb.Field_Range:
+		return nil, fmt.Errorf("oneofs cannot be filtered by range")
 	}
 
 	return out, nil
