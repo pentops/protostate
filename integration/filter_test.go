@@ -761,7 +761,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Oneof filter", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.StepC("List Page (created)", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
 				Page: &psml_pb.PageRequest{
@@ -789,11 +789,71 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(res.Events) != 5 {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Events))
+			if len(res.Events) != 1 {
+				t.Fatalf("expected %d states, got %d", 1, len(res.Events))
 			}
 
 			for ii, event := range res.Events {
+				switch event.Event.Type.(type) {
+				case *testpb.FooEventType_Created_:
+				default:
+					t.Fatalf("expected event to be of type %T, got %T", &testpb.FooEventType_Created_{}, event.Event.Type)
+				}
+
+				t.Logf("%d: %s", ii, event.Event)
+			}
+		})
+
+		ss.StepC("List Page (delted)", func(ctx context.Context, t flowtest.Asserter) {
+			id := ids[tenants[0]][0]
+
+			event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
+				u.Delete = true
+			})
+
+			_, err := sm.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			req := &testpb.ListFooEventsRequest{
+				FooId: id,
+				Page: &psml_pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &psml_pb.QueryRequest{
+					Filters: []*psml_pb.Filter{
+						{
+							Type: &psml_pb.Filter_Field{
+								Field: &psml_pb.Field{
+									Name: "event.type",
+									Type: &psml_pb.Field_Value{
+										Value: "deleted",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &testpb.ListFooEventsResponse{}
+
+			err = queryer.EventLister.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(res.Events) != 1 {
+				t.Fatalf("expected %d states, got %d", 1, len(res.Events))
+			}
+
+			for ii, event := range res.Events {
+				switch event.Event.Type.(type) {
+				case *testpb.FooEventType_Deleted_:
+				default:
+					t.Fatalf("expected event to be of type %T, got %T", &testpb.FooEventType_Deleted_{}, event.Event.Type)
+				}
+
 				t.Logf("%d: %s", ii, event.Event)
 			}
 		})
