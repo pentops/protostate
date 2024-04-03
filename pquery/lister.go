@@ -89,6 +89,8 @@ type ListReflectionSet struct {
 
 	defaultFilterFields []filterSpec
 	RequestFilterFields []protoreflect.FieldDescriptor
+
+	tsvColumnMap map[string]string
 }
 
 func resolveListerOptions(options []ListerOption) listerOptions {
@@ -214,6 +216,11 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		if repeated.MaxItems != nil {
 			ll.defaultPageSize = *repeated.MaxItems
 		}
+	}
+
+	ll.tsvColumnMap, err = buildTsvColumnMap(ll.arrayField.Message().Fields())
+	if err != nil {
+		return nil, err
 	}
 
 	return &ll, nil
@@ -403,7 +410,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			filterFields = append(filterFields, dynFilters...)
 		}
 
-		// TODO: searches
+		if len(reqQuery.GetSearches()) > 0 {
+			searchFilters, err := ll.buildDynamicSearches(tableAlias, reqQuery.GetSearches())
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "build searches: %s", err)
+			}
+
+			filterFields = append(filterFields, searchFilters...)
+		}
 	}
 
 	for i := range filterFields {
@@ -654,44 +668,6 @@ func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) er
 	err = validateQueryRequestSearches(ll.arrayField.Message(), query.GetSearches())
 	if err != nil {
 		return fmt.Errorf("search validation: %w", err)
-	}
-
-	return nil
-}
-
-func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*psml_pb.Search) error {
-	for _, search := range searches {
-		// validate fields exist from the request query
-		err := validateFieldName(message, search.GetField())
-		if err != nil {
-			return fmt.Errorf("field name: %w", err)
-		}
-
-		spec, err := findFieldSpec(message, search.GetField())
-		if err != nil {
-			return err
-		}
-
-		// validate the fields are annotated correctly for the request query
-		searchOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
-		if !ok {
-			return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
-		}
-
-		searchable := false
-		if searchOpts != nil {
-			switch spec.field.Kind() {
-			case protoreflect.StringKind:
-				switch searchOpts.GetString_().WellKnown.(type) {
-				case *psml_pb.StringRules_OpenText:
-					searchable = searchOpts.GetString_().GetOpenText().GetSearching().Searchable
-				}
-			}
-		}
-
-		if !searchable {
-			return fmt.Errorf("requested search field '%s' is not searchable", search.Field)
-		}
 	}
 
 	return nil
