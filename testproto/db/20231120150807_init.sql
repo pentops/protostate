@@ -4,30 +4,30 @@ CREATE TABLE foo (
 	id uuid primary key,
 	state jsonb NOT NULL,
 	tenant_id uuid,
-	foo_name_tsv_1 tsvector GENERATED ALWAYS AS (
+	foostate_name_tsv_1 tsvector GENERATED ALWAYS AS (
 		to_tsvector('english', state ->> 'name')
 	) STORED,
-	foo_field_tsv_1 tsvector GENERATED ALWAYS AS (
+	foostate_field_tsv_1 tsvector GENERATED ALWAYS AS (
 		to_tsvector('english', state ->> 'field')
 	) STORED,
-	foo_description_tsv_1 tsvector GENERATED ALWAYS AS (
+	foostate_description_tsv_1 tsvector GENERATED ALWAYS AS (
 		to_tsvector('english', state ->> 'description')
 	) STORED,
-	profile_name_tsv_1 tsvector GENERATED ALWAYS AS (
+	fooprofile_name_tsv_1 tsvector GENERATED ALWAYS AS (
 		to_tsvector('english', jsonb_path_query_array(state, '$.profiles[*].name'))
 	) STORED
 );
 
-CREATE INDEX idx_foo_name_tsv_1 ON foo
+CREATE INDEX idx_foostate_name_tsv_1 ON foo
 USING gin(to_tsvector('english', state ->> 'name'));
 
-CREATE INDEX idx_foo_field_tsv_1 ON foo
+CREATE INDEX idx_foostate_field_tsv_1 ON foo
 USING gin(to_tsvector('english', state ->> 'field'));
 
-CREATE INDEX idx_foo_description_tsv_1 ON foo
+CREATE INDEX idx_foostate_description_tsv_1 ON foo
 USING gin(to_tsvector('english', state ->> 'description'));
 
-CREATE INDEX idx_profile_name_tsv_1 ON foo
+CREATE INDEX idx_fooprofile_name_tsv_1 ON foo
 USING gin(to_tsvector('english', jsonb_path_query_array(state, '$.profiles[*].name')));
 
 CREATE TABLE foo_event (
