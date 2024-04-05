@@ -303,11 +303,9 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		}
 	}
 	return nil
-
 }
 
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
-
 	state, err := sm.getCurrentState(ctx, tx, event)
 	if err != nil {
 		return state, err
