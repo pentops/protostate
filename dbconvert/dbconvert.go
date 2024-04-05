@@ -16,7 +16,7 @@ func FieldsToDBValues(m map[string]interface{}) (map[string]interface{}, error) 
 	for k, v := range m {
 		converted, err := interfaceToDBValue(v)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to convert fields to database values: %w", err)
 		}
 
 		out[k] = converted
@@ -29,7 +29,7 @@ func FieldsToEqMap(ofTable string, m map[string]interface{}) (sq.Eq, error) {
 	for k, v := range m {
 		converted, err := interfaceToDBValue(v)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to convert fields to database equality types: %w", err)
 		}
 
 		fullKey := fmt.Sprintf("%s.%s", ofTable, k)
@@ -64,5 +64,9 @@ func interfaceToDBValue(i interface{}) (interface{}, error) {
 func MarshalProto(state protoreflect.ProtoMessage) ([]byte, error) {
 	// EmitDefaultValues behaves similarly to EmitUnpopulated, but does not emit "null"-value fields,
 	// i.e. presence-sensing fields that are omitted will remain omitted to preserve presence-sensing.
-	return protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(state)
+	b, err := protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(state)
+	if err != nil {
+		return b, fmt.Errorf("protojson marshal error: %w", err)
+	}
+	return b, nil
 }
