@@ -218,7 +218,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		}
 	}
 
-	ll.tsvColumnMap, err = buildTsvColumnMap(ll.arrayField.Message().Fields())
+	ll.tsvColumnMap, err = buildTsvColumnMap(ll.arrayField.Message())
 	if err != nil {
 		return nil, err
 	}
