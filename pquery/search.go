@@ -2,8 +2,6 @@ package pquery
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -56,7 +54,6 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 	for i := 0; i < message.Fields().Len(); i++ {
 		field := message.Fields().Get(i)
 
-		var colName string
 		switch field.Kind() {
 		case protoreflect.StringKind:
 			fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
@@ -67,81 +64,28 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 			switch fieldOpts.GetString_().GetWellKnown().(type) {
 			case *psml_pb.StringRules_OpenText:
 				searchOpts := fieldOpts.GetString_().GetOpenText().GetSearching()
-				if searchOpts == nil {
+				if searchOpts == nil || !searchOpts.Searchable {
 					continue
 				}
 
-				if !searchOpts.Searchable {
-					continue
+				if searchOpts.GetFieldIdentifier() == "" {
+					return nil, fmt.Errorf("field '%s' is missing a field identifier", field.TextName())
 				}
 
-				colName = strings.ToLower(fmt.Sprintf("%s_tsv", field.TextName()))
-
-				i := 1
-				for {
-					t := fmt.Sprintf("%s_%d", colName, i)
-
-					matched := false
-					for _, v := range out {
-						if v == t {
-							i++
-							matched = true
-							continue
-						}
-					}
-
-					if !matched {
-						colName = t
-						break
-					}
-				}
-
-				out[field.TextName()] = colName
-
-			default:
-				continue
+				out[field.TextName()] = searchOpts.GetFieldIdentifier()
 			}
+
+			continue
 		case protoreflect.MessageKind:
 			nestedMap, err := buildTsvColumnMap(field.Message())
 			if err != nil {
 				return nil, err
 			}
 
-			iout := make(map[string]string)
-			for k, v := range out {
-				iout[v] = k
-			}
-
 			for nk, nv := range nestedMap {
 				k := fmt.Sprintf("%s.%s", field.TextName(), nk)
-
-				_, exists := iout[nv]
-				if !exists {
-					out[nk] = nv
-					continue
-				}
-
-				// increment any conflicting fields from the nested message
-				p := strings.Split(nv, "_")
-				r := strings.Join(p[:len(p)-1], "_")
-
-				n, err := strconv.Atoi(p[len(p)-1])
-				if err != nil {
-					return nil, err
-				}
-
-				for {
-					n++
-
-					t := fmt.Sprintf("%s_%d", r, n)
-					if _, found := iout[t]; !found {
-						out[k] = t
-						break
-					}
-				}
+				out[k] = nv
 			}
-		default:
-			continue
 		}
 	}
 
