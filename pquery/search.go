@@ -53,8 +53,6 @@ func validateQueryRequestSearches(message protoreflect.MessageDescriptor, search
 func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]string, error) {
 	out := make(map[string]string)
 
-	prefix := strings.TrimSuffix(string(message.FullName()), string(message.Name()))
-
 	for i := 0; i < message.Fields().Len(); i++ {
 		field := message.Fields().Get(i)
 
@@ -77,7 +75,7 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 					continue
 				}
 
-				colName = strings.ToLower(fmt.Sprintf("%s_%s_tsv", string(field.Parent().Name()), string(field.Name())))
+				colName = strings.ToLower(fmt.Sprintf("%s_tsv", field.TextName()))
 
 				i := 1
 				for {
@@ -98,11 +96,7 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 					}
 				}
 
-				fullPath := strings.ToLower(string(field.FullName()))
-				fullPath = strings.TrimPrefix(fullPath, prefix)
-				// TODO: needs to contain the field names not the type names
-
-				out[fullPath] = colName
+				out[field.TextName()] = colName
 
 			default:
 				continue
@@ -113,15 +107,22 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 				return nil, err
 			}
 
-			for k, v := range nestedMap {
-				_, exists := out[k]
+			iout := make(map[string]string)
+			for k, v := range out {
+				iout[v] = k
+			}
+
+			for nk, nv := range nestedMap {
+				k := fmt.Sprintf("%s.%s", field.TextName(), nk)
+
+				_, exists := iout[nv]
 				if !exists {
-					out[k] = v
+					out[nk] = nv
 					continue
 				}
 
 				// increment any conflicting fields from the nested message
-				p := strings.Split(v, "_")
+				p := strings.Split(nv, "_")
 				r := strings.Join(p[:len(p)-1], "_")
 
 				n, err := strconv.Atoi(p[len(p)-1])
@@ -133,7 +134,7 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 					n++
 
 					t := fmt.Sprintf("%s_%d", r, n)
-					if _, ok := out[t]; !ok {
+					if _, found := iout[t]; !found {
 						out[k] = t
 						break
 					}
@@ -156,7 +157,7 @@ func (ll *Lister[REQ, RES]) buildDynamicSearches(tableAlias string, searches []*
 			return nil, fmt.Errorf("unknown field name '%s'", searches[i].GetField())
 		}
 
-		out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s.%s @@ to_tsquery(?)", tableAlias, col), searches[i].GetValue())})
+		out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s.%s @@ phraseto_tsquery(?)", tableAlias, col), searches[i].GetValue())})
 	}
 
 	return out, nil
