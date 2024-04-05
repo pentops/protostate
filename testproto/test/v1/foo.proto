@@ -52,9 +52,18 @@ message FooState {
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
-  string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
-  string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
-  optional string description = 8 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  string name = 3 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true,
+    field_identifier: "tsv_name"
+  }];
+  string field = 4 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true,
+    field_identifier: "tsv_field"
+  }];
+  optional string description = 8 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true,
+    field_identifier: "tsv_description"
+  }];
 
   uint64 last_event_sequence = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
 
@@ -97,7 +106,10 @@ message FooProfile {
     filtering: {filterable: true},
   }];
 
-  string name = 2 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  string name = 2 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true,
+    field_identifier: "tsv_profile_name"
+  }];
 }
 
 enum FooStatus {
