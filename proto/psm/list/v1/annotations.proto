@@ -66,6 +66,7 @@ message SortingConstraint {
 
 message SearchingConstraint {
   bool searchable = 1;
+  string field_identifier = 2;
 }
 
 message NumericRules {
