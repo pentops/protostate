@@ -96,7 +96,7 @@ func (ll *Lister[REQ, RES]) buildDynamicSearches(tableAlias string, searches []*
 	out := []sq.Sqlizer{}
 
 	for i := range searches {
-		col, ok := ll.tsvColumnMap[searches[i].GetField()]
+		col, ok := ll.tsvColumnMap[camelToSnake(searches[i].GetField())]
 		if !ok {
 			return nil, fmt.Errorf("unknown field name '%s'", searches[i].GetField())
 		}
