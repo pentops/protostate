@@ -69,7 +69,7 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 				}
 
 				if searchOpts.GetFieldIdentifier() == "" {
-					return nil, fmt.Errorf("field '%s' is missing a field identifier", field.TextName())
+					return nil, fmt.Errorf("field '%s' is missing a field identifier", field.FullName())
 				}
 
 				out[field.TextName()] = searchOpts.GetFieldIdentifier()
