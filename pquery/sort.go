@@ -216,7 +216,7 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 				if subField.Kind() == protoreflect.MessageKind {
 					err := validateSortsAnnotations(subField.Message().Fields())
 					if err != nil {
-						return err
+						return fmt.Errorf("message sort validation: %w", err)
 					}
 				} else {
 					if field.Cardinality() == protoreflect.Repeated {
@@ -316,7 +316,7 @@ func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*
 
 		spec, err := findFieldSpec(message, sort.GetField())
 		if err != nil {
-			return err
+			return fmt.Errorf("field spec: %w", err)
 		}
 
 		// validate the fields are annotated correctly for the request query
