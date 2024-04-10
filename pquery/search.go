@@ -54,7 +54,7 @@ func validateSearchesAnnotations(ids map[string]struct{}, fields protoreflect.Fi
 
 			err := validateSearchesAnnotations(ids, field.Message().Fields())
 			if err != nil {
-				return err
+				return fmt.Errorf("message search validation: %w", err)
 			}
 		}
 	}
@@ -72,7 +72,7 @@ func validateQueryRequestSearches(message protoreflect.MessageDescriptor, search
 
 		spec, err := findFieldSpec(message, search.GetField())
 		if err != nil {
-			return err
+			return fmt.Errorf("field spec: %w", err)
 		}
 
 		// validate the fields are annotated correctly for the request query

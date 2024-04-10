@@ -344,20 +344,24 @@ type DBStateMachine[S IState[ST], ST IStatusEnum, E IEvent[IE], IE IInnerEvent] 
 // machine's database pool
 func (sm *DBStateMachine[S, ST, E, IE]) Transition(ctx context.Context, events ...E) (S, error) {
 	var state S
-	if err := sm.db.Transact(ctx, &sqrlx.TxOptions{
+	opts := &sqrlx.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
 		Retryable: true,
-	}, func(ctx context.Context, tx sqrlx.Transaction) error {
+	}
+
+	err := sm.db.Transact(ctx, opts, func(ctx context.Context, tx sqrlx.Transaction) error {
 		var err error
 		for _, event := range events {
 			state, err = sm.runTx(ctx, tx, event)
 			if err != nil {
-				return err
+				return fmt.Errorf("run tx: %w", err)
 			}
 		}
+
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return state, err
 	}
 

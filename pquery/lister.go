@@ -103,7 +103,7 @@ func resolveListerOptions(options []ListerOption) listerOptions {
 
 func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) error {
 	_, err := buildListReflection(req, res, resolveListerOptions(options))
-	return err
+	return fmt.Errorf("validate list method: %w", err)
 }
 
 func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) (*ListReflectionSet, error) {
@@ -274,12 +274,12 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 
 	pageSize, err := ll.getPageSize(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("get page size: %w", err)
 	}
 
 	selectQuery, err := ll.BuildQuery(ctx, req, res)
 	if err != nil {
-		return err
+		return fmt.Errorf("build query: %w", err)
 	}
 
 	txOpts := &sqrlx.TxOptions{
@@ -299,7 +299,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		for rows.Next() {
 			var json []byte
 			if err := rows.Scan(&json); err != nil {
-				return err
+				return fmt.Errorf("row scan: %w", err)
 			}
 
 			jsonRows = append(jsonRows, json)

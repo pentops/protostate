@@ -133,7 +133,7 @@ func (ee Eventer[S, ST, E, IE]) Run(
 
 		chained, err := ee.runEvent(ctx, tx, state, innerEvent)
 		if err != nil {
-			return err
+			return fmt.Errorf("event queue: %w", err)
 		}
 
 		if state.GetStatus() == 0 {
@@ -170,14 +170,14 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 
 	transition, err := ee.FindTransition(state, innerEvent)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find transition: %w", err)
 	}
 
 	log.Debug(ctx, "Begin Event")
 
 	if err := transition.RunTransition(ctx, baton, state, unwrapped); err != nil {
 		log.WithError(ctx, err).Error("Running Transition")
-		return nil, err
+		return nil, fmt.Errorf("run transition: %w", err)
 	}
 
 	if baton.err != nil {
