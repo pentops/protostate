@@ -5,6 +5,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -45,6 +46,12 @@ func validateSearchesAnnotations(ids map[string]struct{}, fields protoreflect.Fi
 
 			continue
 		case protoreflect.MessageKind:
+			// Skip event type fields, they are composed of parts from the state
+			fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psm_pb.E_EventField).(*psm_pb.EventField)
+			if fieldOpts != nil && fieldOpts.EventType {
+				continue
+			}
+
 			err := validateSearchesAnnotations(ids, field.Message().Fields())
 			if err != nil {
 				return err
