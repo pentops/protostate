@@ -149,6 +149,11 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", res.FullName())
 	}
 
+	err = validateListAnnotations(ll.arrayField.Message().Fields())
+	if err != nil {
+		return nil, fmt.Errorf("validation: list annotations: %w", err)
+	}
+
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
 	ll.tieBreakerFields, err = buildTieBreakerFields(req, ll.arrayField.Message(), options.tieBreakerFields)
@@ -160,19 +165,14 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
-	err = validateSortsAnnotations(ll.arrayField.Message().Fields())
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: validate other annotations
-
 	f, err := buildDefaultFilters(ll.arrayField.Message().Fields())
 	if err != nil {
 		return nil, err
 	}
 
 	ll.defaultFilterFields = f
+
+	ll.tsvColumnMap = buildTsvColumnMap(ll.arrayField.Message())
 
 	requestFields := req.Fields()
 	for i := 0; i < requestFields.Len(); i++ {
@@ -216,11 +216,6 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		if repeated.MaxItems != nil {
 			ll.defaultPageSize = *repeated.MaxItems
 		}
-	}
-
-	ll.tsvColumnMap, err = buildTsvColumnMap(ll.arrayField.Message())
-	if err != nil {
-		return nil, err
 	}
 
 	return &ll, nil
@@ -652,6 +647,25 @@ func camelToSnake(jsonName string) string {
 		}
 	}
 	return out.String()
+}
+
+func validateListAnnotations(fields protoreflect.FieldDescriptors) error {
+	err := validateSortsAnnotations(fields)
+	if err != nil {
+		return fmt.Errorf("sort: %w", err)
+	}
+
+	err = validateFiltersAnnotations(fields)
+	if err != nil {
+		return fmt.Errorf("filter: %w", err)
+	}
+
+	err = validateSearchesAnnotations(nil, fields)
+	if err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+
+	return nil
 }
 
 func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) error {

@@ -10,6 +10,51 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
+func validateSearchesAnnotations(ids map[string]struct{}, fields protoreflect.FieldDescriptors) error {
+	if ids == nil {
+		ids = make(map[string]struct{})
+	}
+
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Get(i)
+
+		switch field.Kind() {
+		case protoreflect.StringKind:
+			fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+			if !ok {
+				continue
+			}
+
+			switch fieldOpts.GetString_().GetWellKnown().(type) {
+			case *psml_pb.StringRules_OpenText:
+				searchOpts := fieldOpts.GetString_().GetOpenText().GetSearching()
+				if searchOpts == nil || !searchOpts.Searchable {
+					continue
+				}
+
+				if searchOpts.GetFieldIdentifier() == "" {
+					return fmt.Errorf("field '%s' is missing a field identifier", field.FullName())
+				}
+
+				if _, ok := ids[searchOpts.GetFieldIdentifier()]; ok {
+					return fmt.Errorf("field identifier '%s' is not unique", searchOpts.GetFieldIdentifier())
+				}
+
+				ids[searchOpts.GetFieldIdentifier()] = struct{}{}
+			}
+
+			continue
+		case protoreflect.MessageKind:
+			err := validateSearchesAnnotations(ids, field.Message().Fields())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*psml_pb.Search) error {
 	for _, search := range searches {
 		// validate fields exist from the request query
@@ -48,7 +93,7 @@ func validateQueryRequestSearches(message protoreflect.MessageDescriptor, search
 	return nil
 }
 
-func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]string, error) {
+func buildTsvColumnMap(message protoreflect.MessageDescriptor) map[string]string {
 	out := make(map[string]string)
 
 	for i := 0; i < message.Fields().Len(); i++ {
@@ -68,19 +113,12 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 					continue
 				}
 
-				if searchOpts.GetFieldIdentifier() == "" {
-					return nil, fmt.Errorf("field '%s' is missing a field identifier", field.FullName())
-				}
-
 				out[field.TextName()] = searchOpts.GetFieldIdentifier()
 			}
 
 			continue
 		case protoreflect.MessageKind:
-			nestedMap, err := buildTsvColumnMap(field.Message())
-			if err != nil {
-				return nil, err
-			}
+			nestedMap := buildTsvColumnMap(field.Message())
 
 			for nk, nv := range nestedMap {
 				k := fmt.Sprintf("%s.%s", field.TextName(), nk)
@@ -89,7 +127,7 @@ func buildTsvColumnMap(message protoreflect.MessageDescriptor) (map[string]strin
 		}
 	}
 
-	return out, nil
+	return out
 }
 
 func (ll *Lister[REQ, RES]) buildDynamicSearches(tableAlias string, searches []*psml_pb.Search) ([]sq.Sqlizer, error) {

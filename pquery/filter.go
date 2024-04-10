@@ -413,6 +413,10 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *on
 	return out, nil
 }
 
+func validateFiltersAnnotations(fields protoreflect.FieldDescriptors) error {
+	return nil
+}
+
 func validateQueryRequestFilters(message protoreflect.MessageDescriptor, filters []*psml_pb.Filter) error {
 	for i := range filters {
 		switch filters[i].GetType().(type) {
