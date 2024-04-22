@@ -24,18 +24,16 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 		return nil, err
 	}
 
-	//if qs.getMethod == nil && qs.listMethod == nil && qs.listEventsMethod == nil {
-	// if none are set, that's ok, but any of them set requires that at
-	// least get and list are set
-	//return nil
-	//}
-
 	if qs.getMethod == nil {
 		return nil, fmt.Errorf("service %s does not have a get method", qs.name)
 	}
 
 	if qs.listMethod == nil {
 		return nil, fmt.Errorf("service %s does not have a list method", qs.name)
+	}
+
+	if qs.listEventsMethod == nil {
+		return nil, fmt.Errorf("service %s does not have a list events method", qs.name)
 	}
 
 	var statePkFields []string
