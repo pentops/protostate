@@ -9,6 +9,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
+	"github.com/pentops/outbox.pg.go/outbox"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -128,23 +129,13 @@ type StateMachine[
 	spec        PSMTableSpec[S, ST, E, IE]
 	conversions EventTypeConverter[S, ST, E, IE]
 	*Eventer[S, ST, E, IE]
+	SystemActor SystemActor
 
-	hooks []StateHook[S, ST, E, IE]
+	hooks []IStateHook[S, ST, E, IE]
 }
 
 func (sm StateMachine[S, ST, E, IE]) StateTableSpec() QueryTableSpec {
 	return sm.spec.StateTableSpec()
-}
-
-type StateHook[
-	S IState[ST], // Outer State Entity
-	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[IE], // Event Wrapper, with IDs and Metadata
-	IE IInnerEvent, // Inner Event, the typed event
-] func(context.Context, sqrlx.Transaction, S, E) error
-
-func (sm *StateMachine[S, ST, E, IE]) AddHook(hook StateHook[S, ST, E, IE]) {
-	sm.hooks = append(sm.hooks, hook)
 }
 
 type SimpleSystemActor struct {
@@ -192,13 +183,13 @@ func NewStateMachine[
 
 	ee := &Eventer[S, ST, E, IE]{
 		conversions: cb.conversions,
-		SystemActor: cb.systemActor,
 	}
 
 	return &StateMachine[S, ST, E, IE]{
 		spec:        cb.spec,
 		conversions: cb.conversions,
 		Eventer:     ee,
+		SystemActor: cb.systemActor,
 	}, nil
 }
 
@@ -297,25 +288,106 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 		return fmt.Errorf("insert event: %w", err)
 	}
 
-	for _, hook := range sm.hooks {
-		if err := hook(ctx, tx, state, event); err != nil {
-			return fmt.Errorf("hook: %w", err)
-		}
-	}
 	return nil
 }
 
-func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
-	state, err := sm.getCurrentState(ctx, tx, event)
+func trySequence[S any, E any](state S, event E, isInitial bool) {
+	stateSequencer, ok := any(state).(IStateSequencer)
+	if !ok {
+		return
+	}
+	eventSequencer, ok := any(event).(IEventSequencer)
+	if !ok {
+		return
+	}
+
+	seq := uint64(0)
+	if !isInitial {
+		seq = stateSequencer.LastPSMSequence() + 1
+	}
+	eventSequencer.SetPSMSequence(seq)
+	stateSequencer.SetLastPSMSequence(seq)
+}
+
+func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent E) (S, error) {
+	state, err := sm.getCurrentState(ctx, tx, outerEvent)
 	if err != nil {
 		return state, err
 	}
 
-	if err := sm.Eventer.Run(ctx, NewSqrlxTransaction[S, E](tx, sm.store), state, event); err != nil {
-		return state, fmt.Errorf("run event: %w", err)
+	eventQueue := []E{outerEvent}
+
+	isInitial := state.GetStatus() == 0
+
+	for len(eventQueue) > 0 {
+		innerEvent := eventQueue[0]
+		eventQueue = eventQueue[1:]
+
+		trySequence(state, innerEvent, isInitial)
+		isInitial = false
+
+		// runEvent modifies state in place
+		err := sm.Eventer.RunEvent(ctx, state, innerEvent)
+		if err != nil {
+			return state, fmt.Errorf("event queue: %w", err)
+		}
+
+		if state.GetStatus() == 0 {
+			return state, fmt.Errorf("state machine transitioned to zero status")
+		}
+
+		chained, err := sm.runHooks(ctx, tx, state, innerEvent)
+		if err != nil {
+			return state, fmt.Errorf("run hooks: %w", err)
+		}
+
+		eventQueue = append(eventQueue, chained...)
 	}
 
 	return state, nil
+}
+
+func (sm *StateMachine[S, ST, E, IE]) AddHook(hook IStateHook[S, ST, E, IE]) {
+	sm.hooks = append(sm.hooks, hook)
+}
+
+func (sm *StateMachine[S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, state S, event E) ([]E, error) {
+
+	if err := sm.store(ctx, tx, state, event); err != nil {
+		return nil, err
+	}
+
+	chain := []E{}
+
+	for _, hook := range sm.hooks {
+
+		baton := &TransitionData[E, IE]{
+			causedBy: event,
+		}
+
+		if err := hook.RunStateHook(ctx, tx, baton, state, event); err != nil {
+			return nil, fmt.Errorf("run state hook: %w", err)
+		}
+
+		for _, se := range baton.sideEffects {
+			if err := outbox.Send(ctx, tx, se); err != nil {
+				return nil, fmt.Errorf("side effect outbox: %w", err)
+			}
+		}
+
+		for _, chained := range baton.chainEvents {
+			chain = append(chain, chained)
+		}
+		for _, chained := range baton.chainInnerEvents {
+			derived, err := sm.deriveEvent(event, chained)
+			if err != nil {
+				return nil, fmt.Errorf("deriving event: %w", err)
+			}
+			chain = append(chain, derived)
+		}
+	}
+
+	return chain, nil
 }
 
 // TransitionInTx uses an existing transaction to transition the state machine.
@@ -335,9 +407,30 @@ func (sm *StateMachine[S, ST, E, IE]) Transition(ctx context.Context, db Transac
 	return sm.WithDB(db).Transition(ctx, events...)
 }
 
+// deriveEvent returns a new event with metadata derived from the causing
+// event and system actor
+func (sm *StateMachine[S, ST, E, IE]) deriveEvent(cause E, inner IE) (evt E, err error) {
+	if sm.SystemActor == nil {
+		err = fmt.Errorf("no system actor defined, cannot derive events")
+		return
+	}
+	eventKey := inner.PSMEventKey()
+	derived := sm.conversions.DeriveChainEvent(cause, sm.SystemActor, eventKey)
+	derived.SetPSMEvent(inner)
+	return derived, nil
+}
+
+// DBStateMachine adds the 'Transaction' method to the state machine, which
+// runs the transition in a new transaction from the state machine's database
 type DBStateMachine[S IState[ST], ST IStatusEnum, E IEvent[IE], IE IInnerEvent] struct {
 	*StateMachine[S, ST, E, IE]
 	db Transactor
+}
+
+var TxOptions = &sqrlx.TxOptions{
+	Isolation: sql.LevelReadCommitted,
+	Retryable: true,
+	ReadOnly:  false,
 }
 
 // Transition transitions the state machine in a new transaction from the state

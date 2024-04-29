@@ -6,6 +6,7 @@ import (
 	context "context"
 	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
+	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 	proto "google.golang.org/protobuf/proto"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -105,20 +106,64 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 }
 
 type FooPSMTransitionBaton = psm.TransitionBaton[*FooEvent, FooPSMEvent]
+type FooPSMHookBaton = psm.StateHookBaton[*FooEvent, FooPSMEvent]
 
-func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.TransitionFunc[
+func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.PSMCombinedFunc[
 	*FooState,
 	FooStatus,
 	*FooEvent,
 	FooPSMEvent,
 	SE,
 ] {
-	return psm.TransitionFunc[
+	return psm.PSMCombinedFunc[
 		*FooState,
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
 		SE,
+	](cb)
+}
+func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) error) psm.PSMTransitionFunc[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+	SE,
+] {
+	return psm.PSMTransitionFunc[
+		*FooState,
+		FooStatus,
+		*FooEvent,
+		FooPSMEvent,
+		SE,
+	](cb)
+}
+func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, SE) error) psm.PSMHookFunc[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+	SE,
+] {
+	return psm.PSMHookFunc[
+		*FooState,
+		FooStatus,
+		*FooEvent,
+		FooPSMEvent,
+		SE,
+	](cb)
+}
+func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralStateHook[
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+] {
+	return psm.GeneralStateHook[
+		*FooState,
+		FooStatus,
+		*FooEvent,
+		FooPSMEvent,
 	](cb)
 }
 

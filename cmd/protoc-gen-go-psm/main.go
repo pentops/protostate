@@ -24,7 +24,11 @@ var (
 	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
 	smNewStateMachine       = smImportPath.Ident("NewStateMachine")
 	smTransitionBaton       = smImportPath.Ident("TransitionBaton")
-	smTransitionFunc        = smImportPath.Ident("TransitionFunc")
+	smStateHookBaton        = smImportPath.Ident("StateHookBaton")
+	smTransitionFunc        = smImportPath.Ident("PSMTransitionFunc")
+	smHookFunc              = smImportPath.Ident("PSMHookFunc")
+	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
+	smCombinedFunc          = smImportPath.Ident("PSMCombinedFunc")
 	smSystemActor           = smImportPath.Ident("SystemActor")
 )
 

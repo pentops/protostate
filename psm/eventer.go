@@ -6,47 +6,26 @@ import (
 
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
-type TransitionBaton[E IEvent[IE], IE IInnerEvent] interface {
-	SideEffect(outbox.OutboxMessage)
-	ChainEvent(E)
-	ChainDerived(IE)
-	FullCause() E
+type ITransition[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] interface {
+	Matches(S, E) bool
+	RunTransition(context.Context, S, E) error
 }
 
-type TransitionData[E IEvent[IE], IE IInnerEvent] struct {
-	sideEffects []outbox.OutboxMessage
-	chainEvents []E
-	causedBy    E
-	err         error
-
-	// returns a new event with metadata derived from the causing event and
-	// metadata from the system actor
-	deriveEvent func(E, IE) (E, error)
-}
-
-func (td *TransitionData[E, IE]) ChainEvent(event E) {
-	td.chainEvents = append(td.chainEvents, event)
-}
-
-func (td *TransitionData[E, IE]) SideEffect(msg outbox.OutboxMessage) {
-	td.sideEffects = append(td.sideEffects, msg)
-}
-
-func (td *TransitionData[E, IE]) FullCause() E {
-	return td.causedBy
-}
-
-func (td *TransitionData[E, IE]) ChainDerived(inner IE) {
-	derived, err := td.deriveEvent(td.causedBy, inner)
-	if err != nil {
-		td.err = err
-		return
-	}
-
-	td.ChainEvent(derived)
+type IStateHook[
+	S IState[ST],
+	ST IStatusEnum,
+	E IEvent[IE],
+	IE IInnerEvent,
+] interface {
+	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[E, IE], S, E) error
 }
 
 // Eventer is the inner state machine, independent of storage.
@@ -59,8 +38,6 @@ type Eventer[
 	conversions EventTypeConverter[S, ST, E, IE]
 
 	Transitions []ITransition[S, ST, E, IE]
-
-	SystemActor SystemActor
 
 	validator *protovalidate.Validator
 }
@@ -92,70 +69,14 @@ func (ee *Eventer[S, ST, E, IE]) ValidateEvent(event E) error {
 	return ee.validator.Validate(event)
 }
 
-func trySequence[S any, E any](state S, event E, isInitial bool) {
-	stateSequencer, ok := any(state).(IStateSequencer)
-	if !ok {
-		return
-	}
-	eventSequencer, ok := any(event).(IEventSequencer)
-	if !ok {
-		return
-	}
-
-	seq := uint64(0)
-	if !isInitial {
-		seq = stateSequencer.LastPSMSequence() + 1
-	}
-	eventSequencer.SetPSMSequence(seq)
-	stateSequencer.SetLastPSMSequence(seq)
-}
-
-func (ee Eventer[S, ST, E, IE]) Run(
+func (ee Eventer[S, ST, E, IE]) RunEvent(
 	ctx context.Context,
-	tx Transaction[S, E],
-	state S,
-	outerEvent E,
-) error {
-	if err := ee.ValidateEvent(outerEvent); err != nil {
-		return fmt.Errorf("validating event %s: %w", outerEvent.ProtoReflect().Descriptor().FullName(), err)
-	}
-
-	eventQueue := []E{outerEvent}
-
-	isInitial := state.GetStatus() == 0
-
-	for len(eventQueue) > 0 {
-		innerEvent := eventQueue[0]
-		eventQueue = eventQueue[1:]
-
-		trySequence(state, innerEvent, isInitial)
-		isInitial = false
-
-		chained, err := ee.runEvent(ctx, tx, state, innerEvent)
-		if err != nil {
-			return fmt.Errorf("event queue: %w", err)
-		}
-
-		if state.GetStatus() == 0 {
-			return fmt.Errorf("state machine transitioned to zero status")
-		}
-		eventQueue = append(eventQueue, chained...)
-	}
-
-	return nil
-}
-
-func (ee Eventer[S, ST, E, IE]) runEvent(
-	ctx context.Context,
-	tx Transaction[S, E],
 	state S,
 	innerEvent E,
-) ([]E, error) {
+) error {
 
-	baton := &TransitionData[E, IE]{
-		causedBy:    innerEvent,
-		deriveEvent: ee.deriveEvent,
-		err:         nil,
+	if err := ee.ValidateEvent(innerEvent); err != nil {
+		return fmt.Errorf("validating event %s: %w", innerEvent.ProtoReflect().Descriptor().FullName(), err)
 	}
 
 	unwrapped := innerEvent.UnwrapPSMEvent()
@@ -170,18 +91,14 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 
 	transition, err := ee.FindTransition(state, innerEvent)
 	if err != nil {
-		return nil, fmt.Errorf("find transition: %w", err)
+		return fmt.Errorf("find transition: %w", err)
 	}
 
 	log.Debug(ctx, "Begin Event")
 
-	if err := transition.RunTransition(ctx, baton, state, unwrapped); err != nil {
+	if err := transition.RunTransition(ctx, state, innerEvent); err != nil {
 		log.WithError(ctx, err).Error("Running Transition")
-		return nil, fmt.Errorf("run transition: %w", err)
-	}
-
-	if baton.err != nil {
-		return nil, baton.err
+		return fmt.Errorf("run transition: %w", err)
 	}
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
@@ -190,96 +107,9 @@ func (ee Eventer[S, ST, E, IE]) runEvent(
 
 	log.Info(ctx, "Event Handled")
 
-	if err := tx.StoreEvent(ctx, state, innerEvent); err != nil {
-		return nil, err
-	}
-
-	for _, se := range baton.sideEffects {
-		if err := tx.Outbox(ctx, se); err != nil {
-			return nil, fmt.Errorf("side effect outbox: %w", err)
-		}
-	}
-
-	for _, event := range baton.chainEvents {
-		if err := ee.ValidateEvent(event); err != nil {
-			return nil, fmt.Errorf("validating chained event: %w", err)
-		}
-	}
-	return baton.chainEvents, nil
-}
-
-// deriveEvent returns a new event with metadata derived from the causing
-// event and system actor
-func (ee Eventer[S, ST, E, IE]) deriveEvent(event E, inner IE) (evt E, err error) {
-	if ee.SystemActor == nil {
-		err = fmt.Errorf("no system actor defined, cannot derive events")
-		return
-	}
-	eventKey := inner.PSMEventKey()
-	derived := ee.conversions.DeriveChainEvent(event, ee.SystemActor, eventKey)
-	derived.SetPSMEvent(inner)
-	return derived, nil
-}
-
-type ITransition[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-] interface {
-	Matches(S, E) bool
-	RunTransition(context.Context, TransitionBaton[E, IE], S, IE) error
+	return nil
 }
 
 func (ee *Eventer[S, ST, E, IE]) Register(transition ITransition[S, ST, E, IE]) {
 	ee.Transitions = append(ee.Transitions, transition)
-}
-
-type EventerTransitionBuilder[
-	S IState[ST],
-	ST IStatusEnum,
-	E IEvent[IE],
-	IE IInnerEvent,
-] struct {
-	eventer    *Eventer[S, ST, E, IE]
-	fromStates []ST
-	filters    []func(E) bool
-}
-
-func (ee *Eventer[S, ST, E, IE]) From(states ...ST) EventerTransitionBuilder[S, ST, E, IE] {
-	return EventerTransitionBuilder[S, ST, E, IE]{
-		eventer:    ee,
-		fromStates: states,
-	}
-}
-
-func (tb EventerTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE) bool) EventerTransitionBuilder[S, ST, E, IE] {
-	innerFilter := func(fullEvent E) bool {
-		innerEvent := fullEvent.UnwrapPSMEvent()
-		return filter(innerEvent)
-	}
-	tb.filters = append(tb.filters, innerFilter)
-	return tb
-}
-
-func (tb EventerTransitionBuilder[S, ST, E, IE]) Do(
-	transition TypedTransitionHandler[S, ST, E, IE],
-) EventerTransitionBuilder[S, ST, E, IE] {
-
-	tb.eventer.Register(&TypedTransition[S, ST, E, IE]{
-		handler:     transition,
-		fromStatus:  tb.fromStates,
-		eventFilter: tb.filter,
-	})
-
-	return tb
-}
-
-func (tb EventerTransitionBuilder[S, ST, E, IE]) filter(event E) bool {
-	for _, filter := range tb.filters {
-		if !filter(event) {
-			return false
-		}
-	}
-	return true
 }
