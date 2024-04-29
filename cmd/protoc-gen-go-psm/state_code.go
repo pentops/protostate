@@ -79,20 +79,70 @@ func (ss PSMEntity) addStateSet(g *protogen.GeneratedFile) error {
 	g.P()
 
 	g.P("type ", ss.machineName, "TransitionBaton = ", smTransitionBaton, "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
+	g.P("type ", ss.machineName, "HookBaton = ", smStateHookBaton, "[*", ss.eventMessage.GoIdent, ", ", ss.eventName, "]")
 
 	g.P()
+
+	// FooPSMFunc - This is for backwards compatibility
 	g.P("func ", ss.machineName,
 		"Func[SE ", ss.eventName, "]",
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		ss.machineName, "TransitionBaton, *",
-		ss.stateMessage.GoIdent, ", SE) error) ", smTransitionFunc, "[")
+		ss.stateMessage.GoIdent, ", SE) error) ", smCombinedFunc, "[")
+	ss.printTypes(g)
+	g.P("SE,")
+	g.P("] {")
+	g.P("return ", smCombinedFunc, "[")
+	ss.printTypes(g)
+	g.P("SE,")
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMTransition
+	g.P("func ", ss.machineName,
+		"Transition[SE ", ss.eventName, "]",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		"*", ss.stateMessage.GoIdent, ", SE) error) ", smTransitionFunc, "[")
 	ss.printTypes(g)
 	g.P("SE,")
 	g.P("] {")
 	g.P("return ", smTransitionFunc, "[")
 	ss.printTypes(g)
 	g.P("SE,")
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMHook
+	g.P("func ", ss.machineName,
+		"Hook[SE ", ss.eventName, "]",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		ss.machineName, "HookBaton, *",
+		ss.stateMessage.GoIdent, ", SE) error) ", smHookFunc, "[")
+	ss.printTypes(g)
+	g.P("SE,")
+	g.P("] {")
+	g.P("return ", smHookFunc, "[")
+	ss.printTypes(g)
+	g.P("SE,")
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMGenericHook
+	g.P("func ", ss.machineName,
+		"GeneralHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		"*", ss.stateMessage.GoIdent, ", ",
+		"*", ss.eventMessage.GoIdent, ") error) ", smGeneralHookFunc, "[")
+	ss.printTypes(g)
+	g.P("] {")
+	g.P("return ", smGeneralHookFunc, "[")
+	ss.printTypes(g)
 	g.P("](cb)")
 	g.P("}")
 

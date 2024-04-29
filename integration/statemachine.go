@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 
+	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -21,6 +22,29 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	if err != nil {
 		return nil, err
 	}
+
+	sm.AddHook(testpb.FooPSMGeneralHook(func(
+		ctx context.Context,
+		tx sqrlx.Transaction,
+		state *testpb.FooState,
+		event *testpb.FooEvent,
+	) error {
+
+		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
+			tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.FooId))
+			return nil
+		}
+
+		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.FooId).
+			Set("weight", state.Characteristics.Weight).
+			Set("height", state.Characteristics.Height).
+			Set("length", state.Characteristics.Length))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}))
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
 		Do(testpb.FooPSMFunc(func(
@@ -44,9 +68,8 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Do(testpb.FooPSMFunc(func(
+		Transition(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			tb testpb.FooPSMTransitionBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Updated,
 		) error {
@@ -59,8 +82,17 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 				Length: event.GetLength(),
 			}
 
+			return nil
+		})).
+		Hook(testpb.FooPSMHook(func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton testpb.FooPSMHookBaton,
+			state *testpb.FooState,
+			event *testpb.FooEventType_Updated,
+		) error {
 			if event.Delete {
-				tb.ChainDerived(&testpb.FooEventType_Deleted{})
+				baton.ChainDerived(&testpb.FooEventType_Deleted{})
 			}
 			return nil
 		}))

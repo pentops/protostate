@@ -26,6 +26,11 @@ service BarService {
     option (google.api.http) = {get: "/test/v1/bars"};
     option (psm.state.v1.state_query_method).list = true;
   }
+
+  rpc ListBarEvents(ListBarEventsRequest) returns (ListBarEventsResponse) {
+    option (google.api.http) = {get: "/test/v1/bar/{bar_id}/events"};
+    option (psm.state.v1.state_query_method).list_events = true;
+  }
 }
 
 message GetBarRequest {
@@ -46,8 +51,14 @@ message BarState {
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
-  string name = 3 [(psm.list.v1.field).string.open_text.searching.searchable = true];
-  string field = 4 [(psm.list.v1.field).string.open_text.searching.searchable = true];
+  string name = 3 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true
+    field_identifier: "tsv_name"
+  }];
+  string field = 4 [(psm.list.v1.field).string.open_text.searching = {
+    searchable: true,
+    field_identifier: "tsv_field"
+  }];
 
   BarStatus status = 5 [(psm.list.v1.field).enum.filtering = {
     filterable: true,

@@ -22,6 +22,7 @@ const (
 	FooService_GetFoo_FullMethodName        = "/test.v1.FooService/GetFoo"
 	FooService_ListFoos_FullMethodName      = "/test.v1.FooService/ListFoos"
 	FooService_ListFooEvents_FullMethodName = "/test.v1.FooService/ListFooEvents"
+	FooService_FooSummary_FullMethodName    = "/test.v1.FooService/FooSummary"
 )
 
 // FooServiceClient is the client API for FooService service.
@@ -31,6 +32,7 @@ type FooServiceClient interface {
 	GetFoo(ctx context.Context, in *GetFooRequest, opts ...grpc.CallOption) (*GetFooResponse, error)
 	ListFoos(ctx context.Context, in *ListFoosRequest, opts ...grpc.CallOption) (*ListFoosResponse, error)
 	ListFooEvents(ctx context.Context, in *ListFooEventsRequest, opts ...grpc.CallOption) (*ListFooEventsResponse, error)
+	FooSummary(ctx context.Context, in *FooSummaryRequest, opts ...grpc.CallOption) (*FooSummaryResponse, error)
 }
 
 type fooServiceClient struct {
@@ -68,6 +70,15 @@ func (c *fooServiceClient) ListFooEvents(ctx context.Context, in *ListFooEventsR
 	return out, nil
 }
 
+func (c *fooServiceClient) FooSummary(ctx context.Context, in *FooSummaryRequest, opts ...grpc.CallOption) (*FooSummaryResponse, error) {
+	out := new(FooSummaryResponse)
+	err := c.cc.Invoke(ctx, FooService_FooSummary_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FooServiceServer is the server API for FooService service.
 // All implementations must embed UnimplementedFooServiceServer
 // for forward compatibility
@@ -75,6 +86,7 @@ type FooServiceServer interface {
 	GetFoo(context.Context, *GetFooRequest) (*GetFooResponse, error)
 	ListFoos(context.Context, *ListFoosRequest) (*ListFoosResponse, error)
 	ListFooEvents(context.Context, *ListFooEventsRequest) (*ListFooEventsResponse, error)
+	FooSummary(context.Context, *FooSummaryRequest) (*FooSummaryResponse, error)
 	mustEmbedUnimplementedFooServiceServer()
 }
 
@@ -90,6 +102,9 @@ func (UnimplementedFooServiceServer) ListFoos(context.Context, *ListFoosRequest)
 }
 func (UnimplementedFooServiceServer) ListFooEvents(context.Context, *ListFooEventsRequest) (*ListFooEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFooEvents not implemented")
+}
+func (UnimplementedFooServiceServer) FooSummary(context.Context, *FooSummaryRequest) (*FooSummaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FooSummary not implemented")
 }
 func (UnimplementedFooServiceServer) mustEmbedUnimplementedFooServiceServer() {}
 
@@ -158,6 +173,24 @@ func _FooService_ListFooEvents_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FooService_FooSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FooSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FooServiceServer).FooSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FooService_FooSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FooServiceServer).FooSummary(ctx, req.(*FooSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FooService_ServiceDesc is the grpc.ServiceDesc for FooService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -176,6 +209,10 @@ var FooService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFooEvents",
 			Handler:    _FooService_ListFooEvents_Handler,
+		},
+		{
+			MethodName: "FooSummary",
+			Handler:    _FooService_FooSummary_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -131,6 +131,8 @@ func TestFooStateMachine(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	controller := NewMiniFooController(db)
+
 	actorID := uuid.NewString()
 
 	sm, err := NewFooStateMachine(db, actorID)
@@ -167,21 +169,6 @@ func TestFooStateMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-
-	t.Run("List", func(t *testing.T) {
-		req := &testpb.ListFoosRequest{}
-		res := &testpb.ListFoosResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		t.Log(protojson.Format(res))
-		if len(res.Foos) != 1 {
-			t.Fatalf("expected 1 states, got %d", len(res.Foos))
-		}
-	})
 
 	t.Run("Get1", func(t *testing.T) {
 		req := &testpb.GetFooRequest{
@@ -246,6 +233,10 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected %v, got %v", statesOut[foo2ID], res.State)
 		}
 
+		if res.State.Status != testpb.FooStatus_DELETED {
+			t.Fatalf("expected state DELETED, got %s - Did the chain run?", res.State.Status.ShortString())
+		}
+
 		if len(res.Events) != 3 {
 			t.Fatalf("expected 3 events, got %d", len(res.Events))
 		}
@@ -256,4 +247,58 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected derived event to have actor ID %s, got %s", actorID, derivedEvent.Metadata.Actor.ActorId)
 		}
 	})
+
+	t.Run("List", func(t *testing.T) {
+		req := &testpb.ListFoosRequest{}
+		res := &testpb.ListFoosResponse{}
+
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Foos) != 1 {
+			t.Fatalf("expected 1 states for default filter (ACTIVE), got %d", len(res.Foos))
+		}
+	})
+
+	t.Run("Summary", func(t *testing.T) {
+		req := &testpb.FooSummaryRequest{}
+
+		res, err := controller.FooSummary(ctx, req)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if res.CountFoos != 1 {
+			t.Fatalf("expected 1 non acrhived FOO, got %d", res.CountFoos)
+		}
+	})
+}
+
+type MiniFooController struct {
+	db *sqrlx.Wrapper
+}
+
+func NewMiniFooController(db *sqrlx.Wrapper) *MiniFooController {
+	return &MiniFooController{
+		db: db,
+	}
+}
+
+func (c *MiniFooController) FooSummary(ctx context.Context, req *testpb.FooSummaryRequest) (*testpb.FooSummaryResponse, error) {
+
+	res := &testpb.FooSummaryResponse{}
+
+	query := sq.Select("count(id)", "sum(weight)", "sum(height)", "sum(length)").From("foo_cache")
+	err := c.db.Transact(ctx, nil, func(ctx context.Context, tx sqrlx.Transaction) error {
+		return tx.QueryRow(ctx, query).Scan(&res.CountFoos, &res.TotalWeight, &res.TotalHeight, &res.TotalLength)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+
 }

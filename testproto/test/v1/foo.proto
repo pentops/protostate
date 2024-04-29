@@ -32,6 +32,10 @@ service FooService {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
     option (psm.state.v1.state_query_method).list_events = true;
   }
+
+  rpc FooSummary(FooSummaryRequest) returns (FooSummaryResponse) {
+    option (google.api.http) = {get: "/test/v1/foo/summary"};
+  }
 }
 
 message GetFooRequest {
@@ -41,6 +45,15 @@ message GetFooRequest {
 message GetFooResponse {
   FooState state = 1;
   repeated FooEvent events = 2;
+}
+
+message FooSummaryRequest {}
+
+message FooSummaryResponse {
+  int64 count_foos = 1;
+  int64 total_weight = 2;
+  int64 total_height = 3;
+  int64 total_length = 4;
 }
 
 message FooState {

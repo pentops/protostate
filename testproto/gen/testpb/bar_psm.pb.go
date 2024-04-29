@@ -6,6 +6,7 @@ import (
 	context "context"
 	fmt "fmt"
 	psm "github.com/pentops/protostate/psm"
+	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 	proto "google.golang.org/protobuf/proto"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -101,20 +102,64 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 }
 
 type BarPSMTransitionBaton = psm.TransitionBaton[*BarEvent, BarPSMEvent]
+type BarPSMHookBaton = psm.StateHookBaton[*BarEvent, BarPSMEvent]
 
-func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, *BarState, SE) error) psm.TransitionFunc[
+func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, *BarState, SE) error) psm.PSMCombinedFunc[
 	*BarState,
 	BarStatus,
 	*BarEvent,
 	BarPSMEvent,
 	SE,
 ] {
-	return psm.TransitionFunc[
+	return psm.PSMCombinedFunc[
 		*BarState,
 		BarStatus,
 		*BarEvent,
 		BarPSMEvent,
 		SE,
+	](cb)
+}
+func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) error) psm.PSMTransitionFunc[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+	SE,
+] {
+	return psm.PSMTransitionFunc[
+		*BarState,
+		BarStatus,
+		*BarEvent,
+		BarPSMEvent,
+		SE,
+	](cb)
+}
+func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarPSMHookBaton, *BarState, SE) error) psm.PSMHookFunc[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+	SE,
+] {
+	return psm.PSMHookFunc[
+		*BarState,
+		BarStatus,
+		*BarEvent,
+		BarPSMEvent,
+		SE,
+	](cb)
+}
+func BarPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *BarState, *BarEvent) error) psm.GeneralStateHook[
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+] {
+	return psm.GeneralStateHook[
+		*BarState,
+		BarStatus,
+		*BarEvent,
+		BarPSMEvent,
 	](cb)
 }
 
@@ -226,8 +271,8 @@ type BarPSMQuerySet = psm.StateQuerySet[
 	*GetBarResponse,
 	*ListBarsRequest,
 	*ListBarsResponse,
-	proto.Message,
-	proto.Message,
+	*ListBarEventsRequest,
+	*ListBarEventsResponse,
 ]
 
 func NewBarPSMQuerySet(
@@ -236,8 +281,8 @@ func NewBarPSMQuerySet(
 		*GetBarResponse,
 		*ListBarsRequest,
 		*ListBarsResponse,
-		proto.Message,
-		proto.Message,
+		*ListBarEventsRequest,
+		*ListBarEventsResponse,
 	],
 	options psm.StateQueryOptions,
 ) (*BarPSMQuerySet, error) {
@@ -246,8 +291,8 @@ func NewBarPSMQuerySet(
 		*GetBarResponse,
 		*ListBarsRequest,
 		*ListBarsResponse,
-		proto.Message,
-		proto.Message,
+		*ListBarEventsRequest,
+		*ListBarEventsResponse,
 	](smSpec, options)
 }
 
@@ -256,8 +301,8 @@ type BarPSMQuerySpec = psm.QuerySpec[
 	*GetBarResponse,
 	*ListBarsRequest,
 	*ListBarsResponse,
-	proto.Message,
-	proto.Message,
+	*ListBarEventsRequest,
+	*ListBarEventsResponse,
 ]
 
 func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
@@ -266,8 +311,8 @@ func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 		*GetBarResponse,
 		*ListBarsRequest,
 		*ListBarsResponse,
-		proto.Message,
-		proto.Message,
+		*ListBarEventsRequest,
+		*ListBarEventsResponse,
 	]{
 		QueryTableSpec: tableSpec,
 		ListRequestFilter: func(req *ListBarsRequest) (map[string]interface{}, error) {
@@ -275,6 +320,11 @@ func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 			if req.TenantId != nil {
 				filter["tenant_id"] = *req.TenantId
 			}
+			return filter, nil
+		},
+		ListEventsRequestFilter: func(req *ListBarEventsRequest) (map[string]interface{}, error) {
+			filter := map[string]interface{}{}
+			filter["bar_id"] = req.BarId
 			return filter, nil
 		},
 	}
