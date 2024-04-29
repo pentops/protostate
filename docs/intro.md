@@ -19,6 +19,12 @@ To grasp this concept, let's break down the key terminologies and their roles:
 
 6. **Commands**: These are explicit instructions, usually from a user, that direct the system to perform a certain operation. In the context of our state machine, a Command could initiate a State Event that leads to a Transition.
 
+7. **Hooks**: These run after state transitions, managing side effects from state transitions including:
+   - Chaining states together using business logic
+   - Publishing requests or events to other services
+   - Publishing generic global events
+   - Storing pre-calculated objects for other queries
+
 By understanding these concepts, we can see how our microservices architecture becomes a dynamic and responsive ecosystem. Each service, or Stateful Entity, is not just performing a task but is actively transitioning between states based on the events it encounters. This approach allows for more sophisticated interactions, adaptive behaviors, and ultimately, a more robust and efficient system.
 
 As we delve deeper into these concepts, remember that the focus here is on the evolving nature of our services and how they interact and respond to various stimuli in an interconnected environment.
@@ -49,4 +55,31 @@ Explanation of the Diagram:
   transitions to the 'CLOSED' state.
 
 
+# State Lifecycle
 
+The State Machine is a storage engine, the Eventer within it manages the
+transitions from one state to the next, where the State Machine itself handles
+the storage, hooks and lifecycle.
+
+![state lifecycle](./state_machine_handoff.svg)
+
+- An external controller (e.g. a user action gRPC server or an event handler)
+  validates the incomming requiest, might do some database lookups for auth or
+  logic, then translates that request into an `Event`.
+
+- The `Event` is passed in to the State Machine.
+
+- The State Machine fetches the current stored state
+
+- State Machine calls the Eventer
+
+- Eventer finds the single appropriate transition and runs it, modifiying state
+
+- Eventer hands back control to the State Machine
+
+- State Machine stores the event and state
+
+- State Machine runs all of the hooks.
+
+- If any hook creates a chained event, the State Machine sends that in to the
+  Eventer and continues the loop.
