@@ -31,7 +31,10 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	) error {
 
 		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
-			tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.FooId))
+			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.FooId))
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 

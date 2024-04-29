@@ -375,9 +375,7 @@ func (sm *StateMachine[S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Tra
 			}
 		}
 
-		for _, chained := range baton.chainEvents {
-			chain = append(chain, chained)
-		}
+		chain = append(chain, baton.chainEvents...)
 		for _, chained := range baton.chainInnerEvents {
 			derived, err := sm.deriveEvent(event, chained)
 			if err != nil {
