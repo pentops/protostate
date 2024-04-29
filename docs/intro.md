@@ -55,7 +55,7 @@ Explanation of the Diagram:
   transitions to the 'CLOSED' state.
 
 
-# State Lifecycle
+# State Machine vs Eventer
 
 The State Machine is a storage engine, the Eventer within it manages the
 transitions from one state to the next, where the State Machine itself handles
