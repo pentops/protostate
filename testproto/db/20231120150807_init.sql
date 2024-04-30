@@ -36,7 +36,8 @@ CREATE TABLE foo_event (
 	foo_id uuid references foo(id) NOT NULL,
 	tenant_id uuid,
 	actor jsonb NOT NULL,
-	data jsonb NOT NULL
+	data jsonb NOT NULL,
+  state jsonb NOT NULL
 );
 
 CREATE TABLE bar (
