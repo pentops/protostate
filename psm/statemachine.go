@@ -46,6 +46,7 @@ type TableSpec[T proto.Message] struct {
 	// DataColumn is the JSONB column which stores the main data chunk
 	DataColumn   string
 	PKFieldPaths []string
+	PK           func(T) (map[string]interface{}, error)
 }
 
 func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
@@ -317,7 +318,104 @@ func trySequence[S any, E any](state S, event E, isInitial bool) {
 	stateSequencer.SetLastPSMSequence(seq)
 }
 
+func (sm *StateMachine[S, ST, E, IE]) eventQuery(ctx context.Context, tx sqrlx.Transaction, event E) (*sq.SelectBuilder, error) {
+	primaryKey, err := sm.spec.Event.PK(event)
+	if err != nil {
+		return nil, fmt.Errorf("primary key: %w", err)
+	}
+
+	pkMap, err := dbconvert.FieldsToDBValues(primaryKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map event primary key to DB values: %w", err)
+	}
+
+	selectQuery := sq.
+		Select(sm.spec.Event.DataColumn).
+		From(sm.spec.Event.TableName).
+		Where(sq.Eq(pkMap))
+
+	return selectQuery, nil
+}
+
+// firstEventUniqueCheck checks if the event ID for the outer triggering event
+// is unique in the event table. If not, it checks if the event is a repeat
+// processing of the same event, and returns the state after the initial
+// transition.
+func (sm *StateMachine[S, ST, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, event E) (S, bool, error) {
+	var s S
+	selectQuery, err := sm.eventQuery(ctx, tx, event)
+	if err != nil {
+		return s, false, fmt.Errorf("event query: %w", err)
+	}
+	if sm.spec.EventStateSnapshotColumn == nil {
+		return s, false, fmt.Errorf("no snapshot column defined")
+	}
+
+	selectQuery.Column(*sm.spec.EventStateSnapshotColumn)
+
+	var eventData, stateData []byte
+	err = tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
+	if errors.Is(sql.ErrNoRows, err) {
+		return s, false, nil
+	}
+	if err != nil {
+		return s, false, fmt.Errorf("selecting event: %w", err)
+	}
+
+	existing := (*new(E)).ProtoReflect().New()
+
+	if err := protojson.Unmarshal(eventData, existing.Interface()); err != nil {
+		return s, false, fmt.Errorf("unmarshalling event: %w", err)
+	}
+
+	if !proto.Equal(existing.Interface(), event) {
+		return s, false, ErrDuplicateEventID
+	}
+
+	state := (*new(S)).ProtoReflect().New()
+	if err := protojson.Unmarshal(stateData, state.Interface()); err != nil {
+		return s, false, fmt.Errorf("unmarshalling state: %w", err)
+	}
+
+	return state.Interface().(S), true, nil
+}
+
+func (sm *StateMachine[S, ST, E, IE]) eventsMustBeUnique(ctx context.Context, tx sqrlx.Transaction, events ...E) error {
+	for _, event := range events {
+		selectQuery, err := sm.eventQuery(ctx, tx, event)
+		if err != nil {
+			return fmt.Errorf("event query: %w", err)
+		}
+
+		var data []byte
+		err = tx.SelectRow(ctx, selectQuery).Scan(&data)
+		if errors.Is(sql.ErrNoRows, err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("selecting event: %w", err)
+		}
+		return ErrDuplicateEventID
+	}
+	return nil
+
+}
+
 func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent E) (S, error) {
+	if sm.spec.EventStateSnapshotColumn == nil {
+		// With no snapshot column, we can't correctly return the state after
+		// the first time we received the event, so duplicates must be an error.
+		if err := sm.eventsMustBeUnique(ctx, tx, outerEvent); err != nil {
+			return *new(S), fmt.Errorf("events must be unique: %w", err)
+		}
+	} else {
+		if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent); err != nil {
+			return existingState, err
+		} else if didExist {
+			return existingState, nil
+		}
+	}
+
 	state, err := sm.getCurrentState(ctx, tx, outerEvent)
 	if err != nil {
 		return state, err
@@ -363,6 +461,13 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		chained, err := sm.runHooks(ctx, tx, statusBefore, state, innerEvent)
 		if err != nil {
 			return state, fmt.Errorf("run hooks: %w", err)
+		}
+
+		if err := sm.eventsMustBeUnique(ctx, tx, chained...); err != nil {
+			if errors.Is(err, ErrDuplicateEventID) {
+				return state, ErrDuplicateChainedEventID
+			}
+			return state, err
 		}
 
 		eventQueue = append(eventQueue, chained...)
@@ -448,6 +553,9 @@ type DBStateMachine[S IState[ST], ST IStatusEnum, E IEvent[IE], IE IInnerEvent] 
 	*StateMachine[S, ST, E, IE]
 	db Transactor
 }
+
+var ErrDuplicateEventID = errors.New("duplicate event ID")
+var ErrDuplicateChainedEventID = errors.New("duplicate chained event ID")
 
 var TxOptions = &sqrlx.TxOptions{
 	Isolation: sql.LevelReadCommitted,
