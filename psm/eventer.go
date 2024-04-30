@@ -15,7 +15,7 @@ type ITransition[
 	E IEvent[IE],
 	IE IInnerEvent,
 ] interface {
-	Matches(S, E) bool
+	Matches(ST, E) bool
 	RunTransition(context.Context, S, E) error
 }
 
@@ -25,6 +25,7 @@ type IStateHook[
 	E IEvent[IE],
 	IE IInnerEvent,
 ] interface {
+	Matches(ST, E) bool
 	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[E, IE], S, E) error
 }
 
@@ -42,9 +43,9 @@ type Eventer[
 	validator *protovalidate.Validator
 }
 
-func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S, ST, E, IE], error) {
+func (ee Eventer[S, ST, E, IE]) FindTransition(status ST, event E) (ITransition[S, ST, E, IE], error) {
 	for _, search := range ee.Transitions {
-		if search.Matches(state, event) {
+		if search.Matches(status, event) {
 			return search, nil
 		}
 	}
@@ -52,7 +53,7 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(state S, event E) (ITransition[S,
 	innerEvent := event.UnwrapPSMEvent()
 	typeKey := innerEvent.PSMEventKey() // ee.conversions.EventLabel(innerEvent)
 	return nil, fmt.Errorf("no transition found for status %s -> %s",
-		state.GetStatus().String(),
+		status.String(),
 		typeKey,
 	)
 }
@@ -82,19 +83,19 @@ func (ee Eventer[S, ST, E, IE]) RunEvent(
 	unwrapped := innerEvent.UnwrapPSMEvent()
 
 	typeKey := unwrapped.PSMEventKey()
-	stateBefore := state.GetStatus().String()
+	stateBefore := state.GetStatus()
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
 		"eventType":  typeKey,
-		"transition": fmt.Sprintf("%s -> ? : %s", stateBefore, typeKey),
+		"transition": fmt.Sprintf("%s -> ? : %s", stateBefore.ShortString(), typeKey),
 	})
 
-	transition, err := ee.FindTransition(state, innerEvent)
+	log.Debug(ctx, "Begin Event")
+
+	transition, err := ee.FindTransition(stateBefore, innerEvent)
 	if err != nil {
 		return fmt.Errorf("find transition: %w", err)
 	}
-
-	log.Debug(ctx, "Begin Event")
 
 	if err := transition.RunTransition(ctx, state, innerEvent); err != nil {
 		log.WithError(ctx, err).Error("Running Transition")

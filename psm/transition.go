@@ -286,10 +286,9 @@ type eventFilter[
 	customFilters []func(E) bool
 }
 
-func (ef eventFilter[S, ST, E, IE]) matches(state S, outerEvent E) bool {
+func (ef eventFilter[S, ST, E, IE]) matches(currentStatus ST, outerEvent E) bool {
 	if ef.fromStatus != nil {
 		didMatch := false
-		currentStatus := state.GetStatus()
 		for _, fromStatus := range ef.fromStatus {
 			if fromStatus == currentStatus {
 				didMatch = true
@@ -319,12 +318,12 @@ type TransitionWrapper[
 	eventFilter[S, ST, E, IE]
 }
 
-func (f TransitionWrapper[S, ST, E, IE]) Matches(state S, outerEvent E) bool {
+func (f TransitionWrapper[S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
 	if !f.handler.handlesEvent(outerEvent) {
 		return false
 	}
 
-	return f.eventFilter.matches(state, outerEvent)
+	return f.eventFilter.matches(status, outerEvent)
 }
 
 func (f TransitionWrapper[S, ST, E, IE]) RunTransition(
@@ -345,12 +344,16 @@ type HookWrapper[
 	eventFilter[S, ST, E, IE]
 }
 
-func (f HookWrapper[S, ST, E, IE]) matches(state S, outerEvent E) bool {
+func (f HookWrapper[S, ST, E, IE]) matches(status ST, outerEvent E) bool {
 	if !f.handler.handlesEvent(outerEvent) {
 		return false
 	}
 
-	return f.eventFilter.matches(state, outerEvent)
+	return f.eventFilter.matches(status, outerEvent)
+}
+
+func (f HookWrapper[S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
+	return f.matches(status, outerEvent)
 }
 
 func (f HookWrapper[S, ST, E, IE]) RunStateHook(
@@ -360,9 +363,6 @@ func (f HookWrapper[S, ST, E, IE]) RunStateHook(
 	state S,
 	event E,
 ) error {
-	if !f.matches(state, event) {
-		return nil
-	}
 	return f.handler.runStateHook(ctx, tx, baton, state, event)
 }
 
@@ -476,4 +476,8 @@ func (hook GeneralStateHook[S, ST, E, IE]) RunStateHook(
 	event E,
 ) error {
 	return hook(ctx, tx, state, event)
+}
+
+func (hook GeneralStateHook[S, ST, E, IE]) Matches(ST, E) bool {
+	return true
 }
