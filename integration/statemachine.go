@@ -18,6 +18,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	}
 	sm, err := testpb.NewFooPSM(testpb.
 		DefaultFooPSMConfig().
+		StoreEventStateSnapshot().
 		SystemActor(systemActor))
 	if err != nil {
 		return nil, err

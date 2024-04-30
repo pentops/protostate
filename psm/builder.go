@@ -63,6 +63,16 @@ func (cb *StateMachineConfig[S, ST, E, IE]) PrimaryKey(primaryKey func(E) (map[s
 	return cb
 }
 
+func (cb *StateMachineConfig[S, ST, E, IE]) StoreEventStateSnapshot() *StateMachineConfig[S, ST, E, IE] {
+	cb.spec.EventStateSnapshotColumn = &cb.spec.State.DataColumn
+	return cb
+}
+
+func (cb *StateMachineConfig[S, ST, E, IE]) EventStateSnapshotColumn(name string) *StateMachineConfig[S, ST, E, IE] {
+	cb.spec.EventStateSnapshotColumn = &name
+	return cb
+}
+
 func (cb *StateMachineConfig[S, ST, E, IE]) NewStateMachine() (*StateMachine[S, ST, E, IE], error) {
 	return NewStateMachine[S, ST, E, IE](cb)
 }

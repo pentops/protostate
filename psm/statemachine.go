@@ -35,6 +35,9 @@ type PSMTableSpec[
 
 	State TableSpec[S]
 	Event TableSpec[E]
+
+	// When set, stores the current state in the event table.
+	EventStateSnapshotColumn *string
 }
 
 type TableSpec[T proto.Message] struct {
@@ -279,6 +282,11 @@ func (sm *StateMachine[S, ST, E, IE]) store(
 	eventSetMap, err := stateSpec.Event.storeDBMap(event)
 	if err != nil {
 		return fmt.Errorf("event fields: %w", err)
+	}
+
+	if stateSpec.EventStateSnapshotColumn != nil {
+		columnName := *stateSpec.EventStateSnapshotColumn
+		eventSetMap[columnName] = stateSetMap[stateSpec.State.DataColumn]
 	}
 
 	_, err = tx.Insert(ctx, sq.
