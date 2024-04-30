@@ -315,6 +315,9 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		return state, err
 	}
 
+	isFirst := true
+	var returnState S
+
 	eventQueue := []E{outerEvent}
 
 	isInitial := state.GetStatus() == 0
@@ -326,6 +329,8 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		trySequence(state, innerEvent, isInitial)
 		isInitial = false
 
+		statusBefore := state.GetStatus()
+
 		// runEvent modifies state in place
 		err := sm.Eventer.RunEvent(ctx, state, innerEvent)
 		if err != nil {
@@ -336,7 +341,18 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 			return state, fmt.Errorf("state machine transitioned to zero status")
 		}
 
-		chained, err := sm.runHooks(ctx, tx, state, innerEvent)
+		if err := sm.store(ctx, tx, state, innerEvent); err != nil {
+			return state, err
+		}
+
+		if isFirst {
+			// return the state after the first transition, not after all hooks
+			// etc have run
+			returnState = proto.Clone(state).(S)
+			isFirst = false
+		}
+
+		chained, err := sm.runHooks(ctx, tx, statusBefore, state, innerEvent)
 		if err != nil {
 			return state, fmt.Errorf("run hooks: %w", err)
 		}
@@ -344,22 +360,22 @@ func (sm *StateMachine[S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transa
 		eventQueue = append(eventQueue, chained...)
 	}
 
-	return state, nil
+	return returnState, nil
 }
 
 func (sm *StateMachine[S, ST, E, IE]) AddHook(hook IStateHook[S, ST, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
-func (sm *StateMachine[S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, state S, event E) ([]E, error) {
-
-	if err := sm.store(ctx, tx, state, event); err != nil {
-		return nil, err
-	}
+func (sm *StateMachine[S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, statusBefore ST, state S, event E) ([]E, error) {
 
 	chain := []E{}
 
 	for _, hook := range sm.hooks {
+
+		if !hook.Matches(statusBefore, event) {
+			continue
+		}
 
 		baton := &TransitionData[E, IE]{
 			causedBy: event,

@@ -229,10 +229,6 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if !proto.Equal(res.State, statesOut[foo2ID]) {
-			t.Fatalf("expected %v, got %v", statesOut[foo2ID], res.State)
-		}
-
 		if res.State.Status != testpb.FooStatus_DELETED {
 			t.Fatalf("expected state DELETED, got %s - Did the chain run?", res.State.Status.ShortString())
 		}
