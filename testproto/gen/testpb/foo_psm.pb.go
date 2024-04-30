@@ -97,6 +97,11 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 		PKFieldPaths: []string{
 			"metadata.event_id",
 		},
+		PK: func(event *FooEvent) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"id": event.Metadata.EventId,
+			}, nil
+		},
 	},
 	PrimaryKey: func(event *FooEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{

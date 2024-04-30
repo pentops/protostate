@@ -343,8 +343,12 @@ func (ss PSMEntity) addDefaultTableSpec(g *protogen.GeneratedFile) error {
 	g.P("    PKFieldPaths: []string{")
 	g.P("      \"", ss.eventFields.metadataField.Desc.Name(), ".", ss.eventFields.metadataFields.id.Desc.Name(), "\",")
 	g.P("    },")
+	g.P("    PK: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("      return map[string]interface{}{")
+	g.P("        \"id\": event.", ss.eventFields.metadataField.GoName, ".", ss.eventFields.metadataFields.id.GoName, ",")
+	g.P("      }, nil")
+	g.P("    },")
 	g.P("  },")
-
 	g.P("  PrimaryKey: func(event *", ss.eventMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
 	for _, field := range ss.eventFields.eventStateKeyFields {

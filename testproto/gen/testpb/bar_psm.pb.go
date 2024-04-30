@@ -93,6 +93,11 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 		PKFieldPaths: []string{
 			"metadata.event_id",
 		},
+		PK: func(event *BarEvent) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"id": event.Metadata.EventId,
+			}, nil
+		},
 	},
 	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
