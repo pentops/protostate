@@ -86,7 +86,9 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			}
 
 			return nil
-		})).
+		}))
+
+	sm.From().
 		Hook(testpb.FooPSMHook(func(
 			ctx context.Context,
 			tx sqrlx.Transaction,
