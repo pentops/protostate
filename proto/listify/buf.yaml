@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/pentops/psm
+name: buf.build/pentops/listify
 
 deps:
   - buf.build/googleapis/googleapis
