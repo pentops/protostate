@@ -1,0 +1,14 @@
+version: v1
+name: buf.build/pentops/protostate
+
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+
+
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package psm.event.v1;
+
+import "buf/validate/validate.proto";
+
+// Events are caused by either an actor external to the boundary, an application
+// within the boundary, the state machine itself,
+message Cause {
+  oneof source {
+    PSMEventCause psm_event = 1;
+    CommandCause command_cause = 2;
+  }
+
+  // Mandatory for CommandCause, optional for others.
+  //optional o5.auth.v1.AuthenticatedActor actor = 3;
+}
+
+// The event was caused by another state machine transition event.
+message PSMEventCause {
+  // The ID of the event that caused this event
+  string event_id = 1 [(buf.validate.field).string.uuid = true];
+
+  // The identity of the state machine for the event.
+  // {package}.{name}, where name is the annotated name in
+  // psm.state.v1.(State|Event)ObjectOptions.name
+  // e.g. "foo.bar.v1.foobar" (not foo.bar.v1.FooBarState)
+  string state_machine = 2;
+
+  // a 'direct' cause means application derived the event purely in
+  // business logic from the causal event, so the event is guaranteed to have
+  // been caused by the causal event. Indirect means an external system
+  // was involved, e.g. where the application sends a request to a vendor
+  // system, and the vendor replies, and so in theory may be incorrect.
+  bool indirect = 4;
+}
+
+// The event was caused by a 'Command' service, i.e. an authenticated gRPC call to a service
+// from outside of the environment boundary which was translated into an event
+message CommandCause {
+  // {package}.{service}/{method}. E.g. "foo.bar.v1.FooService/BarMethod"
+  string method_name = 1;
+}
