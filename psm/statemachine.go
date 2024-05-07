@@ -480,15 +480,25 @@ func (sm *StateMachine[S, ST, E, IE]) AddHook(hook IStateHook[S, ST, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
+func (sm *StateMachine[S, ST, E, IE]) FindHooks(status ST, event E) []IStateHook[S, ST, E, IE] {
+
+	hooks := []IStateHook[S, ST, E, IE]{}
+
+	for _, hook := range sm.hooks {
+		if hook.Matches(status, event) {
+			hooks = append(hooks, hook)
+		}
+	}
+
+	return hooks
+}
+
 func (sm *StateMachine[S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, statusBefore ST, state S, event E) ([]E, error) {
 
 	chain := []E{}
+	hooks := sm.FindHooks(statusBefore, event)
 
-	for _, hook := range sm.hooks {
-
-		if !hook.Matches(statusBefore, event) {
-			continue
-		}
+	for _, hook := range hooks {
 
 		baton := &TransitionData[E, IE]{
 			causedBy: event,
