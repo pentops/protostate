@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
@@ -11,7 +12,6 @@ import (
 )
 
 func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
-
 	if err := qs.validate(); err != nil {
 		return nil, err
 	}
@@ -24,16 +24,21 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 		return nil, err
 	}
 
+	var errs []error
 	if qs.getMethod == nil {
-		return nil, fmt.Errorf("service %s does not have a get method", qs.name)
+		errs = append(errs, fmt.Errorf("service %s does not have a get method", qs.name))
 	}
 
 	if qs.listMethod == nil {
-		return nil, fmt.Errorf("service %s does not have a list method", qs.name)
+		errs = append(errs, fmt.Errorf("service %s does not have a list method", qs.name))
 	}
 
 	if qs.listEventsMethod == nil {
-		return nil, fmt.Errorf("service %s does not have a list events method", qs.name)
+		errs = append(errs, fmt.Errorf("service %s does not have a list events method", qs.name))
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	var statePkFields []string
