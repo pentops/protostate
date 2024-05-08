@@ -79,9 +79,7 @@ func (qs PSMQuerySet) write(g *protogen.GeneratedFile) error {
 	g.P("  ]{")
 	g.P("    QueryTableSpec: tableSpec,")
 	qs.listFilter(g, qs.ListREQ, "ListRequestFilter", qs.ListRequestFilter)
-	if qs.ListEventsREQ != nil {
-		qs.listFilter(g, *qs.ListEventsREQ, "ListEventsRequestFilter", qs.ListEventsRequestFilter)
-	}
+	qs.listFilter(g, *qs.ListEventsREQ, "ListEventsRequestFilter", qs.ListEventsRequestFilter)
 	g.P("  }")
 	g.P("}")
 	g.P()

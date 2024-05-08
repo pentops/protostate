@@ -70,26 +70,27 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 		})
 	}
 
-	if qs.listEventsMethod != nil {
-		var fallbackPkFields []string
-		if ss != nil {
-			fallbackPkFields = ss.eventPkFields
-		}
-		listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.WithTieBreakerFields(fallbackPkFields...))
-		if err != nil {
-			return nil, fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
-		}
-		ww.ListEventsREQ = &qs.listEventsMethod.Input.GoIdent
-		ww.ListEventsRES = &qs.listEventsMethod.Output.GoIdent
-		for _, field := range listEventsReflectionSet.RequestFilterFields {
-			genField := mapGenField(qs.listEventsMethod.Input, field)
-			ww.ListEventsRequestFilter = append(ww.ListEventsRequestFilter, ListFilterField{
-				DBName:   string(field.Name()),
-				Getter:   genField.GoName,
-				Optional: field.HasOptionalKeyword(),
-			})
-		}
+	var fallbackPkFields []string
+	if ss != nil {
+		fallbackPkFields = ss.eventPkFields
 	}
+
+	listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.WithTieBreakerFields(fallbackPkFields...))
+	if err != nil {
+		return nil, fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+	}
+
+	ww.ListEventsREQ = &qs.listEventsMethod.Input.GoIdent
+	ww.ListEventsRES = &qs.listEventsMethod.Output.GoIdent
+	for _, field := range listEventsReflectionSet.RequestFilterFields {
+		genField := mapGenField(qs.listEventsMethod.Input, field)
+		ww.ListEventsRequestFilter = append(ww.ListEventsRequestFilter, ListFilterField{
+			DBName:   string(field.Name()),
+			Getter:   genField.GoName,
+			Optional: field.HasOptionalKeyword(),
+		})
+	}
+
 	return ww, nil
 }
 
@@ -99,7 +100,6 @@ type queryPkFields struct {
 }
 
 func deriveQueryPKFromDescriptors(stateMessage, eventMessage protoreflect.MessageDescriptor) (*queryPkFields, error) {
-
 	// this function mirrors builfEventFieldDescriptors, but uses only the
 	// descriptors, as the messages will likely not be in the same file as the
 	// service, i.e. we won't have the protogen wrappers.
@@ -160,7 +160,6 @@ func deriveQueryPKFromDescriptors(stateMessage, eventMessage protoreflect.Messag
 // attempts to walk through the query methods to find the descriptors for the
 // state and event messages.
 func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*queryPkFields, error) {
-
 	if src.getMethod == nil {
 		return nil, fmt.Errorf("no get nethod, cannot derive state fields")
 	}
