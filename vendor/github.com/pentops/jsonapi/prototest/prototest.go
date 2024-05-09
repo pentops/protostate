@@ -71,3 +71,59 @@ func DescriptorsFromSource(t testing.TB, sourceFiles map[string]string) ResultSe
 		Files: descFiles,
 	}
 }
+
+type MessageOption func(*messageOption)
+
+type messageOption struct {
+	name    string
+	imports []string
+}
+
+func WithMessageName(name string) MessageOption {
+	return func(o *messageOption) {
+		o.name = name
+	}
+}
+
+func WithMessageImports(imports ...string) MessageOption {
+	return func(o *messageOption) {
+		o.imports = append(o.imports, imports...)
+	}
+}
+
+func SingleMessage(t testing.TB, content ...interface{}) protoreflect.MessageDescriptor {
+	t.Helper()
+	options := &messageOption{
+		name: "Wrapper",
+	}
+	lines := make([]string, 0, len(content))
+	for _, c := range content {
+		if opt, ok := c.(MessageOption); ok {
+			opt(options)
+			continue
+		}
+		if str, ok := c.(string); ok {
+			lines = append(lines, str)
+			continue
+		}
+		t.Fatalf("unknown content type: %T", c)
+	}
+
+	importLines := make([]string, 0, len(options.imports))
+	for _, imp := range options.imports {
+		importLines = append(importLines, fmt.Sprintf(`import "%s";`, imp))
+	}
+
+	rs := DescriptorsFromSource(t, map[string]string{
+		"test.proto": fmt.Sprintf(`
+		syntax = "proto3";
+		%s
+		package test;
+		message %s {
+			%s
+		}
+		`, strings.Join(importLines, "\n"), options.name, strings.Join(lines, "\n")),
+	})
+
+	return rs.MessageByName(t, protoreflect.FullName("test."+options.name))
+}
