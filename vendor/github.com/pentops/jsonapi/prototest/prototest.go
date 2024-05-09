@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -17,59 +16,80 @@ import (
 )
 
 type ResultSet struct {
-	*protoregistry.Files
+	messages map[protoreflect.FullName]protoreflect.MessageDescriptor
+	services map[protoreflect.FullName]protoreflect.ServiceDescriptor
 }
 
 func (rs ResultSet) MessageByName(t testing.TB, name protoreflect.FullName) protoreflect.MessageDescriptor {
 	t.Helper()
-	md, err := rs.FindDescriptorByName(name)
-	if err != nil {
-		t.Fatal(err)
+
+	md, ok := rs.messages[name]
+	if !ok {
+		t.Fatalf("message not found: %s", name)
 	}
-	return md.(protoreflect.MessageDescriptor)
+	return md
 }
 
 func (rs ResultSet) ServiceByName(t testing.TB, name protoreflect.FullName) protoreflect.ServiceDescriptor {
 	t.Helper()
-	md, err := rs.FindDescriptorByName(name)
-	if err != nil {
-		t.Fatal(err)
+	md, ok := rs.services[name]
+	if !ok {
+		t.Fatalf("service not found: %s", name)
 	}
-	return md.(protoreflect.ServiceDescriptor)
+	return md
 }
 
-func DescriptorsFromSource(t testing.TB, sourceFiles map[string]string) ResultSet {
+func DescriptorsFromSource(t testing.TB, source map[string]string) *ResultSet {
 	t.Helper()
+
+	allFiles := make([]string, 0, len(source))
+	for filename := range source {
+		allFiles = append(allFiles, filename)
+	}
 
 	parser := protoparse.Parser{
 		ImportPaths:           []string{""},
 		IncludeSourceCodeInfo: false,
-		// Load everything which the runtime has already leaded, includes all
-		// the google, buf, psm etc packages, so long as something which uses
-		// them has already beein imported
-		LookupImport: desc.LoadFileDescriptor,
+
 		Accessor: func(filename string) (io.ReadCloser, error) {
-			if content, ok := sourceFiles[filename]; ok {
-				return io.NopCloser(strings.NewReader(content)), nil
+			src, ok := source[filename]
+			if !ok {
+				return nil, fmt.Errorf("file not found: %s", filename)
 			}
-			return nil, fmt.Errorf("file not found: %s", filename)
+			return io.NopCloser(strings.NewReader(src)), nil
 		},
 	}
 
-	customDesc, err := parser.ParseFiles("test.proto")
+	customDesc, err := parser.ParseFilesButDoNotLink(allFiles...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	realDesc := desc.ToFileDescriptorSet(customDesc...)
-	descFiles, err := protodesc.NewFiles(realDesc)
-	if err != nil {
-		t.Fatal(err)
+	rs := &ResultSet{
+		messages: make(map[protoreflect.FullName]protoreflect.MessageDescriptor),
+		services: make(map[protoreflect.FullName]protoreflect.ServiceDescriptor),
 	}
 
-	return ResultSet{
-		Files: descFiles,
+	for _, file := range customDesc {
+		fd, err := protodesc.NewFile(file, protoregistry.GlobalFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		messages := fd.Messages()
+		for i := 0; i < messages.Len(); i++ {
+			msg := messages.Get(i)
+			rs.messages[msg.FullName()] = msg
+		}
+
+		services := fd.Services()
+		for i := 0; i < services.Len(); i++ {
+			svc := services.Get(i)
+			rs.services[svc.FullName()] = svc
+		}
 	}
+
+	return rs
 }
 
 type MessageOption func(*messageOption)
