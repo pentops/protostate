@@ -10,7 +10,7 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20240222224419-c36885c5b6f6
-	github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311
+	github.com/pentops/jsonapi v0.0.0-20240507235404-82342e0c081e
 	github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4
 	github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7
 	github.com/pentops/pgtest.go v0.0.0-20231220005207-f01c870bad2e

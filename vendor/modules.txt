@@ -94,7 +94,7 @@ github.com/mattn/go-isatty
 # github.com/pentops/flowtest v0.0.0-20240222224419-c36885c5b6f6
 ## explicit; go 1.21.3
 github.com/pentops/flowtest
-# github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311
+# github.com/pentops/jsonapi v0.0.0-20240507235404-82342e0c081e
 ## explicit; go 1.21.4
 github.com/pentops/jsonapi/prototest
 # github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4

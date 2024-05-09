@@ -72,8 +72,8 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/pentops/flowtest v0.0.0-20240222224419-c36885c5b6f6 h1:ExaDyZX83CIoo4XiPJkRRYHriF/FdYZG4nmxp8QmjgY=
 github.com/pentops/flowtest v0.0.0-20240222224419-c36885c5b6f6/go.mod h1:FNquTq/mafLEDD+w/yiiQKIuAuQycFD9zhZ+pbAivc0=
-github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311 h1:JeqazO7kfp3xmggSxJHat3CWY1eMLMtZZV9gwNmcfvI=
-github.com/pentops/jsonapi v0.0.0-20240125182748-28bbbf8f7311/go.mod h1:+G29pelqimEuvqxtzUS3or1tZKssK8Mc0+JBInSR5k0=
+github.com/pentops/jsonapi v0.0.0-20240507235404-82342e0c081e h1:EGTutKAnWPGNIk6lU/34HGsoa30p1u2FiagJT4QAl5k=
+github.com/pentops/jsonapi v0.0.0-20240507235404-82342e0c081e/go.mod h1:0BEiIktK5SxBa6IjaJBn7RmhDnuDEK+w4AB5jqL7l9A=
 github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4 h1:7kPDmBAQxMxcFIYt1rEco/AipZmm1CUoND3wSDmIOeI=
 github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
 github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7 h1:rBLoeUeI1acxd6GbJjJbK6CeVF/q/Xab+xqQYePvNSw=
