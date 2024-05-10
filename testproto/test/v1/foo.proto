@@ -9,6 +9,7 @@ import "psm/list/v1/annotations.proto";
 import "psm/list/v1/page.proto";
 import "psm/list/v1/query.proto";
 import "psm/state/v1/annotations.proto";
+import "psm/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 
@@ -56,41 +57,53 @@ message FooSummaryResponse {
   int64 total_length = 4;
 }
 
-message FooState {
-  option (psm.state.v1.state).name = "foo";
+message FooKeys {
+  option (psm.state.v1.psm).name = "foo";
 
-  string foo_id = 1 [(buf.validate.field).string.uuid = true];
-  optional string tenant_id = 2 [
+  string foo_id = 1 [
     (buf.validate.field).string.uuid = true,
+    (psm.state.v1.field).primary_key = true,
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
-  string name = 3 [(psm.list.v1.field).string.open_text.searching = {
+  optional string tenant_id = 2 [
+    (buf.validate.field).string.uuid = true,
+    (psm.state.v1.field).primary_key = false,
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+  ];
+}
+
+message FooState {
+  psm.state.v1.StateMetadata metadata = 1 [(buf.validate.field).required = true];
+
+  FooKeys keys = 2 [(buf.validate.field).required = true];
+
+  FooStatus status = 3 [(psm.list.v1.field).enum.filtering = {
+    filterable: true,
+    default_filters: ["FOO_STATUS_ACTIVE"]
+  }];
+
+  string name = 5 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_name"
   }];
-  string field = 4 [(psm.list.v1.field).string.open_text.searching = {
+
+  string field = 6 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_field"
   }];
-  optional string description = 8 [(psm.list.v1.field).string.open_text.searching = {
+
+  optional string description = 7 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_description"
   }];
 
-  uint64 last_event_sequence = 6 [(psm.list.v1.field).string.foreign_key.unique_string.filtering.filterable = true];
-
-  google.protobuf.Timestamp created_at = 7 [(psm.list.v1.field).timestamp = {
+  google.protobuf.Timestamp created_at = 8 [(psm.list.v1.field).timestamp = {
     filtering: {filterable: true},
     sorting: {
       sortable: true,
       default_sort: true
     }
-  }];
-
-  FooStatus status = 5 [(psm.list.v1.field).enum.filtering = {
-    filterable: true,
-    default_filters: ["FOO_STATUS_ACTIVE"]
   }];
 
   FooCharacteristics characteristics = 9;
@@ -132,51 +145,11 @@ enum FooStatus {
 }
 
 message FooEvent {
-  option (psm.state.v1.event).name = "foo";
+  psm.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
 
-  Metadata metadata = 1 [
-    (psm.state.v1.event_field).metadata = true,
-    (buf.validate.field).required = true
-  ];
+  FooKeys keys = 2 [(buf.validate.field).required = true];
 
-  string foo_id = 2 [
-    (buf.validate.field).string.uuid = true,
-    (psm.state.v1.event_field).state_key = true,
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
-  ];
-
-  optional string tenant_id = 4 [
-    (buf.validate.field).string.uuid = true,
-    (psm.state.v1.event_field).state_field = true,
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
-  ];
-
-  FooEventType event = 3 [
-    (psm.state.v1.event_field).event_type = true,
-    (buf.validate.field).required = true
-  ];
-}
-
-message Metadata {
-  string event_id = 1;
-
-  google.protobuf.Timestamp timestamp = 2 [(psm.list.v1.field).timestamp = {
-    filtering: {filterable: true},
-    sorting: {
-      sortable: true,
-      default_sort: true
-    }
-  }];
-
-  Actor actor = 3;
-
-  uint64 sequence = 4 [(psm.list.v1.field).uint64 = {
-    sorting: {sortable: true}
-  }];
-}
-
-message Actor {
-  string actor_id = 1 [(psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true];
+  FooEventType event = 3 [(buf.validate.field).required = true];
 }
 
 message FooEventType {

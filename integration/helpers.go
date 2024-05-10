@@ -116,7 +116,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 					t.Fatal(err.Error())
 				}
 				a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-				a.Equal(tenants[ti], *stateOut.TenantId)
+				a.Equal(tenants[ti], *stateOut.Keys.TenantId)
 			}
 
 			ti++

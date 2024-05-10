@@ -4,50 +4,63 @@ import (
 	"fmt"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+func (src stateEntityGenerateSet) validate() error {
+	if src.state == nil {
+		return fmt.Errorf("missing State message (field of %s)", stateMetadataProtoName)
+	}
+
+	if src.event == nil {
+		return fmt.Errorf("missing Event message (field of %s)", eventMetadataProtoName)
+	}
+
+	if src.keyMessage == nil {
+		return fmt.Errorf("missing Key message (field where a message has the state annotation)")
+	}
+
+	return nil
+
+}
 
 func buildStateSet(src stateEntityGenerateSet) (*PSMEntity, error) {
 
-	if src.stateMessage == nil || src.stateOptions == nil {
-		return nil, fmt.Errorf("state object '%s' does not have a State message (message with (psm.state.v1.state).name = '%s')", src.fullName, src.name)
+	if err := src.validate(); err != nil {
+		return nil, fmt.Errorf("state object %s: %w", src.options.Name, err)
 	}
 
-	if src.eventMessage == nil || src.eventOptions == nil {
-		return nil, fmt.Errorf("state object '%s' does not have an Event message (message with (psm.state.v1.event).name = '%s')", src.fullName, src.name)
-	}
-
+	namePrefix := stateGoName(src.options.Name)
 	ss := &PSMEntity{
-		stateMessage: src.stateMessage,
-		eventMessage: src.eventMessage,
+		state:         src.state,
+		event:         src.event,
+		specifiedName: src.options.Name,
+		namePrefix:    namePrefix,
+		machineName:   namePrefix + "PSM",
+		eventName:     namePrefix + "PSMEvent",
+		keyMessage:    src.keyMessage,
+		keyFields:     make([]keyField, 0, len(src.keyMessage.Fields)),
 	}
 
-	ss.specifiedName = src.stateOptions.Name
-	ss.namePrefix = stateGoName(ss.specifiedName)
-	ss.machineName = ss.namePrefix + "PSM"
-	ss.eventName = ss.namePrefix + "PSMEvent"
+	for _, field := range src.keyMessage.Fields {
 
-	stateFields, err := buildStateFields(src)
-	if err != nil {
-		return nil, err
+		annotation := proto.GetExtension(field.Desc.Options(), psm_pb.E_Field).(*psm_pb.FieldOptions)
+		if annotation == nil {
+			annotation = &psm_pb.FieldOptions{}
+		}
+
+		keyField := keyField{
+			field:        field,
+			FieldOptions: annotation,
+		}
+		ss.keyFields = append(ss.keyFields, keyField)
 	}
-
-	if src.eventMessage == nil {
-		return nil, fmt.Errorf("state object %s does not have an event object", src.stateOptions.Name)
-	}
-
-	eventFields, err := buildEventFields(src)
-	if err != nil {
-		return nil, err
-	}
-
-	ss.eventFields = *eventFields
-	ss.stateFields = *stateFields
 
 	return ss, nil
 }
+
+/*
+
 
 type stateFieldGenerators struct {
 	// In the Status message, this is the enum for the simplified status
@@ -69,7 +82,7 @@ func buildStateFields(src stateEntityGenerateSet) (*stateFieldGenerators, error)
 	}
 
 	if err := out.validate(); err != nil {
-		return nil, fmt.Errorf("state object %s: %w", src.stateOptions.Name, err)
+		return nil, fmt.Errorf("state object %s: %w", src.options.Name, err)
 	}
 	return out, nil
 
@@ -94,20 +107,18 @@ type eventStateFieldGenMap struct {
 }
 
 type eventFieldGenerators struct {
-	eventStateKeyFields []eventStateFieldGenMap
-	eventTypeField      *protogen.Field
-	metadataField       *protogen.Field
-	metadataFields      metadataGenerators
+	eventTypeField *protogen.Field
+	metadataField  *protogen.Field
+	keyField       *protogen.Field
+	metadataFields metadataGenerators
 }
 
 func buildEventFields(src stateEntityGenerateSet) (*eventFieldGenerators, error) {
 
+	// The event should have exactly three fields: Metadata, Keys and the
+	// specific Type of event
 	out := eventFieldGenerators{}
 	for _, field := range src.eventMessage.Fields {
-		fieldOpt := proto.GetExtension(field.Desc.Options(), psm_pb.E_EventField).(*psm_pb.EventField)
-		if fieldOpt == nil {
-			continue
-		}
 
 		if fieldOpt.EventType {
 			if field.Message == nil {
@@ -116,22 +127,22 @@ func buildEventFields(src stateEntityGenerateSet) (*eventFieldGenerators, error)
 			out.eventTypeField = field
 		} else if fieldOpt.Metadata {
 			if field.Message == nil {
-				return nil, fmt.Errorf("event object %s metadata field is not a message", src.eventOptions.Name)
+				return nil, fmt.Errorf("event object %s metadata field is not a message", src.name)
 			}
 			out.metadataField = field
 		} else if fieldOpt.StateKey || fieldOpt.StateField {
 			desc := field.Desc
 			if desc.IsList() || desc.IsMap() || desc.Kind() == protoreflect.MessageKind {
-				return nil, fmt.Errorf("event object %s state key field %s is not a scalar", src.eventOptions.Name, field.Desc.Name())
+				return nil, fmt.Errorf("event object %s state key field %s is not a scalar", src.name, field.Desc.Name())
 			}
 
 			matchingStateField := fieldByName(src.stateMessage, field.Desc.Name())
 			if matchingStateField == nil {
-				return nil, fmt.Errorf("event object %s state key field %s does not exist in state object %s", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name)
+				return nil, fmt.Errorf("event object %s state key field %s does not exist in state object %s", src.name, field.Desc.Name(), src.name)
 			}
 
 			if err := descriptorTypesMatch(matchingStateField.Desc, field.Desc); err != nil {
-				return nil, fmt.Errorf("event object %s state key field %s is not the same type as state object %s: %w", src.eventOptions.Name, field.Desc.Name(), src.stateOptions.Name, err)
+				return nil, fmt.Errorf("event object %s state key field %s is not the same type as state object %s: %w", src.name, field.Desc.Name(), src.name, err)
 			}
 
 			out.eventStateKeyFields = append(out.eventStateKeyFields, eventStateFieldGenMap{
@@ -145,7 +156,7 @@ func buildEventFields(src stateEntityGenerateSet) (*eventFieldGenerators, error)
 	}
 
 	if out.metadataField == nil {
-		return nil, fmt.Errorf("event object '%s' missing metadata field", src.eventOptions.Name)
+		return nil, fmt.Errorf("event object '%s' missing metadata field", src.name)
 	}
 
 	mdFields := metadataFields(out.metadataField.Message.Desc)
@@ -154,7 +165,7 @@ func buildEventFields(src stateEntityGenerateSet) (*eventFieldGenerators, error)
 	out.metadataFields = mdFields.toGenerators(mdMsg)
 
 	if err := out.validate(); err != nil {
-		return nil, fmt.Errorf("event object %s: %w", src.eventOptions.Name, err)
+		return nil, fmt.Errorf("event object %s: %w", src.name, err)
 	}
 
 	return &out, nil
@@ -181,3 +192,5 @@ func (desc eventFieldGenerators) validate() error {
 
 	return nil
 }
+
+*/

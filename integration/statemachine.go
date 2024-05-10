@@ -10,9 +10,7 @@ import (
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, error) {
-	systemActor, err := psm.NewSystemActor(actorID, &testpb.Actor{
-		ActorId: actorID,
-	})
+	systemActor, err := psm.NewSystemActor(actorID)
 	if err != nil {
 		return nil, err
 	}
@@ -32,14 +30,14 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	) error {
 
 		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
-			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.FooId))
+			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 
-		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.FooId).
+		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
 			Set("weight", state.Characteristics.Weight).
 			Set("height", state.Characteristics.Height).
 			Set("length", state.Characteristics.Length))
@@ -123,14 +121,14 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 		EventTableName("bar_event").
 		StoreExtraEventColumns(func(event *testpb.BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"bar_id":    event.BarId,
+				"bar_id":    event.Keys.BarId,
 				"id":        event.Metadata.EventId,
 				"timestamp": event.Metadata.Timestamp,
 			}, nil
 		}).
 		PrimaryKey(func(event *testpb.BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"id": event.BarId,
+				"id": event.Keys.BarId,
 			}, nil
 		}).NewStateMachine()
 	if err != nil {

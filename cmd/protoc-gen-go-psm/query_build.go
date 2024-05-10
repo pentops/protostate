@@ -23,6 +23,9 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 	if err != nil {
 		return nil, err
 	}
+	if ss == nil {
+		return nil, fmt.Errorf("query service %s does not have a state descriptor", qs.name)
+	}
 
 	var errs []error
 	if qs.getMethod == nil {
@@ -48,7 +51,7 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 
 	listReflectionSet, err := pquery.BuildListReflection(qs.listMethod.Input.Desc, qs.listMethod.Output.Desc, pquery.WithTieBreakerFields(statePkFields...))
 	if err != nil {
-		return nil, fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+		return nil, fmt.Errorf("pquery.BuildListReflection for %s: %w", qs.listMethod.Desc.FullName(), err)
 	}
 
 	goServiceName := stateGoName(qs.name)
@@ -77,7 +80,7 @@ func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
 
 	listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.WithTieBreakerFields(fallbackPkFields...))
 	if err != nil {
-		return nil, fmt.Errorf("query service %s is not compatible with PSM: %w", qs.listMethod.Desc.FullName(), err)
+		return nil, fmt.Errorf("pquery.BuildListReflection for %s is not compatible with PSM: %w", qs.listEventsMethod.Desc.FullName(), err)
 	}
 
 	ww.ListEventsREQ = &qs.listEventsMethod.Input.GoIdent
@@ -99,64 +102,6 @@ type queryPkFields struct {
 	eventPkFields []string
 }
 
-func deriveQueryPKFromDescriptors(stateMessage, eventMessage protoreflect.MessageDescriptor) (*queryPkFields, error) {
-	// this function mirrors builfEventFieldDescriptors, but uses only the
-	// descriptors, as the messages will likely not be in the same file as the
-	// service, i.e. we won't have the protogen wrappers.
-	out := &queryPkFields{}
-
-	var metadataField protoreflect.FieldDescriptor
-
-	for idx := 0; idx < eventMessage.Fields().Len(); idx++ {
-		field := eventMessage.Fields().Get(idx)
-		fieldOpt := proto.GetExtension(field.Options(), psm_pb.E_EventField).(*psm_pb.EventField)
-		if fieldOpt == nil {
-			continue
-		}
-
-		if fieldOpt.Metadata {
-			if metadataField != nil {
-				return nil, fmt.Errorf("event message %s has more than one metadata field", eventMessage.Name())
-			}
-			metadataField = field
-			continue
-		}
-
-		if fieldOpt.StateKey || fieldOpt.StateField {
-
-			matchingStateField := eventMessage.Fields().ByName(field.Name())
-			if matchingStateField == nil {
-				return nil, fmt.Errorf("event field %s does not exist in event message", field.Name())
-			}
-
-			if err := descriptorTypesMatch(field, matchingStateField); err != nil {
-				return nil, fmt.Errorf("event field %s does not match event field: %w", field.Name(), err)
-			}
-
-			out.statePkFields = append(out.statePkFields, string(field.Name()))
-		}
-	}
-
-	if metadataField == nil {
-		return nil, fmt.Errorf("event message %s does not have a metadata field", eventMessage.Name())
-	}
-	if metadataField.Kind() != protoreflect.MessageKind {
-		return nil, fmt.Errorf("metadata field %s is not a message", metadataField.Name())
-	}
-
-	mdFields := metadataFields(metadataField.Message())
-
-	if mdFields.id == nil {
-		return nil, fmt.Errorf("metadata message %s does not have an id field", metadataField.Message().Name())
-	}
-
-	out.eventPkFields = []string{
-		fmt.Sprintf("%s.%s", metadataField.Name(), mdFields.id.Name()),
-	}
-
-	return out, nil
-}
-
 // attempts to walk through the query methods to find the descriptors for the
 // state and event messages.
 func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*queryPkFields, error) {
@@ -164,18 +109,18 @@ func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*que
 		return nil, fmt.Errorf("no get nethod, cannot derive state fields")
 	}
 
-	var repeatedEventMessage *protogen.Message
-	var stateMessage *protogen.Message
 	var eventMessage *protogen.Message
+	var stateMessage *protogen.Message
+	//var eventMessage *protogen.Message
 	for _, field := range src.getMethod.Output.Fields {
 		if field.Message == nil {
 			continue
 		}
 		if field.Desc.Cardinality() == protoreflect.Repeated {
-			if repeatedEventMessage != nil {
+			if eventMessage != nil {
 				return nil, fmt.Errorf("state get response %s should have exactly one repeated field", src.getMethod.Desc.FullName())
 			}
-			repeatedEventMessage = field.Message
+			eventMessage = field.Message
 			continue
 		}
 
@@ -189,62 +134,92 @@ func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*que
 		return nil, fmt.Errorf("state get response should have exactly one non-repeated field, which is a message")
 	}
 
-	stateOptions := proto.GetExtension(stateMessage.Desc.Options(), psm_pb.E_State).(*psm_pb.StateObjectOptions)
-	if stateOptions == nil {
-		// No state, can't add fallbacks.
-		return nil, nil
+	if eventMessage == nil {
+		if src.listEventsMethod == nil {
+			return nil, fmt.Errorf("no repeated field in get response, and no list events method, cannot derive event")
+		}
 	}
 
-	// derive from the event list in the get response
-	if repeatedEventMessage != nil {
-		eventOptions := proto.GetExtension(repeatedEventMessage.Desc.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
-			return nil, nil
-		}
+	var stateMetadataField *protogen.Field
+	var stateKeyField *protogen.Field
+	var keyMessage *protogen.Message
+	var keyOptions *psm_pb.PSMOptions
 
-		eventMessage = repeatedEventMessage
-
-		return deriveQueryPKFromDescriptors(stateMessage.Desc, eventMessage.Desc)
-	}
-
-	// derive from the list response
-	if src.listEventsMethod != nil {
-
-		for _, field := range src.listEventsMethod.Output.Fields {
-			if field.Message == nil {
-				continue
-			}
-			if field.Desc.Cardinality() != protoreflect.Repeated {
-				continue
-			}
-			repeatedEventMessage = field.Message
-			break
-		}
-		if repeatedEventMessage == nil {
-			return nil, nil
-		}
-		eventOptions := proto.GetExtension(repeatedEventMessage.Desc.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
-			return nil, nil
-		}
-
-		return deriveQueryPKFromDescriptors(stateMessage.Desc, repeatedEventMessage.Desc)
-	}
-
-	// Last ditch effort, try to find the event message in the file
-	stateFileMessages := stateMessage.Desc.ParentFile().Messages()
-	for i := 0; i < stateFileMessages.Len(); i++ {
-		msg := stateFileMessages.Get(i)
-		eventOptions := proto.GetExtension(msg.Options(), psm_pb.E_Event).(*psm_pb.EventObjectOptions)
-		if eventOptions == nil {
+	for _, field := range stateMessage.Fields {
+		if field.Message == nil {
 			continue
 		}
-		if eventOptions.Name != stateOptions.Name {
+		if field.Message.Desc.FullName() == stateMetadataProtoName {
+			stateMetadataField = field
+			continue
+		}
+		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+		if ok && stateObjectAnnotation != nil {
+			keyOptions = stateObjectAnnotation
+			keyMessage = field.Message
+			stateKeyField = field
+			continue
+		}
+	}
+
+	if stateMetadataField == nil {
+		return nil, fmt.Errorf("state message %s has no %s field", stateMessage.Desc.FullName(), stateMetadataProtoName)
+	}
+	if stateKeyField == nil {
+		return nil, fmt.Errorf("state message %s has no PSM Keys", stateMessage.Desc.FullName())
+	}
+	if keyOptions.Name != src.name {
+		return nil, fmt.Errorf("keys message %s has a different name than the query service %s", keyMessage.Desc.FullName(), src.name)
+	}
+
+	var eventMetadataField *protogen.Field
+	var eventKeysField *protogen.Field
+	for _, field := range eventMessage.Fields {
+		if field.Message == nil {
+			continue
+		}
+		if field.Message.Desc.FullName() == eventMetadataProtoName {
+			eventMetadataField = field
 			continue
 		}
 
-		return deriveQueryPKFromDescriptors(stateMessage.Desc, msg)
+		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+		if ok && stateObjectAnnotation != nil {
+			if keyMessage.Desc.FullName() != field.Message.Desc.FullName() {
+				return nil, fmt.Errorf("%s.%s is a %s, but %s.%s is a %s, these should be the same",
+					stateMessage.Desc.FullName(),
+					stateKeyField.Desc.Name(),
+					keyMessage.Desc.FullName(),
+					eventMessage.Desc.FullName(),
+					field.Desc.Name(),
+					field.Message.Desc.FullName(),
+				)
+			}
+			eventKeysField = field
+			continue
+		}
 	}
 
-	return nil, nil
+	if eventMetadataField == nil {
+		// No event, can't add fallbacks.
+		return nil, fmt.Errorf("event message %s has no %s field", eventMessage.Desc.FullName(), eventMetadataProtoName)
+	}
+	if eventKeysField == nil {
+		return nil, fmt.Errorf("event message %s has no PSM Keys", eventMessage.Desc.FullName())
+	}
+
+	// this function mirrors builfEventFieldDescriptors, but uses only the
+	// descriptors, as the messages will likely not be in the same file as the
+	// service, i.e. we won't have the protogen wrappers.
+	out := &queryPkFields{}
+
+	out.eventPkFields = []string{
+		fmt.Sprintf("%s.event_id", eventMetadataField.Desc.Name()),
+	}
+
+	for _, field := range keyMessage.Fields {
+		out.statePkFields = append(out.statePkFields, fmt.Sprintf("%s.%s", string(stateKeyField.Desc.Name()), string(field.Desc.Name())))
+	}
+
+	return out, nil
 }

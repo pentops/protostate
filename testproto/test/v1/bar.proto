@@ -9,6 +9,7 @@ import "psm/list/v1/annotations.proto";
 import "psm/list/v1/page.proto";
 import "psm/list/v1/query.proto";
 import "psm/state/v1/annotations.proto";
+import "psm/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/testproto/gen/testpb";
 
@@ -42,25 +43,35 @@ message GetBarResponse {
   repeated BarEvent events = 2;
 }
 
-message BarState {
-  option (psm.state.v1.state).name = "bar";
+message BarKeys {
+  option (psm.state.v1.psm).name = "bar";
 
-  string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  string tenant_id = 2 [
+  string bar_id = 2 [
+    (buf.validate.field).string.uuid = true,
+    (psm.state.v1.field).primary_key = true
+  ];
+}
+
+message BarState {
+  psm.state.v1.StateMetadata metadata = 1;
+
+  BarKeys keys = 2;
+
+  string tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
-  string name = 3 [(psm.list.v1.field).string.open_text.searching = {
+  string name = 4 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_name"
   }];
-  string field = 4 [(psm.list.v1.field).string.open_text.searching = {
+  string field = 5 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_field"
   }];
 
-  BarStatus status = 5 [(psm.list.v1.field).enum.filtering = {
+  BarStatus status = 6 [(psm.list.v1.field).enum.filtering = {
     filterable: true,
     default_filters: ["BAR_STATUS_ACTIVE"]
   }];
@@ -73,34 +84,9 @@ enum BarStatus {
 }
 
 message BarEvent {
-  option (psm.state.v1.event).name = "bar";
-
-  StrangeMetadata metadata = 1 [
-    (psm.state.v1.event_field).metadata = true,
-    (buf.validate.field).required = true
-  ];
-
-  string bar_id = 2 [
-    (buf.validate.field).string.uuid = true,
-    (psm.state.v1.event_field).state_key = true,
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
-  ];
-
-  BarEventType event = 3 [
-    (psm.state.v1.event_field).event_type = true,
-    (buf.validate.field).required = true
-  ];
-}
-
-message StrangeMetadata {
-  string event_id = 1;
-  google.protobuf.Timestamp timestamp = 2 [(psm.list.v1.field).timestamp = {
-    filtering: {filterable: true},
-    sorting: {
-      sortable: true,
-      default_sort: true
-    }
-  }];
+  psm.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
+  BarKeys keys = 2 [(buf.validate.field).required = true];
+  BarEventType event = 3 [(buf.validate.field).required = true];
 }
 
 message BarEventType {
@@ -130,7 +116,7 @@ message ListBarsRequest {
   psm.list.v1.PageRequest page = 2;
   psm.list.v1.QueryRequest query = 3;
   option (psm.list.v1.list_request) = {
-    sort_tiebreaker: ["bar_id"]
+    sort_tiebreaker: ["keys.bar_id"]
   };
 }
 
