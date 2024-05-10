@@ -11,6 +11,7 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/outbox.pg.go/outbox"
 	"github.com/pentops/protostate/dbconvert"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -134,15 +135,13 @@ type SimpleSystemActor struct {
 	Actor protoreflect.Value
 }
 
-func NewSystemActor(id string, actor proto.Message) (SimpleSystemActor, error) {
+func NewSystemActor(id string) (SimpleSystemActor, error) {
 	idUUID, err := uuid.Parse(id)
 	if err != nil {
 		return SimpleSystemActor{}, fmt.Errorf("parsing id: %w", err)
 	}
-	actorValue := protoreflect.ValueOf(actor.ProtoReflect())
 	return SimpleSystemActor{
-		ID:    idUUID,
-		Actor: actorValue,
+		ID: idUUID,
 	}, nil
 }
 
@@ -150,13 +149,8 @@ func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) st
 	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
 }
 
-func (sa SimpleSystemActor) ActorProto() protoreflect.Value {
-	return sa.Actor
-}
-
 type SystemActor interface {
 	NewEventID(fromEventUUID string, eventKey string) string
-	ActorProto() protoreflect.Value
 }
 
 func NewStateMachine[
@@ -190,7 +184,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) WithDB(db Transactor) *DBStateMachine[K
 }
 
 func (sm *StateMachine[K, S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, event E) (S, error) {
-	state := *new(S)
+	state := (*new(S)).ProtoReflect().New().Interface().(S)
 
 	primaryKey, err := sm.spec.PrimaryKey(event)
 	if err != nil {
@@ -537,7 +531,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) deriveEvent(cause E, inner IE) (evt E, 
 
 	causeMetadata := cause.PSMMetadata()
 	eventKey := inner.PSMEventKey()
-	derived := *new(E)
+	derived := (*new(E)).ProtoReflect().New().Interface().(E)
 	derived.SetPSMKeys(cause.PSMKeys())
 	metadata := derived.PSMMetadata()
 
@@ -546,6 +540,16 @@ func (sm *StateMachine[K, S, ST, E, IE]) deriveEvent(cause E, inner IE) (evt E, 
 
 	// Sequence is set later
 	// Cause should be arranged here
+
+	metadata.Cause = &psm_pb.Cause{
+		Actor: nil, // No actor on derived events, the system is no longer considered an actor.
+		Source: &psm_pb.Cause_PsmEvent{
+			PsmEvent: &psm_pb.PSMEventCause{
+				EventId:  causeMetadata.EventId,
+				Indirect: false, // This is directly caused by the current event
+			},
+		},
+	}
 
 	derived.SetPSMEvent(inner)
 	return derived, nil

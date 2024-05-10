@@ -83,7 +83,7 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			return map[string]interface{}{}, nil
 		},
 		PKFieldPaths: []string{
-			"bar_id",
+			"keys.bar_id",
 		},
 	},
 	Event: psm.TableSpec[*BarEvent]{

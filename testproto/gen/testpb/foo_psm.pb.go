@@ -85,7 +85,7 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			}, nil
 		},
 		PKFieldPaths: []string{
-			"foo_id",
+			"keys.foo_id",
 		},
 	},
 	Event: psm.TableSpec[*FooEvent]{

@@ -21,7 +21,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 
 	actorID := uuid.NewString()
 
-	systemActor, err := psm.NewSystemActor(actorID, nil)
+	systemActor, err := psm.NewSystemActor(actorID)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

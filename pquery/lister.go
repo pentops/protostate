@@ -719,11 +719,6 @@ type pathNode struct {
 	oneof protoreflect.OneofDescriptor
 }
 
-type oneofSpec struct {
-	oneof     protoreflect.OneofDescriptor
-	fieldPath []protoreflect.FieldDescriptor
-}
-
 func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldSpec, error) {
 	var name protoreflect.Name
 	var remainder string
@@ -772,59 +767,6 @@ func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldS
 		fieldPath: append([]pathNode{node}, spec.fieldPath...),
 	}, nil
 }
-
-/*
-
-Oneof must be at the end of the path for this to work
-func findOneofSpec(message protoreflect.MessageDescriptor, path string) (*oneofSpec, error) {
-	var name protoreflect.Name
-	var remainder string
-
-	parts := strings.SplitN(path, ".", 2)
-	if len(parts) == 2 {
-		name = protoreflect.Name(camelToSnake(parts[0]))
-		remainder = parts[1]
-	} else {
-		name = protoreflect.Name(camelToSnake(path))
-	}
-
-	if remainder == "" {
-		oneof := message.Oneofs().ByName(name)
-
-		if oneof == nil {
-			field := message.Fields().ByName(name)
-			if field != nil {
-				return nil, ErrField
-			}
-
-			return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-		}
-
-		return &oneofSpec{
-			oneof: oneof,
-		}, nil
-	}
-
-	field := message.Fields().ByName(name)
-
-	if field == nil {
-		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-	}
-
-	if field.Kind() != protoreflect.MessageKind {
-		return nil, fmt.Errorf("field %s is not a message", name)
-	}
-
-	spec, err := findOneofSpec(field.Message(), remainder)
-	if err != nil {
-		return nil, err
-	}
-
-	return &oneofSpec{
-		oneof:     spec.oneof,
-		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
-	}, nil
-}*/
 
 func findFieldValue(msg protoreflect.Message, path []pathNode) (protoreflect.Value, error) {
 	if len(path) == 0 {

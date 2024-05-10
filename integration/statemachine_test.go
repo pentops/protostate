@@ -517,9 +517,16 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(res.Events)
 
 		derivedEvent := res.Events[2]
-		if derivedEvent.Metadata.Cause.Actor.Id != sm.ActorID {
-			t.Fatalf("expected derived event to have actor ID %s, got %s", sm.ActorID, derivedEvent.Metadata.Cause.Actor.Id)
+		if derivedEvent.Metadata == nil {
+			t.Fatalf("expected derived event to have metadata")
 		}
+		if derivedEvent.Metadata.Cause == nil {
+			t.Fatalf("expected derived event to have cause")
+		}
+		if derivedEvent.Metadata.Cause.Actor != nil {
+			t.Fatalf("expected derived event not to have actor")
+		}
+		// TODO: Assert Cause Fields
 	})
 
 	t.Run("List", func(t *testing.T) {

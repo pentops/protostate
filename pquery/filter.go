@@ -29,7 +29,10 @@ func (fs filterSpec) jsonbPath() string {
 
 	for _, node := range fs.fieldPath {
 		if node.field == nil {
-			panic("TODO: Support ONEOF")
+			if node.oneof == nil {
+				panic("node has no field or oneof")
+			}
+			continue // oneof does not appear in JSON
 		}
 		out.WriteString(fmt.Sprintf(".%s", node.field.JSONName()))
 

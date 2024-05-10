@@ -29,7 +29,6 @@ var (
 	smHookFunc              = smImportPath.Ident("PSMHookFunc")
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
 	smCombinedFunc          = smImportPath.Ident("PSMCombinedFunc")
-	smSystemActor           = smImportPath.Ident("SystemActor")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -128,29 +127,4 @@ func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *
 		}
 	}
 	panic(fmt.Sprintf("field %s not found in parent %s", field.FullName(), parent.Desc.FullName()))
-}
-
-func fieldByName(msg *protogen.Message, name protoreflect.Name) *protogen.Field {
-	for _, field := range msg.Fields {
-		if field.Desc.Name() == name {
-			return field
-		}
-	}
-	return nil
-}
-
-func descriptorTypesMatch(a, b protoreflect.FieldDescriptor) error {
-	if a.Kind() != b.Kind() {
-		return fmt.Errorf("different kind")
-	}
-
-	if a.HasOptionalKeyword() != b.HasOptionalKeyword() {
-		return fmt.Errorf("different optional")
-	}
-
-	if a.Cardinality() != b.Cardinality() {
-		return fmt.Errorf("different cardinality")
-	}
-
-	return nil
 }

@@ -328,7 +328,7 @@ func (ss PSMEntity) addDefaultTableSpec(g *protogen.GeneratedFile) error {
 		if !field.PrimaryKey {
 			continue
 		}
-		g.P("\"", field.field.Desc.Name(), "\",")
+		g.P("\"", ss.state.keyField.Desc.Name(), ".", field.field.Desc.Name(), "\",")
 	}
 	g.P("    },")
 	g.P("  },")

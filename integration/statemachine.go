@@ -10,7 +10,7 @@ import (
 )
 
 func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, error) {
-	systemActor, err := psm.NewSystemActor(actorID, nil)
+	systemActor, err := psm.NewSystemActor(actorID)
 	if err != nil {
 		return nil, err
 	}
