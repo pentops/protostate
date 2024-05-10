@@ -132,7 +132,6 @@ func TestFindFieldSpec(t *testing.T) {
 		name string
 	}{
 		{name: "foo"},
-		//{name: "profile.type"},
 		{name: "profile.weight.size"},
 	}
 
