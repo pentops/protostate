@@ -31,9 +31,6 @@ import (
 
 var dateRegex = regexp.MustCompile(`^\d{4}(-\d{2}(-\d{2})?)?$`)
 
-var ErrOneof = fmt.Errorf("field is a oneof")
-var ErrField = fmt.Errorf("field is a field")
-
 type ListRequest interface {
 	proto.Message
 }
@@ -50,16 +47,6 @@ type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	AuthJoin []*LeftJoin
 
 	RequestFilter func(REQ) (map[string]interface{}, error)
-}
-
-type fieldSpec struct {
-	field     protoreflect.FieldDescriptor
-	fieldPath []protoreflect.FieldDescriptor
-}
-
-type oneofSpec struct {
-	oneof     protoreflect.OneofDescriptor
-	fieldPath []protoreflect.FieldDescriptor
 }
 
 type ListerOption func(*listerOptions)
@@ -151,14 +138,14 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 
 	err = validateListAnnotations(ll.arrayField.Message().Fields())
 	if err != nil {
-		return nil, fmt.Errorf("validation: list annotations: %w", err)
+		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.Message().FullName(), err)
 	}
 
 	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
 
 	ll.tieBreakerFields, err = buildTieBreakerFields(req, ll.arrayField.Message(), options.tieBreakerFields)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tie breaker fields: %w", err)
 	}
 
 	if len(ll.defaultSortFields) == 0 && len(ll.tieBreakerFields) == 0 {
@@ -167,7 +154,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 
 	f, err := buildDefaultFilters(ll.arrayField.Message().Fields())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("default filters: %w", err)
 	}
 
 	ll.defaultFilterFields = f
@@ -535,7 +522,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					}
 					dbVal = intVal
 				default:
-					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.field.Name(), name)
+					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.lastNode.name, name)
 				}
 
 			case string:
@@ -544,7 +531,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					// String fields aren't valid for sorting, they can only be used
 					// for the tie-breaker so the order itself is not important, only
 					// that it is consistent
-					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.field.Name())
+					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.lastNode.name)
 				}
 
 			case int64:
@@ -576,7 +563,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			// TODO: Reversals for the other types that are sortable
 
 			default:
-				return nil, fmt.Errorf("sort field %s is of type %T", sortField.field.Name(), dbVal)
+				return nil, fmt.Errorf("sort field %s is of type %T", sortField.lastNode.name, dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
@@ -660,7 +647,7 @@ func validateListAnnotations(fields protoreflect.FieldDescriptors) error {
 		return fmt.Errorf("filter: %w", err)
 	}
 
-	err = validateSearchesAnnotations(nil, fields)
+	err = validateSearchesAnnotations(fields)
 	if err != nil {
 		return fmt.Errorf("search: %w", err)
 	}
@@ -718,6 +705,17 @@ func validateFieldName(message protoreflect.MessageDescriptor, path string) erro
 	return nil
 }
 
+type fieldSpec struct {
+	field     pathNode
+	fieldPath []pathNode
+}
+
+type pathNode struct {
+	name  protoreflect.Name
+	field protoreflect.FieldDescriptor
+	oneof protoreflect.OneofDescriptor
+}
+
 func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldSpec, error) {
 	var name protoreflect.Name
 	var remainder string
@@ -730,20 +728,25 @@ func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldS
 		name = protoreflect.Name(camelToSnake(path))
 	}
 
+	node := pathNode{name: name}
 	field := message.Fields().ByName(name)
-	if field == nil {
+	if field != nil {
+		node.field = field
+	} else {
 		oneof := message.Oneofs().ByName(name)
 		if oneof != nil {
-			return nil, ErrOneof
+			node.oneof = oneof
+		} else {
+			return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
 		}
-
-		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
 	}
+
+	node.field = field
 
 	if remainder == "" {
 		return &fieldSpec{
-			field:     field,
-			fieldPath: []protoreflect.FieldDescriptor{field},
+			field:     node,
+			fieldPath: []pathNode{node},
 		}, nil
 	}
 
@@ -753,71 +756,31 @@ func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldS
 
 	spec, err := findFieldSpec(field.Message(), remainder)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("field %s: %w", name, err)
 	}
 
 	return &fieldSpec{
 		field:     spec.field,
-		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
+		fieldPath: append([]pathNode{node}, spec.fieldPath...),
 	}, nil
 }
 
-func findOneofSpec(message protoreflect.MessageDescriptor, path string) (*oneofSpec, error) {
-	var name protoreflect.Name
-	var remainder string
-
-	parts := strings.SplitN(path, ".", 2)
-	if len(parts) == 2 {
-		name = protoreflect.Name(camelToSnake(parts[0]))
-		remainder = parts[1]
-	} else {
-		name = protoreflect.Name(camelToSnake(path))
-	}
-
-	if remainder == "" {
-		oneof := message.Oneofs().ByName(name)
-
-		if oneof == nil {
-			field := message.Fields().ByName(name)
-			if field != nil {
-				return nil, ErrField
-			}
-
-			return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-		}
-
-		return &oneofSpec{
-			oneof: oneof,
-		}, nil
-	}
-
-	field := message.Fields().ByName(name)
-
-	if field == nil {
-		return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-	}
-
-	if field.Kind() != protoreflect.MessageKind {
-		return nil, fmt.Errorf("field %s is not a message", name)
-	}
-
-	spec, err := findOneofSpec(field.Message(), remainder)
-	if err != nil {
-		return nil, err
-	}
-
-	return &oneofSpec{
-		oneof:     spec.oneof,
-		fieldPath: append([]protoreflect.FieldDescriptor{field}, spec.fieldPath...),
-	}, nil
-}
-
-func findFieldValue(msg protoreflect.Message, path []protoreflect.FieldDescriptor) (protoreflect.Value, error) {
+func findFieldValue(msg protoreflect.Message, path []pathNode) (protoreflect.Value, error) {
 	if len(path) == 0 {
 		return protoreflect.Value{}, fmt.Errorf("empty path")
 	}
 	var val protoreflect.Value
-	field := path[0]
+	node := path[0]
+
+	if node.field == nil {
+		if node.oneof == nil {
+			return protoreflect.Value{}, fmt.Errorf("no field or oneof")
+		}
+		// oneof doesn't appear in the proto walk.
+		return findFieldValue(msg, path[1:])
+	}
+
+	field := node.field
 
 	// Has vs Get, Has returns false if the field is set to the default value for
 	// scalar types. We still want the fields if they are set to the default value,
