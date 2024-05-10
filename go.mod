@@ -33,7 +33,7 @@ require (
 	github.com/jhump/protoreflect v1.16.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
-	github.com/pentops/jsonapi v0.0.0-20240510221036-29c589dfd5b3 // indirect
+	github.com/pentops/jsonapi v0.0.0-20240510221406-91c55f7e9b17 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pressly/goose v2.7.0+incompatible // indirect
