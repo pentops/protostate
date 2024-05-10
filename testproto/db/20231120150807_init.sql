@@ -33,9 +33,10 @@ USING gin(to_tsvector('english', jsonb_path_query_array(state, '$.profiles[*].na
 CREATE TABLE foo_event (
 	id uuid primary key,
 	timestamp timestamptz NOT NULL,
+  sequence int NOT NULL,
 	foo_id uuid references foo(id) NOT NULL,
 	tenant_id uuid,
-	actor jsonb NOT NULL,
+	cause jsonb NOT NULL,
 	data jsonb NOT NULL,
   state jsonb NOT NULL
 );

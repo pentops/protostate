@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,9 +20,9 @@ Two sets of generic type sets exist:
 
 Both share the same types, as follows, and defined below
 
-### `S IState[ST]`
+### `S IState[K, ST]`
 ### `ST IStatusEnum`
-### `E IEvent[IE]`
+### `E IEvent[K, S, ST, IE]`
 ### `IE IInnerEvent`
 ### `SE IInnerEvent`
 
@@ -45,24 +46,33 @@ type IStatusEnum interface {
 	String() string
 }
 
-// IState is the main State Entity e.g. *testpb.FooState
-type IState[Status IStatusEnum] interface {
+type IKeyset interface {
 	proto.Message
-	GetStatus() Status
 }
 
-// IStateSequence is *optionally* implemented by the IState Entity
-type IStateSequencer interface {
-	LastPSMSequence() uint64
-	SetLastPSMSequence(uint64)
+// IState is the main State Entity e.g. *testpb.FooState
+type IState[K IKeyset, ST IStatusEnum] interface {
+	proto.Message
+	GetStatus() ST
+	PSMMetadata() *psm_pb.StateMetadata
+	PSMKeys() K
+	SetPSMKeys(K)
 }
 
 // The Event Wrapper, the top level which has metadata, foreign keys to the state, and the event itself.
 // e.g. *testpb.FooEvent, the concrete proto message
-type IEvent[Inner any] interface {
+type IEvent[
+	K IKeyset,
+	S IState[K, ST],
+	ST IStatusEnum,
+	Inner any,
+] interface {
 	proto.Message
 	UnwrapPSMEvent() Inner
 	SetPSMEvent(Inner)
+	PSMKeys() K
+	SetPSMKeys(K)
+	PSMMetadata() *psm_pb.EventMetadata
 }
 
 // IEventSequencer is *optionally* implemented by the IEvent Entity
@@ -79,42 +89,61 @@ type IInnerEvent interface {
 	PSMEventKey() string
 }
 
-type StateHookBaton[E IEvent[IE], IE IInnerEvent] interface {
+type StateHookBaton[
+	K IKeyset,
+	S IState[K, ST],
+	ST IStatusEnum,
+	E IEvent[K, S, ST, IE],
+	IE IInnerEvent,
+] interface {
 	SideEffect(outbox.OutboxMessage)
 	ChainEvent(E)
 	ChainDerived(IE)
 	FullCause() E
 }
 
-type TransitionBaton[E IEvent[IE], IE IInnerEvent] StateHookBaton[E, IE]
+type TransitionBaton[
+	K IKeyset,
+	S IState[K, ST],
+	ST IStatusEnum,
+	E IEvent[K, S, ST, IE],
+	IE IInnerEvent,
+] StateHookBaton[K, S, ST, E, IE]
 
-type TransitionData[E IEvent[IE], IE IInnerEvent] struct {
+type TransitionData[
+	K IKeyset,
+	S IState[K, ST],
+	ST IStatusEnum,
+	E IEvent[K, S, ST, IE],
+	IE IInnerEvent,
+] struct {
 	sideEffects      []outbox.OutboxMessage
 	chainEvents      []E
 	chainInnerEvents []IE
 	causedBy         E
 }
 
-func (td *TransitionData[E, IE]) ChainEvent(event E) {
+func (td *TransitionData[K, S, ST, E, IE]) ChainEvent(event E) {
 	td.chainEvents = append(td.chainEvents, event)
 }
 
-func (td *TransitionData[E, IE]) SideEffect(msg outbox.OutboxMessage) {
+func (td *TransitionData[K, S, ST, E, IE]) SideEffect(msg outbox.OutboxMessage) {
 	td.sideEffects = append(td.sideEffects, msg)
 }
 
-func (td *TransitionData[E, IE]) FullCause() E {
+func (td *TransitionData[K, S, ST, E, IE]) FullCause() E {
 	return td.causedBy
 }
 
-func (td *TransitionData[E, IE]) ChainDerived(inner IE) {
+func (td *TransitionData[K, S, ST, E, IE]) ChainDerived(inner IE) {
 	td.chainInnerEvents = append(td.chainInnerEvents, inner)
 }
 
 type ITransitionHandler[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] interface {
 	handlesEvent(E) bool
@@ -122,38 +151,41 @@ type ITransitionHandler[
 }
 
 type IStateHookHandler[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] interface {
 	handlesEvent(E) bool
-	runStateHook(context.Context, sqrlx.Transaction, StateHookBaton[E, IE], S, E) error
+	runStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, E, IE], S, E) error
 }
 
 type ICombinedHandler[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] interface {
-	ITransitionHandler[S, ST, E, IE]
-	IStateHookHandler[S, ST, E, IE]
+	ITransitionHandler[K, S, ST, E, IE]
+	IStateHookHandler[K, S, ST, E, IE]
 }
 
 // PSMCombinedFunc is returned by the generated FooPSMFunc, it exists for
 // compatibility with the combined Do func method.
 type PSMCombinedFunc[
-	S proto.Message,
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, TransitionBaton[E, IE], S, SE) error
+] func(context.Context, TransitionBaton[K, S, ST, E, IE], S, SE) error
 
 // RunTransition implements TransitionHandler, where SE is the specific event
 // cast from the interface IE provided in the call
-func (f PSMCombinedFunc[S, ST, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
+func (f PSMCombinedFunc[K, S, ST, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
 	ctx context.Context,
 	state S,
 	event E,
@@ -161,7 +193,7 @@ func (f PSMCombinedFunc[S, ST, E, IE, SE]) runTransition( // nolint: unused // u
 
 	// Creates a baton to *discard* the chains and side effects, they will be
 	// called later when the transition is used in as state hook
-	baton := &TransitionData[E, IE]{
+	baton := &TransitionData[K, S, ST, E, IE]{
 		causedBy: event,
 	}
 	// Cast the interface ET IInnerEvent to the specific type of event which
@@ -177,10 +209,10 @@ func (f PSMCombinedFunc[S, ST, E, IE, SE]) runTransition( // nolint: unused // u
 	return f(ctx, baton, state, asType)
 }
 
-func (f PSMCombinedFunc[S, ST, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
+func (f PSMCombinedFunc[K, S, ST, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[E, IE],
+	baton StateHookBaton[K, S, ST, E, IE],
 	state S,
 	event E,
 ) error {
@@ -198,7 +230,7 @@ func (f PSMCombinedFunc[S, ST, E, IE, SE]) runStateHook( // nolint: unused // us
 	return f(ctx, baton, stateClone, asType)
 }
 
-func (f PSMCombinedFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint:unused // used when implementing ITransitionHandler
+func (f PSMCombinedFunc[K, S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint:unused // used when implementing ITransitionHandler
 	// Check if the parameter passed as ET (IInnerEvent) is the specific type
 	// (IE, also IInnerEvent, but typed) which this transition handles
 	event := outerEvent.UnwrapPSMEvent()
@@ -207,14 +239,15 @@ func (f PSMCombinedFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // 
 }
 
 type PSMTransitionFunc[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
 ] func(context.Context, S, SE) error
 
-func (f PSMTransitionFunc[S, ST, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
+func (f PSMTransitionFunc[K, S, ST, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
 	ctx context.Context,
 	state S,
 	event E,
@@ -233,7 +266,7 @@ func (f PSMTransitionFunc[S, ST, E, IE, SE]) runTransition( // nolint: unused //
 	return f(ctx, state, asType)
 }
 
-func (f PSMTransitionFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing ITransitionHandler
+func (f PSMTransitionFunc[K, S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing ITransitionHandler
 	// Check if the parameter passed as ET (IInnerEvent) is the specific type
 	// (IE, also IInnerEvent, but typed) which this transition handles
 	event := outerEvent.UnwrapPSMEvent()
@@ -242,17 +275,18 @@ func (f PSMTransitionFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { /
 }
 
 type PSMHookFunc[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, StateHookBaton[E, IE], S, SE) error
+] func(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, E, IE], S, SE) error
 
-func (f PSMHookFunc[S, ST, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
+func (f PSMHookFunc[K, S, ST, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[E, IE],
+	baton StateHookBaton[K, S, ST, E, IE],
 	state S,
 	event E,
 ) error {
@@ -267,7 +301,7 @@ func (f PSMHookFunc[S, ST, E, IE, SE]) runStateHook( // nolint: unused // used w
 	return f(ctx, tx, baton, state, asType)
 }
 
-func (f PSMHookFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing IStateHookHandler
+func (f PSMHookFunc[K, S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing IStateHookHandler
 	// Check if the parameter passed as ET (IInnerEvent) is the specific type
 	// (IE, also IInnerEvent, but typed) which this transition handles
 	event := outerEvent.UnwrapPSMEvent()
@@ -276,9 +310,10 @@ func (f PSMHookFunc[S, ST, E, IE, SE]) handlesEvent(outerEvent E) bool { // noli
 }
 
 type eventFilter[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 
 ] struct {
@@ -286,7 +321,7 @@ type eventFilter[
 	customFilters []func(E) bool
 }
 
-func (ef eventFilter[S, ST, E, IE]) matches(currentStatus ST, outerEvent E) bool {
+func (ef eventFilter[K, S, ST, E, IE]) matches(currentStatus ST, outerEvent E) bool {
 	if ef.fromStatus != nil {
 		didMatch := false
 		for _, fromStatus := range ef.fromStatus {
@@ -309,16 +344,17 @@ func (ef eventFilter[S, ST, E, IE]) matches(currentStatus ST, outerEvent E) bool
 }
 
 type TransitionWrapper[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] struct {
-	handler ITransitionHandler[S, ST, E, IE]
-	eventFilter[S, ST, E, IE]
+	handler ITransitionHandler[K, S, ST, E, IE]
+	eventFilter[K, S, ST, E, IE]
 }
 
-func (f TransitionWrapper[S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
+func (f TransitionWrapper[K, S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
 	if !f.handler.handlesEvent(outerEvent) {
 		return false
 	}
@@ -326,7 +362,7 @@ func (f TransitionWrapper[S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
 	return f.eventFilter.matches(status, outerEvent)
 }
 
-func (f TransitionWrapper[S, ST, E, IE]) RunTransition(
+func (f TransitionWrapper[K, S, ST, E, IE]) RunTransition(
 	ctx context.Context,
 	state S,
 	event E,
@@ -335,16 +371,17 @@ func (f TransitionWrapper[S, ST, E, IE]) RunTransition(
 }
 
 type HookWrapper[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] struct {
-	handler IStateHookHandler[S, ST, E, IE]
-	eventFilter[S, ST, E, IE]
+	handler IStateHookHandler[K, S, ST, E, IE]
+	eventFilter[K, S, ST, E, IE]
 }
 
-func (f HookWrapper[S, ST, E, IE]) matches(status ST, outerEvent E) bool {
+func (f HookWrapper[K, S, ST, E, IE]) matches(status ST, outerEvent E) bool {
 	if !f.handler.handlesEvent(outerEvent) {
 		return false
 	}
@@ -352,14 +389,14 @@ func (f HookWrapper[S, ST, E, IE]) matches(status ST, outerEvent E) bool {
 	return f.eventFilter.matches(status, outerEvent)
 }
 
-func (f HookWrapper[S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
+func (f HookWrapper[K, S, ST, E, IE]) Matches(status ST, outerEvent E) bool {
 	return f.matches(status, outerEvent)
 }
 
-func (f HookWrapper[S, ST, E, IE]) RunStateHook(
+func (f HookWrapper[K, S, ST, E, IE]) RunStateHook(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[E, IE],
+	baton StateHookBaton[K, S, ST, E, IE],
 	state S,
 	event E,
 ) error {
@@ -367,25 +404,26 @@ func (f HookWrapper[S, ST, E, IE]) RunStateHook(
 }
 
 type StateMachineTransitionBuilder[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] struct {
-	sm *StateMachine[S, ST, E, IE]
-	eventFilter[S, ST, E, IE]
+	sm *StateMachine[K, S, ST, E, IE]
+	eventFilter[K, S, ST, E, IE]
 }
 
-func (ee *StateMachine[S, ST, E, IE]) From(states ...ST) StateMachineTransitionBuilder[S, ST, E, IE] {
-	return StateMachineTransitionBuilder[S, ST, E, IE]{
+func (ee *StateMachine[K, S, ST, E, IE]) From(states ...ST) StateMachineTransitionBuilder[K, S, ST, E, IE] {
+	return StateMachineTransitionBuilder[K, S, ST, E, IE]{
 		sm: ee,
-		eventFilter: eventFilter[S, ST, E, IE]{
+		eventFilter: eventFilter[K, S, ST, E, IE]{
 			fromStatus: states,
 		},
 	}
 }
 
-func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE) bool) StateMachineTransitionBuilder[S, ST, E, IE] {
+func (tb StateMachineTransitionBuilder[K, S, ST, E, IE]) Where(filter func(event IE) bool) StateMachineTransitionBuilder[K, S, ST, E, IE] {
 	innerFilter := func(fullEvent E) bool {
 		innerEvent := fullEvent.UnwrapPSMEvent()
 		return filter(innerEvent)
@@ -398,18 +436,18 @@ func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Where(filter func(event IE
 // will run twice, the first run will transition the state machine and discard
 // the side effects, the second discards state transitions and runs only side
 // effects. Use Transition and Hook instead.
-func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Do(
-	handler ICombinedHandler[S, ST, E, IE],
-) StateMachineTransitionBuilder[S, ST, E, IE] {
+func (tb StateMachineTransitionBuilder[K, S, ST, E, IE]) Do(
+	handler ICombinedHandler[K, S, ST, E, IE],
+) StateMachineTransitionBuilder[K, S, ST, E, IE] {
 
-	typedTransition := &TransitionWrapper[S, ST, E, IE]{
+	typedTransition := &TransitionWrapper[K, S, ST, E, IE]{
 		handler:     handler,
 		eventFilter: tb.eventFilter,
 	}
 
 	tb.sm.Eventer.Register(typedTransition)
 
-	typedHook := &HookWrapper[S, ST, E, IE]{
+	typedHook := &HookWrapper[K, S, ST, E, IE]{
 		handler:     handler,
 		eventFilter: tb.eventFilter,
 	}
@@ -419,11 +457,11 @@ func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Do(
 	return tb
 }
 
-func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Transition(
-	transition ITransitionHandler[S, ST, E, IE],
-) StateMachineTransitionBuilder[S, ST, E, IE] {
+func (tb StateMachineTransitionBuilder[K, S, ST, E, IE]) Transition(
+	transition ITransitionHandler[K, S, ST, E, IE],
+) StateMachineTransitionBuilder[K, S, ST, E, IE] {
 
-	typedTransition := &TransitionWrapper[S, ST, E, IE]{
+	typedTransition := &TransitionWrapper[K, S, ST, E, IE]{
 		handler:     transition,
 		eventFilter: tb.eventFilter,
 	}
@@ -433,11 +471,11 @@ func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Transition(
 	return tb
 }
 
-func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Hook(
-	hook IStateHookHandler[S, ST, E, IE],
-) StateMachineTransitionBuilder[S, ST, E, IE] {
+func (tb StateMachineTransitionBuilder[K, S, ST, E, IE]) Hook(
+	hook IStateHookHandler[K, S, ST, E, IE],
+) StateMachineTransitionBuilder[K, S, ST, E, IE] {
 
-	typedHook := &HookWrapper[S, ST, E, IE]{
+	typedHook := &HookWrapper[K, S, ST, E, IE]{
 		handler:     hook,
 		eventFilter: tb.eventFilter,
 	}
@@ -452,9 +490,10 @@ func (tb StateMachineTransitionBuilder[S, ST, E, IE]) Hook(
 // designed for either business logic requiring the database, or for more
 // generic hooks which need to run after all transitions.
 type StateHook[
-	S IState[ST], // Outer State Entity
+	K IKeyset,
+	S IState[K, ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[IE], // Event Wrapper, with IDs and Metadata
+	E IEvent[K, S, ST, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event but untyped
 	SE IInnerEvent, // Typed Inner Event, the specifically typed event *interface*
 ] func(context.Context, sqrlx.Transaction, S, E) error
@@ -462,22 +501,23 @@ type StateHook[
 // GeneralStateHook is a StateHook that should do something after all or most
 // transitions, e.g. publishing to a global event bus or updating a cache.
 type GeneralStateHook[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] func(context.Context, sqrlx.Transaction, S, E) error
 
-func (hook GeneralStateHook[S, ST, E, IE]) RunStateHook(
+func (hook GeneralStateHook[K, S, ST, E, IE]) RunStateHook(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[E, IE],
+	baton StateHookBaton[K, S, ST, E, IE],
 	state S,
 	event E,
 ) error {
 	return hook(ctx, tx, state, event)
 }
 
-func (hook GeneralStateHook[S, ST, E, IE]) Matches(ST, E) bool {
+func (hook GeneralStateHook[K, S, ST, E, IE]) Matches(ST, E) bool {
 	return true
 }

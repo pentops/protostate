@@ -4,15 +4,15 @@ package testpb
 
 import (
 	context "context"
-	fmt "fmt"
+	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 	proto "google.golang.org/protobuf/proto"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StateObjectOptions: FooPSM
 type FooPSM = psm.StateMachine[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -20,6 +20,7 @@ type FooPSM = psm.StateMachine[
 ]
 
 type FooPSMDB = psm.DBStateMachine[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -27,6 +28,7 @@ type FooPSMDB = psm.DBStateMachine[
 ]
 
 type FooPSMEventer = psm.Eventer[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -34,26 +36,30 @@ type FooPSMEventer = psm.Eventer[
 ]
 
 func DefaultFooPSMConfig() *psm.StateMachineConfig[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
 	FooPSMEvent,
 ] {
 	return psm.NewStateMachineConfig[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
 		FooPSMEvent,
-	](FooPSMConverter{}, DefaultFooPSMTableSpec)
+	](DefaultFooPSMTableSpec)
 }
 
 func NewFooPSM(config *psm.StateMachineConfig[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
 	FooPSMEvent,
 ]) (*FooPSM, error) {
 	return psm.NewStateMachine[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
@@ -62,6 +68,7 @@ func NewFooPSM(config *psm.StateMachineConfig[
 }
 
 type FooPSMTableSpec = psm.PSMTableSpec[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -74,11 +81,11 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 		DataColumn: "state",
 		StoreExtraColumns: func(state *FooState) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"tenant_id": state.TenantId,
+				"tenant_id": state.Keys.TenantId,
 			}, nil
 		},
 		PKFieldPaths: []string{
-			"foo_id",
+			"keys.foo_id",
 		},
 	},
 	Event: psm.TableSpec[*FooEvent]{
@@ -89,13 +96,14 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			return map[string]interface{}{
 				"id":        metadata.EventId,
 				"timestamp": metadata.Timestamp,
-				"actor":     metadata.Actor,
-				"foo_id":    event.FooId,
-				"tenant_id": event.TenantId,
+				"cause":     metadata.Cause,
+				"sequence":  metadata.Sequence,
+				"foo_id":    event.Keys.FooId,
+				"tenant_id": event.Keys.TenantId,
 			}, nil
 		},
 		PKFieldPaths: []string{
-			"metadata.event_id",
+			"metadata.EventId",
 		},
 		PK: func(event *FooEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
@@ -105,15 +113,29 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 	},
 	PrimaryKey: func(event *FooEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
-			"id": event.FooId,
+			"id": event.Keys.FooId,
 		}, nil
 	},
 }
 
-type FooPSMTransitionBaton = psm.TransitionBaton[*FooEvent, FooPSMEvent]
-type FooPSMHookBaton = psm.StateHookBaton[*FooEvent, FooPSMEvent]
+type FooPSMTransitionBaton = psm.TransitionBaton[
+	*FooKeys,
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
+type FooPSMHookBaton = psm.StateHookBaton[
+	*FooKeys,
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
 
 func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.PSMCombinedFunc[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -121,6 +143,7 @@ func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, 
 	SE,
 ] {
 	return psm.PSMCombinedFunc[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
@@ -129,6 +152,7 @@ func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, 
 	](cb)
 }
 func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) error) psm.PSMTransitionFunc[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -136,6 +160,7 @@ func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) er
 	SE,
 ] {
 	return psm.PSMTransitionFunc[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
@@ -144,6 +169,7 @@ func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) er
 	](cb)
 }
 func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, SE) error) psm.PSMHookFunc[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
@@ -151,6 +177,7 @@ func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooP
 	SE,
 ] {
 	return psm.PSMHookFunc[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
@@ -159,12 +186,14 @@ func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooP
 	](cb)
 }
 func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralStateHook[
+	*FooKeys,
 	*FooState,
 	FooStatus,
 	*FooEvent,
 	FooPSMEvent,
 ] {
 	return psm.GeneralStateHook[
+		*FooKeys,
 		*FooState,
 		FooStatus,
 		*FooEvent,
@@ -184,46 +213,6 @@ const (
 type FooPSMEvent interface {
 	proto.Message
 	PSMEventKey() FooPSMEventKey
-}
-
-type FooPSMConverter struct{}
-
-func (c FooPSMConverter) EmptyState(e *FooEvent) *FooState {
-	return &FooState{
-		FooId:    e.FooId,
-		TenantId: e.TenantId,
-	}
-}
-
-func (c FooPSMConverter) DeriveChainEvent(e *FooEvent, systemActor psm.SystemActor, eventKey string) *FooEvent {
-	metadata := &Metadata{
-		EventId:   systemActor.NewEventID(e.Metadata.EventId, eventKey),
-		Timestamp: timestamppb.Now(),
-	}
-	actorProto := systemActor.ActorProto()
-	refl := metadata.ProtoReflect()
-	refl.Set(refl.Descriptor().Fields().ByName("actor"), actorProto)
-	return &FooEvent{
-		Metadata: metadata,
-		FooId:    e.FooId,
-		TenantId: e.TenantId,
-	}
-}
-
-func (c FooPSMConverter) CheckStateKeys(s *FooState, e *FooEvent) error {
-	if s.FooId != e.FooId {
-		return fmt.Errorf("state field 'FooId' %q does not match event field %q", s.FooId, e.FooId)
-	}
-	if s.TenantId == nil {
-		if e.TenantId != nil {
-			return fmt.Errorf("state field 'TenantId' is nil, but event field is not (%q)", *e.TenantId)
-		}
-	} else if e.TenantId == nil {
-		return fmt.Errorf("state field 'TenantId' is not nil (%q), but event field is", *e.TenantId)
-	} else if *s.TenantId != *e.TenantId {
-		return fmt.Errorf("state field 'TenantId' %q does not match event field %q", *s.TenantId, *e.TenantId)
-	}
-	return nil
 }
 
 func (etw *FooEventType) UnwrapPSMEvent() FooPSMEvent {
@@ -285,20 +274,34 @@ func (*FooEventType_Updated) PSMEventKey() FooPSMEventKey {
 func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
 	return FooPSMEventDeleted
 }
-func (ee *FooEvent) PSMSequence() uint64 {
-	return ee.Metadata.Sequence
+func (ee *FooEvent) PSMMetadata() *psm_pb.EventMetadata {
+	if ee.Metadata == nil {
+		ee.Metadata = &psm_pb.EventMetadata{}
+	}
+	return ee.Metadata
 }
 
-func (ee *FooEvent) SetPSMSequence(seq uint64) {
-	ee.Metadata.Sequence = seq
+func (st *FooState) PSMMetadata() *psm_pb.StateMetadata {
+	if st.Metadata == nil {
+		st.Metadata = &psm_pb.StateMetadata{}
+	}
+	return st.Metadata
 }
 
-func (st *FooState) LastPSMSequence() uint64 {
-	return st.LastEventSequence
+func (ee *FooEvent) PSMKeys() *FooKeys {
+	return ee.Keys
 }
 
-func (st *FooState) SetLastPSMSequence(seq uint64) {
-	st.LastEventSequence = seq
+func (ee *FooEvent) SetPSMKeys(inner *FooKeys) {
+	ee.Keys = inner
+}
+
+func (st *FooState) PSMKeys() *FooKeys {
+	return st.Keys
+}
+
+func (st *FooState) SetPSMKeys(inner *FooKeys) {
+	st.Keys = inner
 }
 
 // State Query Service for %sFoo

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -52,7 +53,7 @@ func TestFooStateField(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-		a.Equal(tenantID, *stateOut.TenantId)
+		a.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
 	ss.StepC("Update OK, Same Key", func(ctx context.Context, a flowtest.Asserter) {
@@ -64,21 +65,20 @@ func TestFooStateField(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-		a.Equal(tenantID, *stateOut.TenantId)
+		a.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
 	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, a flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
 		event := &testpb.FooEvent{
-			Metadata: &testpb.Metadata{
+			Metadata: &psm_pb.EventMetadata{
 				EventId:   uuid.NewString(),
 				Timestamp: timestamppb.Now(),
-				Actor: &testpb.Actor{
-					ActorId: uuid.NewString(),
-				},
 			},
-			FooId:    fooID,
-			TenantId: &differentTenantId,
+			Keys: &testpb.FooKeys{
+				FooId:    fooID,
+				TenantId: &differentTenantId,
+			},
 			Event: &testpb.FooEventType{
 				Type: &testpb.FooEventType_Updated_{
 					Updated: &testpb.FooEventType_Updated{
@@ -143,14 +143,14 @@ func TestStateMachineHook(t *testing.T) {
 		event *testpb.FooEvent,
 	) error {
 		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
-			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.FooId))
+			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 
-		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.FooId).
+		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
 			Set("weight", state.Characteristics.Weight).
 			Set("height", state.Characteristics.Height).
 			Set("length", state.Characteristics.Length))
@@ -441,7 +441,7 @@ func TestFooStateMachine(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		statesOut[event.FooId] = stateOut
+		statesOut[event.Keys.FooId] = stateOut
 	}
 
 	if statesOut[fooID].GetStatus() != testpb.FooStatus_ACTIVE {
@@ -517,9 +517,16 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(res.Events)
 
 		derivedEvent := res.Events[2]
-		if derivedEvent.Metadata.Actor.ActorId != sm.ActorID {
-			t.Fatalf("expected derived event to have actor ID %s, got %s", sm.ActorID, derivedEvent.Metadata.Actor.ActorId)
+		if derivedEvent.Metadata == nil {
+			t.Fatalf("expected derived event to have metadata")
 		}
+		if derivedEvent.Metadata.Cause == nil {
+			t.Fatalf("expected derived event to have cause")
+		}
+		if derivedEvent.Metadata.Cause.Actor != nil {
+			t.Fatalf("expected derived event not to have actor")
+		}
+		// TODO: Assert Cause Fields
 	})
 
 	t.Run("List", func(t *testing.T) {
