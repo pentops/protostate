@@ -30,6 +30,13 @@ var (
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
 	smCombinedFunc          = smImportPath.Ident("PSMCombinedFunc")
 	smSystemActor           = smImportPath.Ident("SystemActor")
+
+	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
+	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
+	psmStateMetadataStruct = psmProtoImportPath.Ident("StateMetadata")
+
+	eventMetadataProtoName = protoreflect.FullName("psm.state.v1.EventMetadata")
+	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
 )
 
 func main() {

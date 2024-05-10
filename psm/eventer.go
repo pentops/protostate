@@ -10,9 +10,10 @@ import (
 )
 
 type ITransition[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] interface {
 	Matches(ST, E) bool
@@ -20,30 +21,29 @@ type ITransition[
 }
 
 type IStateHook[
-	S IState[ST],
+	K IKeyset,
+	S IState[K, ST],
 	ST IStatusEnum,
-	E IEvent[IE],
+	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] interface {
 	Matches(ST, E) bool
-	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[E, IE], S, E) error
+	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, E, IE], S, E) error
 }
 
 // Eventer is the inner state machine, independent of storage.
 type Eventer[
-	S IState[ST], // Outer State Entity
+	K IKeyset,
+	S IState[K, ST], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[IE], // Event Wrapper, with IDs and Metadata
+	E IEvent[K, S, ST, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event *interface*
 ] struct {
-	conversions EventTypeConverter[S, ST, E, IE]
-
-	Transitions []ITransition[S, ST, E, IE]
-
-	validator *protovalidate.Validator
+	Transitions []ITransition[K, S, ST, E, IE]
+	validator   *protovalidate.Validator
 }
 
-func (ee Eventer[S, ST, E, IE]) FindTransition(status ST, event E) (ITransition[S, ST, E, IE], error) {
+func (ee Eventer[K, S, ST, E, IE]) FindTransition(status ST, event E) (ITransition[K, S, ST, E, IE], error) {
 	for _, search := range ee.Transitions {
 		if search.Matches(status, event) {
 			return search, nil
@@ -58,7 +58,7 @@ func (ee Eventer[S, ST, E, IE]) FindTransition(status ST, event E) (ITransition[
 	)
 }
 
-func (ee *Eventer[S, ST, E, IE]) ValidateEvent(event E) error {
+func (ee *Eventer[K, S, ST, E, IE]) ValidateEvent(event E) error {
 	if ee.validator == nil {
 		v, err := protovalidate.New()
 		if err != nil {
@@ -70,7 +70,7 @@ func (ee *Eventer[S, ST, E, IE]) ValidateEvent(event E) error {
 	return ee.validator.Validate(event)
 }
 
-func (ee Eventer[S, ST, E, IE]) RunEvent(
+func (ee Eventer[K, S, ST, E, IE]) RunEvent(
 	ctx context.Context,
 	state S,
 	innerEvent E,
@@ -111,6 +111,6 @@ func (ee Eventer[S, ST, E, IE]) RunEvent(
 	return nil
 }
 
-func (ee *Eventer[S, ST, E, IE]) Register(transition ITransition[S, ST, E, IE]) {
+func (ee *Eventer[K, S, ST, E, IE]) Register(transition ITransition[K, S, ST, E, IE]) {
 	ee.Transitions = append(ee.Transitions, transition)
 }

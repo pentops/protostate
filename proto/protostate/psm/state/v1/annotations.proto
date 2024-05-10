@@ -7,49 +7,26 @@ import "google/protobuf/descriptor.proto";
 option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 
 extend google.protobuf.MessageOptions {
-  StateObjectOptions state = 90443400;
-  EventObjectOptions event = 90443401;
+  PSMOptions psm = 90443400;
   EventTypeObjectOptions event_type = 90443402;
 }
 
-message StateObjectOptions {
-  string name = 1;
-}
-
-message EventObjectOptions {
+message PSMOptions {
   string name = 1;
 }
 
 message EventTypeObjectOptions {}
 
 extend google.protobuf.FieldOptions {
-  StateField state_field = 90443405;
-  EventField event_field = 90443403;
+  FieldOptions field = 90443405;
   EventTypeField event_type_field = 90443404;
 }
 
-message StateField {
-  // the field is the primary key, or is one field in a multi-key primary key
-  // for the state object.
+message FieldOptions {
+  // the field is the primary key of the state, or is one field in a multi-key
+  // primary key for the state object. This field must exist on both the event
+  // and the state
   bool primary_key = 1;
-}
-
-message EventField {
-  // the field is the enum wrapper for the event type
-  bool event_type = 1;
-
-  // the field contains the metadata for this message
-  bool metadata = 2;
-
-  // the field contains a foreign key to the state object. This must be part of
-  // the state's primary key, i.e. the state's field must be marked as
-  // primary_key = true;
-  bool state_key = 3;
-
-  // a non-primary key field used to construct initial state. When this is
-  // specified on an event for a state which already exists, it must equal the
-  // value in the state after the transition caused by the event.
-  bool state_field = 4;
 }
 
 message EventTypeField {

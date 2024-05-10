@@ -12,6 +12,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -61,7 +62,7 @@ func TestPagination(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-			a.Equal(tenantID, *stateOut.TenantId)
+			a.Equal(tenantID, *stateOut.Keys.TenantId)
 		}
 	})
 
@@ -296,15 +297,14 @@ func TestPageSize(t *testing.T) {
 			fooID := uuid.NewString()
 
 			event1 := &testpb.FooEvent{
-				Metadata: &testpb.Metadata{
+				Metadata: &psm_pb.EventMetadata{
 					EventId:   uuid.NewString(),
 					Timestamp: timestamppb.New(tt),
-					Actor: &testpb.Actor{
-						ActorId: uuid.NewString(),
-					},
 				},
-				TenantId: &tenantID,
-				FooId:    fooID,
+				Keys: &testpb.FooKeys{
+					TenantId: &tenantID,
+					FooId:    fooID,
+				},
 				Event: &testpb.FooEventType{
 					Type: &testpb.FooEventType_Created_{
 						Created: &testpb.FooEventType_Created{
@@ -320,7 +320,7 @@ func TestPageSize(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-			a.Equal(tenantID, *stateOut.TenantId)
+			a.Equal(tenantID, *stateOut.Keys.TenantId)
 		}
 	})
 

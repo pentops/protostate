@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
@@ -51,16 +52,15 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_
 
 func newFooEvent(fooID, tenantID string, mod func(e *testpb.FooEvent)) *testpb.FooEvent {
 	e := &testpb.FooEvent{
-		Metadata: &testpb.Metadata{
+		Metadata: &psm_pb.EventMetadata{
 			EventId:   uuid.NewString(),
 			Timestamp: timestamppb.Now(),
-			Actor: &testpb.Actor{
-				ActorId: uuid.NewString(),
-			},
 		},
-		FooId:    fooID,
-		TenantId: &tenantID,
-		Event:    &testpb.FooEventType{},
+		Keys: &testpb.FooKeys{
+			FooId:    fooID,
+			TenantId: &tenantID,
+		},
+		Event: &testpb.FooEventType{},
 	}
 	mod(e)
 	return e
@@ -85,11 +85,13 @@ func newBarCreatedEvent(barID string, mod func(c *testpb.BarEventType_Created)) 
 
 func newBarEvent(barID string, mod func(e *testpb.BarEvent)) *testpb.BarEvent {
 	e := &testpb.BarEvent{
-		Metadata: &testpb.StrangeMetadata{
+		Metadata: &psm_pb.EventMetadata{
 			EventId:   uuid.NewString(),
 			Timestamp: timestamppb.Now(),
 		},
-		BarId: barID,
+		Keys: &testpb.BarKeys{
+			BarId: barID,
+		},
 		Event: &testpb.BarEventType{},
 	}
 	mod(e)

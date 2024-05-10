@@ -4,15 +4,15 @@ package testpb
 
 import (
 	context "context"
-	fmt "fmt"
+	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 	proto "google.golang.org/protobuf/proto"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StateObjectOptions: BarPSM
 type BarPSM = psm.StateMachine[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -20,6 +20,7 @@ type BarPSM = psm.StateMachine[
 ]
 
 type BarPSMDB = psm.DBStateMachine[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -27,6 +28,7 @@ type BarPSMDB = psm.DBStateMachine[
 ]
 
 type BarPSMEventer = psm.Eventer[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -34,26 +36,30 @@ type BarPSMEventer = psm.Eventer[
 ]
 
 func DefaultBarPSMConfig() *psm.StateMachineConfig[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
 	BarPSMEvent,
 ] {
 	return psm.NewStateMachineConfig[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
 		BarPSMEvent,
-	](BarPSMConverter{}, DefaultBarPSMTableSpec)
+	](DefaultBarPSMTableSpec)
 }
 
 func NewBarPSM(config *psm.StateMachineConfig[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
 	BarPSMEvent,
 ]) (*BarPSM, error) {
 	return psm.NewStateMachine[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
@@ -62,6 +68,7 @@ func NewBarPSM(config *psm.StateMachineConfig[
 }
 
 type BarPSMTableSpec = psm.PSMTableSpec[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -87,11 +94,13 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			return map[string]interface{}{
 				"id":        metadata.EventId,
 				"timestamp": metadata.Timestamp,
-				"bar_id":    event.BarId,
+				"cause":     metadata.Cause,
+				"sequence":  metadata.Sequence,
+				"bar_id":    event.Keys.BarId,
 			}, nil
 		},
 		PKFieldPaths: []string{
-			"metadata.event_id",
+			"metadata.EventId",
 		},
 		PK: func(event *BarEvent) (map[string]interface{}, error) {
 			return map[string]interface{}{
@@ -101,15 +110,29 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 	},
 	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
 		return map[string]interface{}{
-			"id": event.BarId,
+			"id": event.Keys.BarId,
 		}, nil
 	},
 }
 
-type BarPSMTransitionBaton = psm.TransitionBaton[*BarEvent, BarPSMEvent]
-type BarPSMHookBaton = psm.StateHookBaton[*BarEvent, BarPSMEvent]
+type BarPSMTransitionBaton = psm.TransitionBaton[
+	*BarKeys,
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+]
+
+type BarPSMHookBaton = psm.StateHookBaton[
+	*BarKeys,
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+]
 
 func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, *BarState, SE) error) psm.PSMCombinedFunc[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -117,6 +140,7 @@ func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, 
 	SE,
 ] {
 	return psm.PSMCombinedFunc[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
@@ -125,6 +149,7 @@ func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, 
 	](cb)
 }
 func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) error) psm.PSMTransitionFunc[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -132,6 +157,7 @@ func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) er
 	SE,
 ] {
 	return psm.PSMTransitionFunc[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
@@ -140,6 +166,7 @@ func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) er
 	](cb)
 }
 func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarPSMHookBaton, *BarState, SE) error) psm.PSMHookFunc[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
@@ -147,6 +174,7 @@ func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarP
 	SE,
 ] {
 	return psm.PSMHookFunc[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
@@ -155,12 +183,14 @@ func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarP
 	](cb)
 }
 func BarPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *BarState, *BarEvent) error) psm.GeneralStateHook[
+	*BarKeys,
 	*BarState,
 	BarStatus,
 	*BarEvent,
 	BarPSMEvent,
 ] {
 	return psm.GeneralStateHook[
+		*BarKeys,
 		*BarState,
 		BarStatus,
 		*BarEvent,
@@ -180,32 +210,6 @@ const (
 type BarPSMEvent interface {
 	proto.Message
 	PSMEventKey() BarPSMEventKey
-}
-
-type BarPSMConverter struct{}
-
-func (c BarPSMConverter) EmptyState(e *BarEvent) *BarState {
-	return &BarState{
-		BarId: e.BarId,
-	}
-}
-
-func (c BarPSMConverter) DeriveChainEvent(e *BarEvent, systemActor psm.SystemActor, eventKey string) *BarEvent {
-	metadata := &StrangeMetadata{
-		EventId:   systemActor.NewEventID(e.Metadata.EventId, eventKey),
-		Timestamp: timestamppb.Now(),
-	}
-	return &BarEvent{
-		Metadata: metadata,
-		BarId:    e.BarId,
-	}
-}
-
-func (c BarPSMConverter) CheckStateKeys(s *BarState, e *BarEvent) error {
-	if s.BarId != e.BarId {
-		return fmt.Errorf("state field 'BarId' %q does not match event field %q", s.BarId, e.BarId)
-	}
-	return nil
 }
 
 func (etw *BarEventType) UnwrapPSMEvent() BarPSMEvent {
@@ -266,6 +270,35 @@ func (*BarEventType_Updated) PSMEventKey() BarPSMEventKey {
 }
 func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 	return BarPSMEventDeleted
+}
+func (ee *BarEvent) PSMMetadata() *psm_pb.EventMetadata {
+	if ee.Metadata == nil {
+		ee.Metadata = &psm_pb.EventMetadata{}
+	}
+	return ee.Metadata
+}
+
+func (st *BarState) PSMMetadata() *psm_pb.StateMetadata {
+	if st.Metadata == nil {
+		st.Metadata = &psm_pb.StateMetadata{}
+	}
+	return st.Metadata
+}
+
+func (ee *BarEvent) PSMKeys() *BarKeys {
+	return ee.Keys
+}
+
+func (ee *BarEvent) SetPSMKeys(inner *BarKeys) {
+	ee.Keys = inner
+}
+
+func (st *BarState) PSMKeys() *BarKeys {
+	return st.Keys
+}
+
+func (st *BarState) SetPSMKeys(inner *BarKeys) {
+	st.Keys = inner
 }
 
 // State Query Service for %sBar

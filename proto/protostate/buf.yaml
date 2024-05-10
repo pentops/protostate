@@ -4,6 +4,8 @@ name: buf.build/pentops/protostate
 deps:
   - buf.build/googleapis/googleapis
   - buf.build/bufbuild/protovalidate
+  - buf.build/pentops/o5
+  - buf.build/pentops/listify
 
 breaking:
   use:

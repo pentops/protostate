@@ -11,8 +11,8 @@ import (
 )
 
 type sortSpec struct {
-	field     protoreflect.FieldDescriptor
-	fieldPath []protoreflect.FieldDescriptor
+	field     pathNode
+	fieldPath []pathNode
 	desc      bool
 }
 
@@ -20,13 +20,16 @@ func (ss sortSpec) jsonbPath() string {
 	out := strings.Builder{}
 	last := len(ss.fieldPath) - 1
 	for idx, part := range ss.fieldPath {
+		if part.oneof != nil {
+			panic("Oneof node on sortSpec jsonbPath")
+		}
 		// last part gets a double >
 		if idx == last {
 			out.WriteString("->>")
 		} else {
 			out.WriteString("->")
 		}
-		out.WriteString(fmt.Sprintf("'%s'", part.JSONName()))
+		out.WriteString(fmt.Sprintf("'%s'", part.field.JSONName()))
 	}
 
 	return out.String()
@@ -36,7 +39,7 @@ func (ss sortSpec) fieldName() string {
 	out := strings.Builder{}
 	last := len(ss.fieldPath) - 1
 	for idx, part := range ss.fieldPath {
-		out.WriteString(part.JSONName())
+		out.WriteString(part.field.JSONName())
 		if idx != last {
 			out.WriteString(".")
 		}
@@ -52,7 +55,7 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
 			spec, err := findFieldSpec(arrayField, tieBreaker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("field %s in annotated sort tiebreaker for %s: %w", tieBreaker, req.FullName(), err)
 			}
 
 			tieBreakerFields = append(tieBreakerFields, sortSpec{
@@ -73,7 +76,7 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 	for _, tieBreaker := range fallback {
 		spec, err := findFieldSpec(arrayField, tieBreaker)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("find field spec: %w", err)
 		}
 
 		tieBreakerFields = append(tieBreakerFields, sortSpec{
@@ -151,16 +154,24 @@ func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
 				}
 			}
 			if isDefaultSort {
+				node := pathNode{
+					field: field,
+					name:  field.Name(),
+				}
 				defaultSortFields = append(defaultSortFields, sortSpec{
-					field:     field,
-					fieldPath: []protoreflect.FieldDescriptor{field},
+					field:     node,
+					fieldPath: []pathNode{node},
 					desc:      true,
 				})
 			}
 		} else if field.Kind() == protoreflect.MessageKind {
 			subSort := buildDefaultSorts(field.Message().Fields())
 			for idx, subSortField := range subSort {
-				subSortField.fieldPath = append([]protoreflect.FieldDescriptor{field}, subSortField.fieldPath...)
+				node := pathNode{
+					field: field,
+					name:  field.Name(),
+				}
+				subSortField.fieldPath = append([]pathNode{node}, subSortField.fieldPath...)
 				subSort[idx] = subSortField
 			}
 
@@ -320,14 +331,14 @@ func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*
 		}
 
 		// validate the fields are annotated correctly for the request query
-		sortOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		sortOpts, ok := proto.GetExtension(spec.field.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 		if !ok {
 			return fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
 		}
 
 		sortable := false
 		if sortOpts != nil {
-			switch spec.field.Kind() {
+			switch spec.field.field.Kind() {
 			case protoreflect.DoubleKind:
 				sortable = sortOpts.GetDouble().GetSorting().Sortable
 			case protoreflect.Fixed32Kind:
@@ -353,7 +364,7 @@ func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*
 			case protoreflect.Uint64Kind:
 				sortable = sortOpts.GetUint64().GetSorting().Sortable
 			case protoreflect.MessageKind:
-				if spec.field.Message().FullName() == "google.protobuf.Timestamp" {
+				if spec.field.field.Message().FullName() == "google.protobuf.Timestamp" {
 					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
 				}
 			}

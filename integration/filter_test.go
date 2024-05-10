@@ -161,8 +161,8 @@ func TestFilteringWithAuthScope(t *testing.T) {
 				t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
 			}
 
-			if *state.TenantId != tenantID1 {
-				t.Fatalf("expected tenant ID %s, got %s", tenantID1, state.TenantId)
+			if *state.Keys.TenantId != tenantID1 {
+				t.Fatalf("expected tenant ID %s, got %s", tenantID1, state.Keys.TenantId)
 			}
 		}
 
