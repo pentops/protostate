@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pentops/jsonapi/prototest"
+	"github.com/pentops/flowtest/prototest"
 	"github.com/stretchr/testify/assert"
 )
 

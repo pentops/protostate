@@ -9,8 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20240222224419-c36885c5b6f6
-	github.com/pentops/jsonapi v0.0.0-20240409180110-344be49fb0b7
+	github.com/pentops/flowtest v0.0.0-20240510221023-0114d43723cb
 	github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4
 	github.com/pentops/o5-go v0.0.0-20240509214217-5d45e1a08183
 	github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7
@@ -19,21 +18,22 @@ require (
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240401170217-c3f982113cda
 	google.golang.org/grpc v1.63.2
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 )
 
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
-	github.com/bufbuild/protocompile v0.8.0 // indirect
+	github.com/bufbuild/protocompile v0.10.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/cel-go v0.20.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
-	github.com/jhump/protoreflect v1.15.5 // indirect
+	github.com/jhump/protoreflect v1.16.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/pentops/jsonapi v0.0.0-20240510221036-29c589dfd5b3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pressly/goose v2.7.0+incompatible // indirect
@@ -46,5 +46,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240401170217-c3f982113cda // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/pentops/jsonapi => ../jsonapi
