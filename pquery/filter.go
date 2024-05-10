@@ -1,7 +1,6 @@
 package pquery
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,8 +17,8 @@ import (
 )
 
 type filterSpec struct {
-	field      protoreflect.FieldDescriptor
-	fieldPath  []protoreflect.FieldDescriptor
+	lastNode   pathNode
+	fieldPath  []pathNode
 	filterVals []interface{}
 }
 
@@ -27,10 +26,16 @@ func (fs filterSpec) jsonbPath() string {
 	out := strings.Builder{}
 	out.WriteString("$")
 
-	for idx := range fs.fieldPath {
-		out.WriteString(fmt.Sprintf(".%s", fs.fieldPath[idx].JSONName()))
+	for _, node := range fs.fieldPath {
+		if node.field == nil {
+			if node.oneof == nil {
+				panic("node has no field or oneof")
+			}
+			continue // oneof does not appear in JSON
+		}
+		out.WriteString(fmt.Sprintf(".%s", node.field.JSONName()))
 
-		if fs.fieldPath[idx].Cardinality() == protoreflect.Repeated {
+		if node.field.Cardinality() == protoreflect.Repeated {
 			out.WriteString("[*]")
 		}
 	}
@@ -264,9 +269,13 @@ func buildDefaultFilters(messageFields protoreflect.FieldDescriptors) ([]filterS
 			}
 
 			if len(vals) > 0 {
+				node := pathNode{
+					field: field,
+					name:  field.Name(),
+				}
 				filters = append(filters, filterSpec{
-					fieldPath:  []protoreflect.FieldDescriptor{field},
-					field:      field,
+					fieldPath:  []pathNode{node},
+					lastNode:   node,
 					filterVals: vals,
 				})
 			}
@@ -293,18 +302,13 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 		switch filters[i].GetType().(type) {
 		case *psml_pb.Filter_Field:
 			spec, err := findFieldSpec(ll.arrayField.Message(), filters[i].GetField().GetName())
-			if err != nil && !errors.Is(err, ErrOneof) {
+			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 			}
 
 			var o sq.Sqlizer
-			if errors.Is(err, ErrOneof) {
-				ospec, err := findOneofSpec(ll.arrayField.Message(), filters[i].GetField().GetName())
-				if err != nil {
-					return nil, fmt.Errorf("dynamic filter: find oneof: %w", err)
-				}
-
-				o, err = ll.buildDynamicFilterOneof(tableAlias, ospec, filters[i])
+			if spec.field.oneof != nil {
+				o, err = ll.buildDynamicFilterOneof(tableAlias, spec, filters[i])
 				if err != nil {
 					return nil, fmt.Errorf("dynamic filter: build oneof: %w", err)
 				}
@@ -354,9 +358,9 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *fie
 	switch filter.GetField().GetType().(type) {
 	case *psml_pb.Field_Value:
 		val := filter.GetField().GetValue()
-		if spec.field.Kind() == protoreflect.EnumKind {
+		if spec.field.field.Kind() == protoreflect.EnumKind {
 			name := strings.ToTitle(val)
-			prefix := strings.TrimSuffix(string(spec.field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
+			prefix := strings.TrimSuffix(string(spec.field.field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
 
 			if !strings.HasPrefix(val, prefix) {
 				name = prefix + "_" + name
@@ -386,7 +390,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *fie
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *oneofSpec, filter *psml_pb.Filter) (sq.Sqlizer, error) {
+func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *fieldSpec, filter *psml_pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	field := &filterSpec{
@@ -436,11 +440,11 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 	// validate fields exist from the request query
 	err := validateFieldName(message, filterField.GetName())
 	if err != nil {
-		return fmt.Errorf("field name: %w", err)
+		return fmt.Errorf("validate field name: %w", err)
 	}
 
 	spec, err := findFieldSpec(message, filterField.GetName())
-	if err != nil && !errors.Is(err, ErrOneof) {
+	if err != nil {
 		return fmt.Errorf("find field: %w", err)
 	}
 
@@ -449,12 +453,9 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 
 	filterable := false
 
-	if errors.Is(err, ErrOneof) {
-		ospec, err := findOneofSpec(message, filterField.GetName())
-		if err != nil {
-			return fmt.Errorf("find field: %w", err)
-		}
+	if spec.field.oneof != nil {
 
+		ospec := spec.field
 		filterOpts, ok := proto.GetExtension(ospec.oneof.Options().(*descriptorpb.OneofOptions), psml_pb.E_Oneof).(*psml_pb.OneofConstraint)
 		if !ok {
 			return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
@@ -493,13 +494,13 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 		return nil
 	}
 
-	filterOpts, ok := proto.GetExtension(spec.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+	filterOpts, ok := proto.GetExtension(spec.field.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 	if !ok {
 		return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
 	}
 
 	if filterOpts != nil {
-		switch spec.field.Kind() {
+		switch spec.field.field.Kind() {
 		case protoreflect.DoubleKind:
 			filterable = filterOpts.GetDouble().GetFiltering().Filterable
 		case protoreflect.Fixed32Kind:
@@ -541,7 +542,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 				}
 			}
 		case protoreflect.MessageKind:
-			if spec.field.Message().FullName() == "google.protobuf.Timestamp" {
+			if spec.field.field.Message().FullName() == "google.protobuf.Timestamp" {
 				filterable = filterOpts.GetTimestamp().GetFiltering().Filterable
 			}
 		}
@@ -579,7 +580,7 @@ func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, spec *fieldSp
 		return nil
 	}
 
-	switch spec.field.Kind() {
+	switch spec.field.field.Kind() {
 	case protoreflect.DoubleKind:
 		if filterOpts.GetDouble().GetFiltering().Filterable {
 			_, err := strconv.ParseFloat(value, 64)
@@ -674,12 +675,12 @@ func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, spec *fieldSp
 	case protoreflect.EnumKind:
 		if filterOpts.GetEnum().GetFiltering().Filterable {
 			name := strings.ToTitle(value)
-			prefix := strings.TrimSuffix(string(spec.field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
+			prefix := strings.TrimSuffix(string(spec.field.field.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
 
 			if !strings.HasPrefix(value, prefix) {
 				name = prefix + "_" + name
 			}
-			eval := spec.field.Enum().Values().ByName(protoreflect.Name(name))
+			eval := spec.field.field.Enum().Values().ByName(protoreflect.Name(name))
 
 			if eval == nil {
 				return fmt.Errorf("enum value %s is not a valid enum value for field", value)
@@ -712,7 +713,7 @@ func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, spec *fieldSp
 			}
 		}
 	case protoreflect.MessageKind:
-		if spec.field.Message().FullName() == "google.protobuf.Timestamp" {
+		if spec.field.field.Message().FullName() == "google.protobuf.Timestamp" {
 			if filterOpts.GetTimestamp().GetFiltering().Filterable {
 				_, err := time.Parse(time.RFC3339, value)
 				if err != nil {
