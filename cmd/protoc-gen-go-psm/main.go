@@ -29,6 +29,7 @@ var (
 	smHookFunc              = smImportPath.Ident("PSMHookFunc")
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
 	smCombinedFunc          = smImportPath.Ident("PSMCombinedFunc")
+	smEventSpec             = smImportPath.Ident("EventSpec")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")

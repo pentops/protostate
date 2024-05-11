@@ -57,6 +57,7 @@ func (ss PSMEntity) addStateSet(g *protogen.GeneratedFile) error {
 	ss.typeAlias(g, "", smStateMachine)
 	ss.typeAlias(g, "DB", smDBStateMachine)
 	ss.typeAlias(g, "Eventer", smEventer)
+	ss.typeAlias(g, "EventSpec", smEventSpec)
 
 	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
 
@@ -257,15 +258,16 @@ func (ss PSMEntity) eventTypeMethods(g *protogen.GeneratedFile) error {
 	g.P("	return tt.PSMEventKey()")
 	g.P("}")
 
-	g.P("func (etw *", ss.event.eventTypeField.Message.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") {")
+	g.P("func (etw *", ss.event.eventTypeField.Message.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") error {")
 	g.P("  switch v := inner.(type) {")
 	for _, field := range ss.event.eventTypeField.Message.Fields {
 		g.P("	case *", field.Message.GoIdent, ":")
 		g.P("		etw.Type = &", field.GoIdent, "{", field.GoName, ": v}")
 	}
 	g.P("	default:")
-	g.P("		panic(\"invalid type\")")
+	g.P("   return ", protogen.GoImportPath("fmt").Ident("Errorf"), "(\"invalid type %T for ", ss.event.eventTypeField.Message.GoIdent, "\", v)")
 	g.P("	}")
+	g.P("	return nil")
 	g.P("}")
 
 	return nil
@@ -282,11 +284,11 @@ func (ss PSMEntity) eventAliasMethods(g *protogen.GeneratedFile) error {
 	g.P("   return ee.", ss.event.eventTypeField.GoName, ".UnwrapPSMEvent()")
 	g.P("}")
 	g.P()
-	g.P("func (ee *", ss.event.message.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") {")
+	g.P("func (ee *", ss.event.message.GoIdent, ") SetPSMEvent(inner ", ss.eventName, ") error {")
 	g.P("  if ee.", ss.event.eventTypeField.GoName, " == nil {")
 	g.P("    ee.", ss.event.eventTypeField.GoName, " = &", ss.event.eventTypeField.Message.GoIdent, "{}")
 	g.P("  }")
-	g.P("  ee.", ss.event.eventTypeField.GoName, ".SetPSMEvent(inner)")
+	g.P("  return ee.", ss.event.eventTypeField.GoName, ".SetPSMEvent(inner)")
 	g.P("}")
 
 	return nil
@@ -353,13 +355,13 @@ func (ss PSMEntity) addDefaultTableSpec(g *protogen.GeneratedFile) error {
 	g.P("    PKFieldPaths: []string{")
 	g.P("      \"", ss.event.metadataField.Desc.Name(), ".EventId\",")
 	g.P("    },")
-	g.P("    PK: func(event *", ss.event.message.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("      return map[string]interface{}{")
-	g.P("        \"id\": event.", ss.event.metadataField.GoName, ".EventId,")
-	g.P("      }, nil")
-	g.P("    },")
 	g.P("  },")
-	g.P("  PrimaryKey: func(event *", ss.event.message.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("  EventPrimaryKey: func(id string, keys *", ss.keyMessage.GoIdent, ") (map[string]interface{}, error) {")
+	g.P("    return map[string]interface{}{")
+	g.P("      \"id\": id,")
+	g.P("    }, nil")
+	g.P("  },")
+	g.P("  PrimaryKey: func(keys *", ss.keyMessage.GoIdent, ") (map[string]interface{}, error) {")
 	g.P("    return map[string]interface{}{")
 	for _, field := range ss.keyFields {
 		if !field.PrimaryKey {
@@ -368,7 +370,7 @@ func (ss PSMEntity) addDefaultTableSpec(g *protogen.GeneratedFile) error {
 		// stripping the prefix foo_ from the name in the event. In the DB, we
 		// expect the primary key to be called just id, so foo_id -> id
 		keyName := strings.TrimPrefix(string(field.field.Desc.Name()), ss.specifiedName+"_")
-		g.P("      \"", keyName, "\": event.", ss.event.keyField.GoName, ".", field.field.GoName, ",")
+		g.P("      \"", keyName, "\": keys.", field.field.GoName, ",")
 	}
 	g.P("    }, nil")
 	g.P("  },")

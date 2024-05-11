@@ -9,21 +9,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
 )
 
 func TestStateEntityExtensions(t *testing.T) {
 	event := &testpb.FooEvent{}
 	assert.Equal(t, testpb.FooPSMEventNil, event.PSMEventKey())
-	event.SetPSMEvent(&testpb.FooEventType_Created{})
+	if err := event.SetPSMEvent(&testpb.FooEventType_Created{}); err != nil {
+		t.Fatal(err.Error())
+	}
 	assert.Equal(t, testpb.FooPSMEventCreated, event.Event.PSMEventKey())
 	assert.Equal(t, testpb.FooPSMEventCreated, event.PSMEventKey())
 }
@@ -70,11 +70,8 @@ func TestFooStateField(t *testing.T) {
 
 	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, a flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
-		event := &testpb.FooEvent{
-			Metadata: &psm_pb.EventMetadata{
-				EventId:   uuid.NewString(),
-				Timestamp: timestamppb.Now(),
-			},
+		event := &testpb.FooPSMEventSpec{
+			EventID: uuid.NewString(),
 			Keys: &testpb.FooKeys{
 				FooId:    fooID,
 				TenantId: &differentTenantId,
@@ -169,7 +166,7 @@ func TestStateMachineHook(t *testing.T) {
 		foo2ID := uuid.NewString()
 		event3 := newFooCreatedEvent(foo2ID, tenantID, nil)
 
-		for _, event := range []*testpb.FooEvent{event1, event3} {
+		for _, event := range []*testpb.FooPSMEventSpec{event1, event3} {
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -252,7 +249,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 	t.Run("Different Event Data", func(t *testing.T) {
 		// idempotency test
 		// event 1 should be idempotent
-		event1.Event.Type.(*testpb.FooEventType_Created_).Created.Name = "foo2"
+		event1.Event.(*testpb.FooEventType_Created).Name = "foo2"
 		_, err = sm.Transition(ctx, event1)
 		if err == nil {
 			t.Fatal("expected error")
@@ -345,7 +342,7 @@ func TestStateMachineIdempotencyChained(t *testing.T) {
 	event1 := newFooCreatedEvent(fooID, tenantID, nil)
 
 	// set up a hook which returns this event, the tests can then play with it.
-	var autoHookEvent *testpb.FooEvent
+	var autoHookEvent *testpb.FooPSMEventSpec
 	sm.From().Hook(testpb.FooPSMHook(func(
 		ctx context.Context,
 		tx sqrlx.Transaction,
@@ -356,9 +353,9 @@ func TestStateMachineIdempotencyChained(t *testing.T) {
 		if autoHookEvent == nil {
 			return nil
 		}
-		newEvent := proto.Clone(autoHookEvent).(*testpb.FooEvent)
+		nextEvent := autoHookEvent
 		autoHookEvent = nil
-		baton.ChainEvent(newEvent)
+		baton.ChainEvent(nextEvent)
 		return nil
 	}))
 
@@ -436,7 +433,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	statesOut := map[string]*testpb.FooState{}
-	for _, event := range []*testpb.FooEvent{event1, event2, event3, event4} {
+	for _, event := range []*testpb.FooPSMEventSpec{event1, event2, event3, event4} {
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())

@@ -96,7 +96,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			event *testpb.FooEventType_Updated,
 		) error {
 			if event.Delete {
-				baton.ChainDerived(&testpb.FooEventType_Deleted{})
+				baton.DeriveEvent(&testpb.FooEventType_Deleted{})
 			}
 			return nil
 		}))
@@ -126,9 +126,9 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 				"timestamp": event.Metadata.Timestamp,
 			}, nil
 		}).
-		PrimaryKey(func(event *testpb.BarEvent) (map[string]interface{}, error) {
+		PrimaryKey(func(keys *testpb.BarKeys) (map[string]interface{}, error) {
 			return map[string]interface{}{
-				"id": event.Keys.BarId,
+				"id": keys.BarId,
 			}, nil
 		}).NewStateMachine()
 	if err != nil {

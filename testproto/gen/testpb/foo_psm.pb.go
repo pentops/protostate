@@ -4,6 +4,7 @@ package testpb
 
 import (
 	context "context"
+	fmt "fmt"
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
@@ -28,6 +29,14 @@ type FooPSMDB = psm.DBStateMachine[
 ]
 
 type FooPSMEventer = psm.Eventer[
+	*FooKeys,
+	*FooState,
+	FooStatus,
+	*FooEvent,
+	FooPSMEvent,
+]
+
+type FooPSMEventSpec = psm.EventSpec[
 	*FooKeys,
 	*FooState,
 	FooStatus,
@@ -105,15 +114,15 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 		PKFieldPaths: []string{
 			"metadata.EventId",
 		},
-		PK: func(event *FooEvent) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"id": event.Metadata.EventId,
-			}, nil
-		},
 	},
-	PrimaryKey: func(event *FooEvent) (map[string]interface{}, error) {
+	EventPrimaryKey: func(id string, keys *FooKeys) (map[string]interface{}, error) {
 		return map[string]interface{}{
-			"id": event.Keys.FooId,
+			"id": id,
+		}, nil
+	},
+	PrimaryKey: func(keys *FooKeys) (map[string]interface{}, error) {
+		return map[string]interface{}{
+			"id": keys.FooId,
 		}, nil
 	},
 }
@@ -237,7 +246,7 @@ func (etw *FooEventType) PSMEventKey() FooPSMEventKey {
 	}
 	return tt.PSMEventKey()
 }
-func (etw *FooEventType) SetPSMEvent(inner FooPSMEvent) {
+func (etw *FooEventType) SetPSMEvent(inner FooPSMEvent) error {
 	switch v := inner.(type) {
 	case *FooEventType_Created:
 		etw.Type = &FooEventType_Created_{Created: v}
@@ -246,8 +255,9 @@ func (etw *FooEventType) SetPSMEvent(inner FooPSMEvent) {
 	case *FooEventType_Deleted:
 		etw.Type = &FooEventType_Deleted_{Deleted: v}
 	default:
-		panic("invalid type")
+		return fmt.Errorf("invalid type %T for FooEventType", v)
 	}
+	return nil
 }
 
 func (ee *FooEvent) PSMEventKey() FooPSMEventKey {
@@ -258,11 +268,11 @@ func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
 	return ee.Event.UnwrapPSMEvent()
 }
 
-func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) {
+func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) error {
 	if ee.Event == nil {
 		ee.Event = &FooEventType{}
 	}
-	ee.Event.SetPSMEvent(inner)
+	return ee.Event.SetPSMEvent(inner)
 }
 
 func (*FooEventType_Created) PSMEventKey() FooPSMEventKey {
