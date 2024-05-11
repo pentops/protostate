@@ -4,6 +4,7 @@ package testpb
 
 import (
 	context "context"
+	fmt "fmt"
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
@@ -28,6 +29,14 @@ type BarPSMDB = psm.DBStateMachine[
 ]
 
 type BarPSMEventer = psm.Eventer[
+	*BarKeys,
+	*BarState,
+	BarStatus,
+	*BarEvent,
+	BarPSMEvent,
+]
+
+type BarPSMEventSpec = psm.EventSpec[
 	*BarKeys,
 	*BarState,
 	BarStatus,
@@ -102,15 +111,15 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 		PKFieldPaths: []string{
 			"metadata.EventId",
 		},
-		PK: func(event *BarEvent) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"id": event.Metadata.EventId,
-			}, nil
-		},
 	},
-	PrimaryKey: func(event *BarEvent) (map[string]interface{}, error) {
+	EventPrimaryKey: func(id string, keys *BarKeys) (map[string]interface{}, error) {
 		return map[string]interface{}{
-			"id": event.Keys.BarId,
+			"id": id,
+		}, nil
+	},
+	PrimaryKey: func(keys *BarKeys) (map[string]interface{}, error) {
+		return map[string]interface{}{
+			"id": keys.BarId,
 		}, nil
 	},
 }
@@ -234,7 +243,7 @@ func (etw *BarEventType) PSMEventKey() BarPSMEventKey {
 	}
 	return tt.PSMEventKey()
 }
-func (etw *BarEventType) SetPSMEvent(inner BarPSMEvent) {
+func (etw *BarEventType) SetPSMEvent(inner BarPSMEvent) error {
 	switch v := inner.(type) {
 	case *BarEventType_Created:
 		etw.Type = &BarEventType_Created_{Created: v}
@@ -243,8 +252,9 @@ func (etw *BarEventType) SetPSMEvent(inner BarPSMEvent) {
 	case *BarEventType_Deleted:
 		etw.Type = &BarEventType_Deleted_{Deleted: v}
 	default:
-		panic("invalid type")
+		return fmt.Errorf("invalid type %T for BarEventType", v)
 	}
+	return nil
 }
 
 func (ee *BarEvent) PSMEventKey() BarPSMEventKey {
@@ -255,11 +265,11 @@ func (ee *BarEvent) UnwrapPSMEvent() BarPSMEvent {
 	return ee.Event.UnwrapPSMEvent()
 }
 
-func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) {
+func (ee *BarEvent) SetPSMEvent(inner BarPSMEvent) error {
 	if ee.Event == nil {
 		ee.Event = &BarEventType{}
 	}
-	ee.Event.SetPSMEvent(inner)
+	return ee.Event.SetPSMEvent(inner)
 }
 
 func (*BarEventType_Created) PSMEventKey() BarPSMEventKey {

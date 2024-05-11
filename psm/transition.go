@@ -69,7 +69,7 @@ type IEvent[
 ] interface {
 	proto.Message
 	UnwrapPSMEvent() Inner
-	SetPSMEvent(Inner)
+	SetPSMEvent(Inner) error
 	PSMKeys() K
 	SetPSMKeys(K)
 	PSMMetadata() *psm_pb.EventMetadata
@@ -97,8 +97,8 @@ type StateHookBaton[
 	IE IInnerEvent,
 ] interface {
 	SideEffect(outbox.OutboxMessage)
-	ChainEvent(E)
-	ChainDerived(IE)
+	ChainEvent(*EventSpec[K, S, ST, E, IE])
+	DeriveEvent(IE)
 	FullCause() E
 }
 
@@ -117,14 +117,19 @@ type TransitionData[
 	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] struct {
-	sideEffects      []outbox.OutboxMessage
-	chainEvents      []E
-	chainInnerEvents []IE
-	causedBy         E
+	sideEffects []outbox.OutboxMessage
+	chainEvents []*EventSpec[K, S, ST, E, IE]
+	causedBy    E
 }
 
-func (td *TransitionData[K, S, ST, E, IE]) ChainEvent(event E) {
+func (td *TransitionData[K, S, ST, E, IE]) ChainEvent(event *EventSpec[K, S, ST, E, IE]) {
 	td.chainEvents = append(td.chainEvents, event)
+}
+
+func (td *TransitionData[K, S, ST, E, IE]) DeriveEvent(inner IE) {
+	td.chainEvents = append(td.chainEvents, &EventSpec[K, S, ST, E, IE]{
+		Event: inner,
+	})
 }
 
 func (td *TransitionData[K, S, ST, E, IE]) SideEffect(msg outbox.OutboxMessage) {
@@ -133,10 +138,6 @@ func (td *TransitionData[K, S, ST, E, IE]) SideEffect(msg outbox.OutboxMessage) 
 
 func (td *TransitionData[K, S, ST, E, IE]) FullCause() E {
 	return td.causedBy
-}
-
-func (td *TransitionData[K, S, ST, E, IE]) ChainDerived(inner IE) {
-	td.chainInnerEvents = append(td.chainInnerEvents, inner)
 }
 
 type ITransitionHandler[

@@ -81,7 +81,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 			event *testpb.FooEventType_Updated,
 		) error {
 			if event.Delete {
-				baton.ChainDerived(&testpb.FooEventType_Deleted{})
+				baton.DeriveEvent(&testpb.FooEventType_Deleted{})
 			}
 			return nil
 		}))

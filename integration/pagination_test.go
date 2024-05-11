@@ -12,13 +12,11 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
 )
 
@@ -166,7 +164,6 @@ func TestEventPagination(t *testing.T) {
 				u.Field = fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano))
 				u.Weight = ptr.To(11 + int64(ii))
 			})
-			t.Logf("Entering foo %d TS: %d, ID: %s", ii, event.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro(), event.Metadata.EventId)
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -286,7 +283,7 @@ func TestPageSize(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -296,31 +293,24 @@ func TestPageSize(t *testing.T) {
 			tt := time.Now()
 			fooID := uuid.NewString()
 
-			event1 := &testpb.FooEvent{
-				Metadata: &psm_pb.EventMetadata{
-					EventId:   uuid.NewString(),
-					Timestamp: timestamppb.New(tt),
-				},
+			event1 := &testpb.FooPSMEventSpec{
+				EventID: uuid.NewString(),
 				Keys: &testpb.FooKeys{
 					TenantId: &tenantID,
 					FooId:    fooID,
 				},
-				Event: &testpb.FooEventType{
-					Type: &testpb.FooEventType_Created_{
-						Created: &testpb.FooEventType_Created{
-							Name:   "foo",
-							Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
-							Weight: ptr.To(10 + int64(ii)),
-						},
-					},
+				Event: &testpb.FooEventType_Created{
+					Name:   "foo",
+					Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+					Weight: ptr.To(10 + int64(ii)),
 				},
 			}
 			stateOut, err := sm.Transition(ctx, event1)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
-			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-			a.Equal(tenantID, *stateOut.Keys.TenantId)
+			t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+			t.Equal(tenantID, *stateOut.Keys.TenantId)
 		}
 	})
 

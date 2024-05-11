@@ -52,7 +52,7 @@ func (cb *StateMachineConfig[K, S, ST, E, IE]) StoreExtraEventColumns(eventColum
 	return cb
 }
 
-func (cb *StateMachineConfig[K, S, ST, E, IE]) PrimaryKey(primaryKey func(E) (map[string]interface{}, error)) *StateMachineConfig[K, S, ST, E, IE] {
+func (cb *StateMachineConfig[K, S, ST, E, IE]) PrimaryKey(primaryKey func(K) (map[string]interface{}, error)) *StateMachineConfig[K, S, ST, E, IE] {
 	cb.spec.PrimaryKey = primaryKey
 	return cb
 }
