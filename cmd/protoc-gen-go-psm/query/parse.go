@@ -12,10 +12,51 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func stateGoName(specified string) string {
-	// return the exported go name for the string, which is provided as _ case
-	// separated
-	return strcase.ToCamel(specified)
+type QueryServiceSourceSet struct {
+	QuerySets map[string]*QueryServiceGenerateSet
+}
+
+func WalkFile(file *protogen.File) (map[string]*PSMQuerySet, error) {
+	qss := &QueryServiceSourceSet{
+		QuerySets: map[string]*QueryServiceGenerateSet{},
+	}
+
+	for _, service := range file.Services {
+		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
+
+		for _, method := range service.Methods {
+			methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
+			if methodOpt == nil {
+				continue
+			}
+			if methodOpt.Name == "" {
+				if stateQueryAnnotation == nil || stateQueryAnnotation.Name == "" {
+					return nil, fmt.Errorf("service %s method %s does not have a state query name, and no service default", service.GoName, method.GoName)
+				}
+				methodOpt.Name = stateQueryAnnotation.Name
+			}
+
+			methodSet, ok := qss.QuerySets[methodOpt.Name]
+			if !ok {
+				methodSet = NewQueryServiceGenerateSet(methodOpt.Name, service.Desc.FullName())
+				qss.QuerySets[methodOpt.Name] = methodSet
+			}
+			if err := methodSet.AddMethod(method, methodOpt); err != nil {
+				return nil, fmt.Errorf("adding method %s to %s: %w", method.Desc.Name(), service.Desc.FullName(), err)
+			}
+		}
+	}
+
+	out := map[string]*PSMQuerySet{}
+	for _, qs := range qss.QuerySets {
+		converted, err := BuildQuerySet(*qs)
+		if err != nil {
+			return nil, err
+		}
+		out[qs.name] = converted
+	}
+
+	return out, nil
 }
 
 type QueryServiceGenerateSet struct {
@@ -120,7 +161,7 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		return nil, fmt.Errorf("pquery.BuildListReflection for %s: %w", qs.listMethod.Desc.FullName(), err)
 	}
 
-	goServiceName := stateGoName(qs.name)
+	goServiceName := strcase.ToCamel(qs.name)
 
 	ww := &PSMQuerySet{
 		GoServiceName: goServiceName,
