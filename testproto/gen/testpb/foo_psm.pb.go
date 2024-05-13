@@ -8,80 +8,198 @@ import (
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
-	proto "google.golang.org/protobuf/proto"
 )
 
-// StateObjectOptions: FooPSM
+// PSM FooPSM
+
 type FooPSM = psm.StateMachine[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
 type FooPSMDB = psm.DBStateMachine[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
 type FooPSMEventer = psm.Eventer[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
 type FooPSMEventSpec = psm.EventSpec[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
-func DefaultFooPSMConfig() *psm.StateMachineConfig[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-] {
-	return psm.NewStateMachineConfig[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
-	](DefaultFooPSMTableSpec)
+type FooPSMEventKey = string
+
+const (
+	FooPSMEventNil     FooPSMEventKey = "<nil>"
+	FooPSMEventCreated FooPSMEventKey = "created"
+	FooPSMEventUpdated FooPSMEventKey = "updated"
+	FooPSMEventDeleted FooPSMEventKey = "deleted"
+)
+
+// EXTEND FooKeys with the psm.IKeyset interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooKeys) PSMIsSet() bool {
+	return msg != nil
 }
 
-func NewFooPSM(config *psm.StateMachineConfig[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-]) (*FooPSM, error) {
-	return psm.NewStateMachine[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
-	](config)
+// PSMFullName returns the full name of state machine with package prefix
+func (msg *FooKeys) PSMFullName() string {
+	return "test.v1.foo"
+}
+
+// EXTEND FooState with the psm.IState interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooState) PSMIsSet() bool {
+	return msg != nil
+}
+
+func (msg *FooState) PSMMetadata() *psm_pb.StateMetadata {
+	if msg.Metadata == nil {
+		msg.Metadata = &psm_pb.StateMetadata{}
+	}
+	return msg.Metadata
+}
+
+func (msg *FooState) PSMKeys() *FooKeys {
+	return msg.Keys
+}
+
+func (msg *FooState) SetPSMKeys(inner *FooKeys) {
+	msg.Keys = inner
+}
+
+// EXTEND FooEvent with the psm.IEvent interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooEvent) PSMIsSet() bool {
+	return msg != nil
+}
+
+func (msg *FooEvent) PSMMetadata() *psm_pb.EventMetadata {
+	if msg.Metadata == nil {
+		msg.Metadata = &psm_pb.EventMetadata{}
+	}
+	return msg.Metadata
+}
+
+func (msg *FooEvent) PSMKeys() *FooKeys {
+	return msg.Keys
+}
+
+func (msg *FooEvent) SetPSMKeys(inner *FooKeys) {
+	msg.Keys = inner
+}
+
+// PSMEventKey returns the FooPSMEventPSMEventKey for the event, implementing psm.IEvent
+func (msg *FooEvent) PSMEventKey() FooPSMEventKey {
+	tt := msg.UnwrapPSMEvent()
+	if tt == nil {
+		return FooPSMEventNil
+	}
+	return tt.PSMEventKey()
+}
+
+// UnwrapPSMEvent implements psm.IEvent, returning the inner event message
+func (msg *FooEvent) UnwrapPSMEvent() FooPSMEvent {
+	if msg == nil {
+		return nil
+	}
+	if msg.Event == nil {
+		return nil
+	}
+	switch v := msg.Event.Type.(type) {
+	case *FooEventType_Created_:
+		return v.Created
+	case *FooEventType_Updated_:
+		return v.Updated
+	case *FooEventType_Deleted_:
+		return v.Deleted
+	default:
+		return nil
+	}
+}
+
+// SetPSMEvent sets the inner event message from a concrete type, implementing psm.IEvent
+func (msg *FooEvent) SetPSMEvent(inner FooPSMEvent) error {
+	if msg.Event == nil {
+		msg.Event = &FooEventType{}
+	}
+	switch v := inner.(type) {
+	case *FooEventType_Created:
+		msg.Event.Type = &FooEventType_Created_{Created: v}
+	case *FooEventType_Updated:
+		msg.Event.Type = &FooEventType_Updated_{Updated: v}
+	case *FooEventType_Deleted:
+		msg.Event.Type = &FooEventType_Deleted_{Deleted: v}
+	default:
+		return fmt.Errorf("invalid type %T for FooEventType", v)
+	}
+	return nil
+}
+
+type FooPSMEvent interface {
+	psm.IInnerEvent
+	PSMEventKey() FooPSMEventKey
+}
+
+// EXTEND FooEventType_Created with the FooPSMEvent interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooEventType_Created) PSMIsSet() bool {
+	return msg != nil
+}
+
+func (*FooEventType_Created) PSMEventKey() FooPSMEventKey {
+	return FooPSMEventCreated
+}
+
+// EXTEND FooEventType_Updated with the FooPSMEvent interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooEventType_Updated) PSMIsSet() bool {
+	return msg != nil
+}
+
+func (*FooEventType_Updated) PSMEventKey() FooPSMEventKey {
+	return FooPSMEventUpdated
+}
+
+// EXTEND FooEventType_Deleted with the FooPSMEvent interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *FooEventType_Deleted) PSMIsSet() bool {
+	return msg != nil
+}
+
+func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
+	return FooPSMEventDeleted
 }
 
 type FooPSMTableSpec = psm.PSMTableSpec[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
 var DefaultFooPSMTableSpec = FooPSMTableSpec{
@@ -127,256 +245,118 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 	},
 }
 
-type FooPSMTransitionBaton = psm.TransitionBaton[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-]
+func DefaultFooPSMConfig() *psm.StateMachineConfig[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+] {
+	return psm.NewStateMachineConfig[
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+	](DefaultFooPSMTableSpec)
+}
 
-type FooPSMHookBaton = psm.StateHookBaton[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+func NewFooPSM(config *psm.StateMachineConfig[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]) (*FooPSM, error) {
+	return psm.NewStateMachine[
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+	](config)
+}
+
+type FooPSMTransitionBaton = psm.TransitionBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
 func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.PSMCombinedFunc[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-	SE,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+	SE,          // Specific event type for the transition
 ] {
 	return psm.PSMCombinedFunc[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
-		SE,
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+		SE,          // Specific event type for the transition
 	](cb)
 }
 func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) error) psm.PSMTransitionFunc[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-	SE,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+	SE,          // Specific event type for the transition
 ] {
 	return psm.PSMTransitionFunc[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
-		SE,
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+		SE,          // Specific event type for the transition
 	](cb)
 }
+
+type FooPSMHookBaton = psm.StateHookBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]
+
 func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, SE) error) psm.PSMHookFunc[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
-	SE,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+	SE,          // Specific event type for the transition
 ] {
 	return psm.PSMHookFunc[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
-		SE,
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+		SE,          // Specific event type for the transition
 	](cb)
 }
 func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralStateHook[
-	*FooKeys,
-	*FooState,
-	FooStatus,
-	*FooEvent,
-	FooPSMEvent,
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ] {
 	return psm.GeneralStateHook[
-		*FooKeys,
-		*FooState,
-		FooStatus,
-		*FooEvent,
-		FooPSMEvent,
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
 	](cb)
-}
-
-type FooPSMEventKey = string
-
-const (
-	FooPSMEventNil     FooPSMEventKey = "<nil>"
-	FooPSMEventCreated FooPSMEventKey = "created"
-	FooPSMEventUpdated FooPSMEventKey = "updated"
-	FooPSMEventDeleted FooPSMEventKey = "deleted"
-)
-
-type FooPSMEvent interface {
-	proto.Message
-	PSMEventKey() FooPSMEventKey
-}
-
-func (etw *FooEventType) UnwrapPSMEvent() FooPSMEvent {
-	if etw == nil {
-		return nil
-	}
-	switch v := etw.Type.(type) {
-	case *FooEventType_Created_:
-		return v.Created
-	case *FooEventType_Updated_:
-		return v.Updated
-	case *FooEventType_Deleted_:
-		return v.Deleted
-	default:
-		return nil
-	}
-}
-func (etw *FooEventType) PSMEventKey() FooPSMEventKey {
-	tt := etw.UnwrapPSMEvent()
-	if tt == nil {
-		return FooPSMEventNil
-	}
-	return tt.PSMEventKey()
-}
-func (etw *FooEventType) SetPSMEvent(inner FooPSMEvent) error {
-	switch v := inner.(type) {
-	case *FooEventType_Created:
-		etw.Type = &FooEventType_Created_{Created: v}
-	case *FooEventType_Updated:
-		etw.Type = &FooEventType_Updated_{Updated: v}
-	case *FooEventType_Deleted:
-		etw.Type = &FooEventType_Deleted_{Deleted: v}
-	default:
-		return fmt.Errorf("invalid type %T for FooEventType", v)
-	}
-	return nil
-}
-
-func (ee *FooEvent) PSMEventKey() FooPSMEventKey {
-	return ee.Event.PSMEventKey()
-}
-
-func (ee *FooEvent) UnwrapPSMEvent() FooPSMEvent {
-	return ee.Event.UnwrapPSMEvent()
-}
-
-func (ee *FooEvent) SetPSMEvent(inner FooPSMEvent) error {
-	if ee.Event == nil {
-		ee.Event = &FooEventType{}
-	}
-	return ee.Event.SetPSMEvent(inner)
-}
-
-func (*FooEventType_Created) PSMEventKey() FooPSMEventKey {
-	return FooPSMEventCreated
-}
-func (*FooEventType_Updated) PSMEventKey() FooPSMEventKey {
-	return FooPSMEventUpdated
-}
-func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
-	return FooPSMEventDeleted
-}
-func (ee *FooEvent) PSMMetadata() *psm_pb.EventMetadata {
-	if ee.Metadata == nil {
-		ee.Metadata = &psm_pb.EventMetadata{}
-	}
-	return ee.Metadata
-}
-
-func (st *FooState) PSMMetadata() *psm_pb.StateMetadata {
-	if st.Metadata == nil {
-		st.Metadata = &psm_pb.StateMetadata{}
-	}
-	return st.Metadata
-}
-
-func (ee *FooEvent) PSMKeys() *FooKeys {
-	return ee.Keys
-}
-
-func (ee *FooEvent) SetPSMKeys(inner *FooKeys) {
-	ee.Keys = inner
-}
-
-func (st *FooState) PSMKeys() *FooKeys {
-	return st.Keys
-}
-
-func (st *FooState) SetPSMKeys(inner *FooKeys) {
-	st.Keys = inner
-}
-
-// State Query Service for %sFoo
-// QuerySet is the query set for the Foo service.
-
-type FooPSMQuerySet = psm.StateQuerySet[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
-]
-
-func NewFooPSMQuerySet(
-	smSpec psm.QuerySpec[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
-	],
-	options psm.StateQueryOptions,
-) (*FooPSMQuerySet, error) {
-	return psm.BuildStateQuerySet[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
-	](smSpec, options)
-}
-
-type FooPSMQuerySpec = psm.QuerySpec[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
-]
-
-func DefaultFooPSMQuerySpec(tableSpec psm.QueryTableSpec) FooPSMQuerySpec {
-	return psm.QuerySpec[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
-	]{
-		QueryTableSpec: tableSpec,
-		ListRequestFilter: func(req *ListFoosRequest) (map[string]interface{}, error) {
-			filter := map[string]interface{}{}
-			if req.TenantId != nil {
-				filter["tenant_id"] = *req.TenantId
-			}
-			return filter, nil
-		},
-		ListEventsRequestFilter: func(req *ListFooEventsRequest) (map[string]interface{}, error) {
-			filter := map[string]interface{}{}
-			filter["foo_id"] = req.FooId
-			return filter, nil
-		},
-	}
 }

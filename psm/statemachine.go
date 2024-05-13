@@ -376,14 +376,25 @@ type EventSpec[
 	E IEvent[K, S, ST, IE],
 	IE IInnerEvent,
 ] struct {
-	Keys    K
+	// Keys must be set, to identify the state machine.
+	Keys K
+	// EventID must be set for incomming events
 	EventID string
-	Event   IE
+	// The inner PSM Event type, must be set
+	Event IE
 }
 
 func (es EventSpec[K, S, ST, E, IE]) validateIncomming() error {
 	if es.EventID == "" {
-		return fmt.Errorf("missing event ID")
+		return fmt.Errorf("EventSpec.EventID must be set")
+	}
+
+	if !es.Keys.PSMIsSet() {
+		return fmt.Errorf("EventSpec.Keys is required")
+	}
+
+	if !es.Event.PSMIsSet() {
+		return fmt.Errorf("EventSpec.Event must be set")
 	}
 
 	return nil

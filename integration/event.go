@@ -53,7 +53,6 @@ func newFooEvent(fooID, tenantID string, mod func(e *testpb.FooPSMEventSpec)) *t
 			FooId:    fooID,
 			TenantId: &tenantID,
 		},
-		Event: &testpb.FooEventType{},
 	}
 	mod(e)
 	return e
@@ -81,7 +80,6 @@ func newBarEvent(barID string, mod func(e *testpb.BarPSMEventSpec)) *testpb.BarP
 		Keys: &testpb.BarKeys{
 			BarId: barID,
 		},
-		Event: &testpb.BarEventType{},
 	}
 	mod(e)
 	return e

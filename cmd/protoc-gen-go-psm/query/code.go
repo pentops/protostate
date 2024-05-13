@@ -1,18 +1,28 @@
-package main
+package query
 
 import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
 	protoPackage        = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	stateMachinePackage = protogen.GoImportPath("github.com/pentops/protostate/psm")
+
+	eventMetadataProtoName = protoreflect.FullName("psm.state.v1.EventMetadata")
+	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
 )
 
 func quoteString(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+}
+
+type ListFilterField struct {
+	DBName   string
+	Getter   string
+	Optional bool
 }
 
 type PSMQuerySet struct {
@@ -28,34 +38,7 @@ type PSMQuerySet struct {
 	ListEventsRequestFilter []ListFilterField
 }
 
-type ListFilterField struct {
-	DBName   string
-	Getter   string
-	Optional bool
-}
-
-func (qs PSMQuerySet) writeGenericTypeSet(g *protogen.GeneratedFile) {
-	g.P("*", qs.GetREQ, ",")
-	g.P("*", qs.GetRES, ",")
-	g.P("*", qs.ListREQ, ",")
-	g.P("*", qs.ListRES, ",")
-	if qs.ListEventsREQ != nil {
-		g.P("*", *qs.ListEventsREQ, ",")
-		g.P("*", *qs.ListEventsRES, ",")
-	} else {
-		g.P(protoPackage.Ident("Message"), ",")
-		g.P(protoPackage.Ident("Message"), ",")
-	}
-}
-
-func (qs PSMQuerySet) genericTypeAlias(g *protogen.GeneratedFile, typedName string, psmName string) {
-	g.P("type ", typedName, " = ", stateMachinePackage.Ident(psmName), "[")
-	qs.writeGenericTypeSet(g)
-	g.P("]")
-	g.P()
-}
-
-func (qs PSMQuerySet) write(g *protogen.GeneratedFile) error {
+func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 	g.P("// State Query Service for %s", qs.GoServiceName)
 	g.P("// QuerySet is the query set for the ", qs.GoServiceName, " service.")
 	g.P()
@@ -83,7 +66,27 @@ func (qs PSMQuerySet) write(g *protogen.GeneratedFile) error {
 	g.P("  }")
 	g.P("}")
 	g.P()
-	return nil
+}
+
+func (qs PSMQuerySet) writeGenericTypeSet(g *protogen.GeneratedFile) {
+	g.P("*", qs.GetREQ, ",")
+	g.P("*", qs.GetRES, ",")
+	g.P("*", qs.ListREQ, ",")
+	g.P("*", qs.ListRES, ",")
+	if qs.ListEventsREQ != nil {
+		g.P("*", *qs.ListEventsREQ, ",")
+		g.P("*", *qs.ListEventsRES, ",")
+	} else {
+		g.P(protoPackage.Ident("Message"), ",")
+		g.P(protoPackage.Ident("Message"), ",")
+	}
+}
+
+func (qs PSMQuerySet) genericTypeAlias(g *protogen.GeneratedFile, typedName string, psmName string) {
+	g.P("type ", typedName, " = ", stateMachinePackage.Ident(psmName), "[")
+	qs.writeGenericTypeSet(g)
+	g.P("]")
+	g.P()
 }
 
 func (qs PSMQuerySet) listFilter(g *protogen.GeneratedFile, reqType protogen.GoIdent, name string, fields []ListFilterField) {
