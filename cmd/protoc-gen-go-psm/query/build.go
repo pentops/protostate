@@ -1,9 +1,10 @@
-package main
+package query
 
 import (
 	"errors"
 	"fmt"
 
+	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -11,7 +12,72 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func buildQuerySet(qs queryServiceGenerateSet) (*PSMQuerySet, error) {
+func stateGoName(specified string) string {
+	// return the exported go name for the string, which is provided as _ case
+	// separated
+	return strcase.ToCamel(specified)
+}
+
+type QueryServiceGenerateSet struct {
+
+	// name of the state machine
+	name string
+	// for errors / debugging, includes the proto source name
+	fullName string
+
+	getMethod        *protogen.Method
+	listMethod       *protogen.Method
+	listEventsMethod *protogen.Method
+}
+
+func NewQueryServiceGenerateSet(name string, serviceFullName protoreflect.FullName) *QueryServiceGenerateSet {
+	return &QueryServiceGenerateSet{
+		name:     name,
+		fullName: fmt.Sprintf("%s/%s", serviceFullName, name),
+	}
+}
+
+func (qs *QueryServiceGenerateSet) AddMethod(method *protogen.Method, methodOpt *psm_pb.StateQueryMethodOptions) error {
+
+	if methodOpt.Get {
+		if qs.getMethod != nil {
+			return fmt.Errorf("service %s already has a get method (%s)", qs.name, qs.getMethod.Desc.Name())
+		}
+		qs.getMethod = method
+	} else if methodOpt.List {
+		if qs.listMethod != nil {
+			return fmt.Errorf("service %s already has a list method (%s)", qs.name, qs.listMethod.Desc.Name())
+		}
+		qs.listMethod = method
+	} else if methodOpt.ListEvents {
+		if qs.listEventsMethod != nil {
+			return fmt.Errorf("service %s already has a list events method (%s)", qs.name, qs.listEventsMethod.Desc.Name())
+		}
+
+		qs.listEventsMethod = method
+
+	} else {
+		return fmt.Errorf("method does not have a state query type")
+	}
+
+	return nil
+
+}
+
+func (qs QueryServiceGenerateSet) validate() error {
+	if qs.getMethod == nil {
+		return fmt.Errorf("PSM Query '%s' does not have a get method", qs.fullName)
+	}
+
+	if qs.listMethod == nil {
+		return fmt.Errorf("PSM Qurey '%s' does not have a list method", qs.fullName)
+	}
+
+	return nil
+
+}
+
+func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	if err := qs.validate(); err != nil {
 		return nil, err
 	}
@@ -104,7 +170,7 @@ type queryPkFields struct {
 
 // attempts to walk through the query methods to find the descriptors for the
 // state and event messages.
-func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*queryPkFields, error) {
+func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*queryPkFields, error) {
 	if src.getMethod == nil {
 		return nil, fmt.Errorf("no get nethod, cannot derive state fields")
 	}
@@ -222,4 +288,16 @@ func deriveStateDescriptorFromQueryDescriptor(src queryServiceGenerateSet) (*que
 	}
 
 	return out, nil
+}
+
+func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *protogen.Field {
+	if field == nil {
+		return nil
+	}
+	for _, f := range parent.Fields {
+		if f.Desc.FullName() == field.FullName() {
+			return f
+		}
+	}
+	panic(fmt.Sprintf("field %s not found in parent %s", field.FullName(), parent.Desc.FullName()))
 }

@@ -24,7 +24,6 @@ func TestStateEntityExtensions(t *testing.T) {
 	if err := event.SetPSMEvent(&testpb.FooEventType_Created{}); err != nil {
 		t.Fatal(err.Error())
 	}
-	assert.Equal(t, testpb.FooPSMEventCreated, event.Event.PSMEventKey())
 	assert.Equal(t, testpb.FooPSMEventCreated, event.PSMEventKey())
 }
 
@@ -76,14 +75,10 @@ func TestFooStateField(t *testing.T) {
 				FooId:    fooID,
 				TenantId: &differentTenantId,
 			},
-			Event: &testpb.FooEventType{
-				Type: &testpb.FooEventType_Updated_{
-					Updated: &testpb.FooEventType_Updated{
-						Name:   "foo",
-						Field:  "event3",
-						Weight: ptr.To(int64(11)),
-					},
-				},
+			Event: &testpb.FooEventType_Updated{
+				Name:   "foo",
+				Field:  "event3",
+				Weight: ptr.To(int64(11)),
 			},
 		}
 		_, err := sm.Transition(ctx, event)
