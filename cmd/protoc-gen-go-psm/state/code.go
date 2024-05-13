@@ -9,6 +9,8 @@ import (
 )
 
 var (
+	// all imports from PSM are defined here, i.e. this is the committed PSM
+	// interface.
 	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
 	smEventer               = smImportPath.Ident("Eventer")
 	smStateMachine          = smImportPath.Ident("StateMachine")
@@ -51,7 +53,7 @@ type keyField struct {
 	field *protogen.Field
 }
 
-func (ss PSMEntity) Write(g *protogen.GeneratedFile) error {
+func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 	g.P("// PSM ", ss.machineName)
 	g.P()
 
@@ -73,7 +75,6 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) error {
 	ss.tableSpecAndConfig(g)
 	g.P()
 	ss.transitionFuncTypes(g)
-	return nil
 }
 
 // prints the generic type parameters K, S, ST, E, IE

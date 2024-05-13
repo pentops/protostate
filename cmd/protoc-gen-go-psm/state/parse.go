@@ -15,16 +15,6 @@ var (
 	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
 )
 
-type StateEntities struct {
-	StateMachines map[string]*StateEntityGenerateSet
-}
-
-func NewStateEntities() *StateEntities {
-	return &StateEntities{
-		StateMachines: make(map[string]*StateEntityGenerateSet),
-	}
-}
-
 type walkingMessage struct {
 	message        *protogen.Message
 	isEventMessage bool
@@ -34,7 +24,33 @@ type walkingMessage struct {
 	unusedFields   []*protogen.Field
 }
 
-func (se *StateEntities) CheckMessage(message *protogen.Message) error {
+type sourceSet struct {
+	stateMachines map[string]*StateEntityGenerateSet
+}
+
+func WalkFile(file *protogen.File) (map[string]*PSMEntity, error) {
+	se := &sourceSet{
+		stateMachines: make(map[string]*StateEntityGenerateSet),
+	}
+	for _, message := range file.Messages {
+		if err := se.checkMessage(message); err != nil {
+			return nil, err
+		}
+	}
+
+	stateMachines := make(map[string]*PSMEntity, len(se.stateMachines))
+	for _, stateSet := range se.stateMachines {
+		converted, err := BuildStateSet(*stateSet)
+		if err != nil {
+			return nil, err
+		}
+		stateMachines[stateSet.options.Name] = converted
+	}
+
+	return stateMachines, nil
+}
+
+func (se *sourceSet) checkMessage(message *protogen.Message) error {
 
 	ww := walkingMessage{
 		message: message,
@@ -98,10 +114,10 @@ func (se *StateEntities) CheckMessage(message *protogen.Message) error {
 		return fmt.Errorf("message %s does not have a metadata field but, but imports the PSM Key Message (%s)", message.Desc.Name(), keyMessage.Desc.FullName())
 	}
 
-	stateSet, ok := se.StateMachines[keyOptions.Name]
+	stateSet, ok := se.stateMachines[keyOptions.Name]
 	if !ok {
 		stateSet = NewStateEntityGenerateSet(keyMessage, keyOptions)
-		se.StateMachines[keyOptions.Name] = stateSet
+		se.stateMachines[keyOptions.Name] = stateSet
 	}
 
 	if ww.isStateMessage {
