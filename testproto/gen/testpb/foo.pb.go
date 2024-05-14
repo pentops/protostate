@@ -13,7 +13,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	_ "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -345,15 +345,14 @@ type FooState struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Metadata        *psm_pb.StateMetadata  `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Keys            *FooKeys               `protobuf:"bytes,2,opt,name=keys,proto3" json:"keys,omitempty"`
-	Status          FooStatus              `protobuf:"varint,3,opt,name=status,proto3,enum=test.v1.FooStatus" json:"status,omitempty"`
-	Name            string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
-	Field           string                 `protobuf:"bytes,6,opt,name=field,proto3" json:"field,omitempty"`
-	Description     *string                `protobuf:"bytes,7,opt,name=description,proto3,oneof" json:"description,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Characteristics *FooCharacteristics    `protobuf:"bytes,9,opt,name=characteristics,proto3" json:"characteristics,omitempty"`
-	Profiles        []*FooProfile          `protobuf:"bytes,10,rep,name=profiles,proto3" json:"profiles,omitempty"`
+	Metadata        *psm_pb.StateMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Keys            *FooKeys              `protobuf:"bytes,2,opt,name=keys,proto3" json:"keys,omitempty"`
+	Status          FooStatus             `protobuf:"varint,3,opt,name=status,proto3,enum=test.v1.FooStatus" json:"status,omitempty"`
+	Name            string                `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Field           string                `protobuf:"bytes,6,opt,name=field,proto3" json:"field,omitempty"`
+	Description     *string               `protobuf:"bytes,7,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	Characteristics *FooCharacteristics   `protobuf:"bytes,9,opt,name=characteristics,proto3" json:"characteristics,omitempty"`
+	Profiles        []*FooProfile         `protobuf:"bytes,10,rep,name=profiles,proto3" json:"profiles,omitempty"`
 }
 
 func (x *FooState) Reset() {
@@ -428,13 +427,6 @@ func (x *FooState) GetDescription() string {
 		return *x.Description
 	}
 	return ""
-}
-
-func (x *FooState) GetCreatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return nil
 }
 
 func (x *FooState) GetCharacteristics() *FooCharacteristics {
@@ -1249,7 +1241,7 @@ var file_test_v1_foo_proto_rawDesc = []byte{
 	0x02, 0x08, 0x01, 0xea, 0xe8, 0x81, 0xd9, 0x02, 0x00, 0x48, 0x00, 0x52, 0x08, 0x74, 0x65, 0x6e,
 	0x61, 0x6e, 0x74, 0x49, 0x64, 0x88, 0x01, 0x01, 0x3a, 0x0b, 0xc2, 0xe8, 0x81, 0xd9, 0x02, 0x05,
 	0x0a, 0x03, 0x66, 0x6f, 0x6f, 0x42, 0x0c, 0x0a, 0x0a, 0x5f, 0x74, 0x65, 0x6e, 0x61, 0x6e, 0x74,
-	0x5f, 0x69, 0x64, 0x22, 0xc6, 0x04, 0x0a, 0x08, 0x46, 0x6f, 0x6f, 0x53, 0x74, 0x61, 0x74, 0x65,
+	0x5f, 0x69, 0x64, 0x22, 0xf6, 0x03, 0x0a, 0x08, 0x46, 0x6f, 0x6f, 0x53, 0x74, 0x61, 0x74, 0x65,
 	0x12, 0x3f, 0x0a, 0x08, 0x6d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x18, 0x01, 0x20, 0x01,
 	0x28, 0x0b, 0x32, 0x1b, 0x2e, 0x70, 0x73, 0x6d, 0x2e, 0x73, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x76,
 	0x31, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x42,
@@ -1272,12 +1264,7 @@ var file_test_v1_foo_proto_rawDesc = []byte{
 	0x09, 0x42, 0x1f, 0x8a, 0x9b, 0x81, 0xca, 0x02, 0x19, 0x72, 0x17, 0x0a, 0x15, 0x52, 0x13, 0x08,
 	0x01, 0x12, 0x0f, 0x74, 0x73, 0x76, 0x5f, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69,
 	0x6f, 0x6e, 0x48, 0x00, 0x52, 0x0b, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f,
-	0x6e, 0x88, 0x01, 0x01, 0x12, 0x4e, 0x0a, 0x0a, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x5f,
-	0x61, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73,
-	0x74, 0x61, 0x6d, 0x70, 0x42, 0x13, 0x8a, 0x9b, 0x81, 0xca, 0x02, 0x0d, 0xf2, 0x01, 0x0a, 0x52,
-	0x02, 0x08, 0x01, 0x5a, 0x04, 0x08, 0x01, 0x10, 0x01, 0x52, 0x09, 0x63, 0x72, 0x65, 0x61, 0x74,
-	0x65, 0x64, 0x41, 0x74, 0x12, 0x45, 0x0a, 0x0f, 0x63, 0x68, 0x61, 0x72, 0x61, 0x63, 0x74, 0x65,
+	0x6e, 0x88, 0x01, 0x01, 0x12, 0x45, 0x0a, 0x0f, 0x63, 0x68, 0x61, 0x72, 0x61, 0x63, 0x74, 0x65,
 	0x72, 0x69, 0x73, 0x74, 0x69, 0x63, 0x73, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e,
 	0x74, 0x65, 0x73, 0x74, 0x2e, 0x76, 0x31, 0x2e, 0x46, 0x6f, 0x6f, 0x43, 0x68, 0x61, 0x72, 0x61,
 	0x63, 0x74, 0x65, 0x72, 0x69, 0x73, 0x74, 0x69, 0x63, 0x73, 0x52, 0x0f, 0x63, 0x68, 0x61, 0x72,
@@ -1471,11 +1458,10 @@ var file_test_v1_foo_proto_goTypes = []interface{}{
 	(*FooEventType_Updated)(nil),  // 16: test.v1.FooEventType.Updated
 	(*FooEventType_Deleted)(nil),  // 17: test.v1.FooEventType.Deleted
 	(*psm_pb.StateMetadata)(nil),  // 18: psm.state.v1.StateMetadata
-	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
-	(*psm_pb.EventMetadata)(nil),  // 20: psm.state.v1.EventMetadata
-	(*psml_pb.PageRequest)(nil),   // 21: psm.list.v1.PageRequest
-	(*psml_pb.QueryRequest)(nil),  // 22: psm.list.v1.QueryRequest
-	(*psml_pb.PageResponse)(nil),  // 23: psm.list.v1.PageResponse
+	(*psm_pb.EventMetadata)(nil),  // 19: psm.state.v1.EventMetadata
+	(*psml_pb.PageRequest)(nil),   // 20: psm.list.v1.PageRequest
+	(*psml_pb.QueryRequest)(nil),  // 21: psm.list.v1.QueryRequest
+	(*psml_pb.PageResponse)(nil),  // 22: psm.list.v1.PageResponse
 }
 var file_test_v1_foo_proto_depIdxs = []int32{
 	6,  // 0: test.v1.GetFooResponse.state:type_name -> test.v1.FooState
@@ -1483,38 +1469,37 @@ var file_test_v1_foo_proto_depIdxs = []int32{
 	18, // 2: test.v1.FooState.metadata:type_name -> psm.state.v1.StateMetadata
 	5,  // 3: test.v1.FooState.keys:type_name -> test.v1.FooKeys
 	0,  // 4: test.v1.FooState.status:type_name -> test.v1.FooStatus
-	19, // 5: test.v1.FooState.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 6: test.v1.FooState.characteristics:type_name -> test.v1.FooCharacteristics
-	8,  // 7: test.v1.FooState.profiles:type_name -> test.v1.FooProfile
-	20, // 8: test.v1.FooEvent.metadata:type_name -> psm.state.v1.EventMetadata
-	5,  // 9: test.v1.FooEvent.keys:type_name -> test.v1.FooKeys
-	10, // 10: test.v1.FooEvent.event:type_name -> test.v1.FooEventType
-	15, // 11: test.v1.FooEventType.created:type_name -> test.v1.FooEventType.Created
-	16, // 12: test.v1.FooEventType.updated:type_name -> test.v1.FooEventType.Updated
-	17, // 13: test.v1.FooEventType.deleted:type_name -> test.v1.FooEventType.Deleted
-	21, // 14: test.v1.ListFoosRequest.page:type_name -> psm.list.v1.PageRequest
-	22, // 15: test.v1.ListFoosRequest.query:type_name -> psm.list.v1.QueryRequest
-	6,  // 16: test.v1.ListFoosResponse.foos:type_name -> test.v1.FooState
-	23, // 17: test.v1.ListFoosResponse.page:type_name -> psm.list.v1.PageResponse
-	21, // 18: test.v1.ListFooEventsRequest.page:type_name -> psm.list.v1.PageRequest
-	22, // 19: test.v1.ListFooEventsRequest.query:type_name -> psm.list.v1.QueryRequest
-	9,  // 20: test.v1.ListFooEventsResponse.events:type_name -> test.v1.FooEvent
-	23, // 21: test.v1.ListFooEventsResponse.page:type_name -> psm.list.v1.PageResponse
-	8,  // 22: test.v1.FooEventType.Created.profiles:type_name -> test.v1.FooProfile
-	8,  // 23: test.v1.FooEventType.Updated.profiles:type_name -> test.v1.FooProfile
-	1,  // 24: test.v1.FooService.GetFoo:input_type -> test.v1.GetFooRequest
-	11, // 25: test.v1.FooService.ListFoos:input_type -> test.v1.ListFoosRequest
-	13, // 26: test.v1.FooService.ListFooEvents:input_type -> test.v1.ListFooEventsRequest
-	3,  // 27: test.v1.FooService.FooSummary:input_type -> test.v1.FooSummaryRequest
-	2,  // 28: test.v1.FooService.GetFoo:output_type -> test.v1.GetFooResponse
-	12, // 29: test.v1.FooService.ListFoos:output_type -> test.v1.ListFoosResponse
-	14, // 30: test.v1.FooService.ListFooEvents:output_type -> test.v1.ListFooEventsResponse
-	4,  // 31: test.v1.FooService.FooSummary:output_type -> test.v1.FooSummaryResponse
-	28, // [28:32] is the sub-list for method output_type
-	24, // [24:28] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	7,  // 5: test.v1.FooState.characteristics:type_name -> test.v1.FooCharacteristics
+	8,  // 6: test.v1.FooState.profiles:type_name -> test.v1.FooProfile
+	19, // 7: test.v1.FooEvent.metadata:type_name -> psm.state.v1.EventMetadata
+	5,  // 8: test.v1.FooEvent.keys:type_name -> test.v1.FooKeys
+	10, // 9: test.v1.FooEvent.event:type_name -> test.v1.FooEventType
+	15, // 10: test.v1.FooEventType.created:type_name -> test.v1.FooEventType.Created
+	16, // 11: test.v1.FooEventType.updated:type_name -> test.v1.FooEventType.Updated
+	17, // 12: test.v1.FooEventType.deleted:type_name -> test.v1.FooEventType.Deleted
+	20, // 13: test.v1.ListFoosRequest.page:type_name -> psm.list.v1.PageRequest
+	21, // 14: test.v1.ListFoosRequest.query:type_name -> psm.list.v1.QueryRequest
+	6,  // 15: test.v1.ListFoosResponse.foos:type_name -> test.v1.FooState
+	22, // 16: test.v1.ListFoosResponse.page:type_name -> psm.list.v1.PageResponse
+	20, // 17: test.v1.ListFooEventsRequest.page:type_name -> psm.list.v1.PageRequest
+	21, // 18: test.v1.ListFooEventsRequest.query:type_name -> psm.list.v1.QueryRequest
+	9,  // 19: test.v1.ListFooEventsResponse.events:type_name -> test.v1.FooEvent
+	22, // 20: test.v1.ListFooEventsResponse.page:type_name -> psm.list.v1.PageResponse
+	8,  // 21: test.v1.FooEventType.Created.profiles:type_name -> test.v1.FooProfile
+	8,  // 22: test.v1.FooEventType.Updated.profiles:type_name -> test.v1.FooProfile
+	1,  // 23: test.v1.FooService.GetFoo:input_type -> test.v1.GetFooRequest
+	11, // 24: test.v1.FooService.ListFoos:input_type -> test.v1.ListFoosRequest
+	13, // 25: test.v1.FooService.ListFooEvents:input_type -> test.v1.ListFooEventsRequest
+	3,  // 26: test.v1.FooService.FooSummary:input_type -> test.v1.FooSummaryRequest
+	2,  // 27: test.v1.FooService.GetFoo:output_type -> test.v1.GetFooResponse
+	12, // 28: test.v1.FooService.ListFoos:output_type -> test.v1.ListFoosResponse
+	14, // 29: test.v1.FooService.ListFooEvents:output_type -> test.v1.ListFooEventsResponse
+	4,  // 30: test.v1.FooService.FooSummary:output_type -> test.v1.FooSummaryResponse
+	27, // [27:31] is the sub-list for method output_type
+	23, // [23:27] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_test_v1_foo_proto_init() }

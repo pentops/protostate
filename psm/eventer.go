@@ -7,6 +7,7 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ITransition[
@@ -30,6 +31,14 @@ type IStateHook[
 	Matches(ST, E) bool
 	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, E, IE], S, E) error
 }
+
+type eventerCallback[
+	K IKeyset,
+	S IState[K, ST],
+	ST IStatusEnum,
+	E IEvent[K, S, ST, IE],
+	IE IInnerEvent,
+] func(ctx context.Context, statusBefore ST, mutableState S, event E) error
 
 // Eventer is the inner state machine, independent of storage.
 type Eventer[
@@ -73,8 +82,14 @@ func (ee *Eventer[K, S, ST, E, IE]) ValidateEvent(event E) error {
 func (ee Eventer[K, S, ST, E, IE]) RunEvent(
 	ctx context.Context,
 	state S,
-	innerEvent E,
+	spec *EventSpec[K, S, ST, E, IE],
+	callbacks ...eventerCallback[K, S, ST, E, IE],
 ) error {
+
+	innerEvent, err := ee.prepareEvent(state, spec)
+	if err != nil {
+		return fmt.Errorf("prepare event: %w", err)
+	}
 
 	if err := ee.ValidateEvent(innerEvent); err != nil {
 		return fmt.Errorf("validating event %s: %w", innerEvent.ProtoReflect().Descriptor().FullName(), err)
@@ -86,8 +101,11 @@ func (ee Eventer[K, S, ST, E, IE]) RunEvent(
 	stateBefore := state.GetStatus()
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
-		"eventType":  typeKey,
-		"transition": fmt.Sprintf("%s -> ? : %s", stateBefore.ShortString(), typeKey),
+		"eventType": typeKey,
+		"transition": map[string]interface{}{
+			"from":  stateBefore.String(),
+			"event": typeKey,
+		},
 	})
 
 	log.Debug(ctx, "Begin Event")
@@ -103,14 +121,57 @@ func (ee Eventer[K, S, ST, E, IE]) RunEvent(
 	}
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
-		"transition": fmt.Sprintf("%s -> %s : %s", stateBefore, state.GetStatus().String(), typeKey),
+		"transition": map[string]string{
+			"from":  stateBefore.String(),
+			"to":    state.GetStatus().String(),
+			"event": typeKey,
+		},
 	})
 
+	if state.GetStatus() == 0 {
+		return fmt.Errorf("state machine transitioned to zero status")
+	}
+
 	log.Info(ctx, "Event Handled")
+
+	for _, callback := range callbacks {
+		if err := callback(ctx, stateBefore, state, innerEvent); err != nil {
+			return fmt.Errorf("callback: %w", err)
+		}
+	}
 
 	return nil
 }
 
 func (ee *Eventer[K, S, ST, E, IE]) Register(transition ITransition[K, S, ST, E, IE]) {
 	ee.Transitions = append(ee.Transitions, transition)
+}
+
+func (ee *Eventer[K, S, ST, E, IE]) prepareEvent(state S, spec *EventSpec[K, S, ST, E, IE]) (built E, err error) {
+
+	built = (*new(E)).ProtoReflect().New().Interface().(E)
+	if err := built.SetPSMEvent(spec.Event); err != nil {
+		return built, fmt.Errorf("set event: %w", err)
+	}
+	built.SetPSMKeys(spec.Keys)
+
+	eventMeta := built.PSMMetadata()
+	eventMeta.EventId = spec.EventID
+	eventMeta.Timestamp = timestamppb.Now()
+	eventMeta.Cause = spec.Cause
+
+	stateMeta := state.PSMMetadata()
+
+	eventMeta.Sequence = 0
+	if state.GetStatus() == 0 {
+		eventMeta.Sequence = 0
+		stateMeta.CreatedAt = eventMeta.Timestamp
+		stateMeta.UpdatedAt = eventMeta.Timestamp
+	} else {
+		eventMeta.Sequence = stateMeta.LastSequence + 1
+		stateMeta.LastSequence = eventMeta.Sequence
+		stateMeta.UpdatedAt = eventMeta.Timestamp
+		stateMeta.CreatedAt = eventMeta.Timestamp
+	}
+	return
 }

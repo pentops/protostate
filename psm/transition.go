@@ -17,8 +17,7 @@ type StateHookBaton[
 	IE IInnerEvent,
 ] interface {
 	SideEffect(outbox.OutboxMessage)
-	ChainEvent(*EventSpec[K, S, ST, E, IE])
-	DeriveEvent(IE)
+	ChainEvent(IE)
 	FullCause() E
 }
 
@@ -38,18 +37,12 @@ type TransitionData[
 	IE IInnerEvent,
 ] struct {
 	sideEffects []outbox.OutboxMessage
-	chainEvents []*EventSpec[K, S, ST, E, IE]
+	chainEvents []IE
 	causedBy    E
 }
 
-func (td *TransitionData[K, S, ST, E, IE]) ChainEvent(event *EventSpec[K, S, ST, E, IE]) {
-	td.chainEvents = append(td.chainEvents, event)
-}
-
-func (td *TransitionData[K, S, ST, E, IE]) DeriveEvent(inner IE) {
-	td.chainEvents = append(td.chainEvents, &EventSpec[K, S, ST, E, IE]{
-		Event: inner,
-	})
+func (td *TransitionData[K, S, ST, E, IE]) ChainEvent(inner IE) {
+	td.chainEvents = append(td.chainEvents, inner)
 }
 
 func (td *TransitionData[K, S, ST, E, IE]) SideEffect(msg outbox.OutboxMessage) {

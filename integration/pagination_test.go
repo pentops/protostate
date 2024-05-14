@@ -40,7 +40,7 @@ func TestPagination(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -59,8 +59,8 @@ func TestPagination(t *testing.T) {
 			if err != nil {
 				t.Fatal(err.Error())
 			}
-			a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-			a.Equal(tenantID, *stateOut.Keys.TenantId)
+			t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+			t.Equal(tenantID, *stateOut.Keys.TenantId)
 		}
 	})
 
@@ -146,7 +146,7 @@ func TestEventPagination(t *testing.T) {
 	}
 
 	fooID := uuid.NewString()
-	ss.StepC("CreateEvents", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("CreateEvents", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -293,18 +293,15 @@ func TestPageSize(t *testing.T) {
 			tt := time.Now()
 			fooID := uuid.NewString()
 
-			event1 := &testpb.FooPSMEventSpec{
-				EventID: uuid.NewString(),
-				Keys: &testpb.FooKeys{
-					TenantId: &tenantID,
-					FooId:    fooID,
-				},
-				Event: &testpb.FooEventType_Created{
-					Name:   "foo",
-					Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
-					Weight: ptr.To(10 + int64(ii)),
-				},
-			}
+			event1 := newFooEvent(&testpb.FooKeys{
+				TenantId: &tenantID,
+				FooId:    fooID,
+			}, &testpb.FooEventType_Created{
+				Name:   "foo",
+				Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),
+				Weight: ptr.To(10 + int64(ii)),
+			},
+			)
 			stateOut, err := sm.Transition(ctx, event1)
 			if err != nil {
 				t.Fatal(err.Error())

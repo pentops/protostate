@@ -293,7 +293,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "createdAt"},
+						{Field: "metadata.createdAt"},
 					},
 				},
 			}
@@ -338,7 +338,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "createdAt"},
+						{Field: "metadata.createdAt"},
 					},
 				},
 			}

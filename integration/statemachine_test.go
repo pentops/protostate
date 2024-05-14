@@ -45,17 +45,17 @@ func TestFooStateField(t *testing.T) {
 	fooID := uuid.NewString()
 	tenantID := uuid.NewString()
 
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
 		event := newFooCreatedEvent(fooID, tenantID, nil)
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-		a.Equal(tenantID, *stateOut.Keys.TenantId)
+		t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
-	ss.StepC("Update OK, Same Key", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Update OK, Same Key", func(ctx context.Context, t flowtest.Asserter) {
 		event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
 			u.Weight = ptr.To(int64(11))
 		})
@@ -63,11 +63,11 @@ func TestFooStateField(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-		a.Equal(tenantID, *stateOut.Keys.TenantId)
+		t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
-	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
 		event := &testpb.FooPSMEventSpec{
 			EventID: uuid.NewString(),
@@ -318,92 +318,6 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 
 }
 
-// Test that when a hook returns a duplicated event, the state machine will
-// return an error.
-func TestStateMachineIdempotencyChained(t *testing.T) {
-
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm := NewFooTestMachine(t, db)
-
-	tenantID := uuid.NewString()
-	fooID := uuid.NewString()
-	event1 := newFooCreatedEvent(fooID, tenantID, nil)
-
-	// set up a hook which returns this event, the tests can then play with it.
-	var autoHookEvent *testpb.FooPSMEventSpec
-	sm.From().Hook(testpb.FooPSMHook(func(
-		ctx context.Context,
-		tx sqrlx.Transaction,
-		baton testpb.FooPSMHookBaton,
-		state *testpb.FooState,
-		event *testpb.FooEventType_Updated,
-	) error {
-		if autoHookEvent == nil {
-			return nil
-		}
-		nextEvent := autoHookEvent
-		autoHookEvent = nil
-		baton.ChainEvent(nextEvent)
-		return nil
-	}))
-
-	t.Run("Create", func(t *testing.T) {
-		_, err = sm.Transition(ctx, event1)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-	})
-
-	updateTo2 := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
-		u.Name = "2"
-	})
-
-	t.Run("Update, with auto hook", func(t *testing.T) {
-		autoHookEvent = updateTo2
-
-		state, err := sm.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
-			u.Name = "1"
-		}))
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		// The return from the first transition should be "1"
-		if state.Name != "1" {
-			t.Fatalf("expected state name 1, got %s", state.Name)
-		}
-
-		// But the state of foo should be "2" from the hook
-		sm.AssertFooName(t, fooID, "2")
-	})
-
-	t.Run("Update, a new event, but same hook", func(t *testing.T) {
-		autoHookEvent = updateTo2 // Same as it was before
-
-		// a brand new event
-		_, err := sm.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
-			u.Name = "3"
-		}))
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if !errors.Is(err, psm.ErrDuplicateChainedEventID) {
-			t.Fatalf("expected duplicate chained event ID, got %v", err)
-		}
-
-		// But the state of foo should still be "2" from the earlier hook
-		sm.AssertFooName(t, fooID, "2")
-	})
-
-}
-
 func TestFooStateMachine(t *testing.T) {
 	ctx := context.Background()
 
@@ -515,10 +429,14 @@ func TestFooStateMachine(t *testing.T) {
 		if derivedEvent.Metadata.Cause == nil {
 			t.Fatalf("expected derived event to have cause")
 		}
-		if derivedEvent.Metadata.Cause.Actor != nil {
-			t.Fatalf("expected derived event not to have actor")
+		t.Log(protojson.Format(derivedEvent.Metadata.Cause))
+		causeEvent := derivedEvent.Metadata.Cause.GetPsmEvent()
+		if causeEvent == nil {
+			t.Fatalf("expected derived event to be caused by a PSM event")
 		}
-		// TODO: Assert Cause Fields
+		if causeEvent.EventId != event4.EventID {
+			t.Fatalf("expected derived event to be caused by event 4")
+		}
 	})
 
 	t.Run("List", func(t *testing.T) {

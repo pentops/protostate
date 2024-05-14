@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"k8s.io/utils/ptr"
 )
@@ -16,15 +17,15 @@ func newFooCreatedEvent(fooID, tenantID string, mod func(c *testpb.FooEventType_
 		Description: ptr.To("creation event for foo: " + fooID),
 		Weight:      &weight,
 	}
-	e := newFooEvent(fooID, tenantID, func(e *testpb.FooPSMEventSpec) {
-		e.Event = created
-	})
 
 	if mod != nil {
 		mod(created)
 	}
 
-	return e
+	return newFooEvent(&testpb.FooKeys{
+		FooId:    fooID,
+		TenantId: &tenantID,
+	}, created)
 }
 
 func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_Updated)) *testpb.FooPSMEventSpec {
@@ -35,26 +36,32 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_
 		Description: ptr.To("update event for foo: " + fooID),
 		Weight:      &weight,
 	}
-	e := newFooEvent(fooID, tenantID, func(e *testpb.FooPSMEventSpec) {
-		e.Event = updated
-	})
 
 	if mod != nil {
 		mod(updated)
 	}
 
-	return e
+	return newFooEvent(&testpb.FooKeys{
+		FooId:    fooID,
+		TenantId: &tenantID,
+	}, updated)
 }
 
-func newFooEvent(fooID, tenantID string, mod func(e *testpb.FooPSMEventSpec)) *testpb.FooPSMEventSpec {
+func newFooEvent(keys *testpb.FooKeys, et testpb.FooPSMEvent) *testpb.FooPSMEventSpec {
 	e := &testpb.FooPSMEventSpec{
 		EventID: uuid.NewString(),
-		Keys: &testpb.FooKeys{
-			FooId:    fooID,
-			TenantId: &tenantID,
+		Keys:    keys,
+		Cause: &psm_pb.Cause{
+			Type: &psm_pb.Cause_ExternalEvent{
+				ExternalEvent: &psm_pb.ExternalEventCause{
+					SystemName: "a",
+					EventName:  "b",
+				},
+			},
 		},
+		Event: et,
 	}
-	mod(e)
+
 	return e
 }
 
@@ -63,15 +70,14 @@ func newBarCreatedEvent(barID string, mod func(c *testpb.BarEventType_Created)) 
 		Name:  "bar",
 		Field: "event",
 	}
-	e := newBarEvent(barID, func(e *testpb.BarPSMEventSpec) {
-		e.Event = created
-	})
 
 	if mod != nil {
 		mod(created)
 	}
 
-	return e
+	return newBarEvent(barID, func(e *testpb.BarPSMEventSpec) {
+		e.Event = created
+	})
 }
 
 func newBarEvent(barID string, mod func(e *testpb.BarPSMEventSpec)) *testpb.BarPSMEventSpec {
@@ -79,6 +85,14 @@ func newBarEvent(barID string, mod func(e *testpb.BarPSMEventSpec)) *testpb.BarP
 		EventID: uuid.NewString(),
 		Keys: &testpb.BarKeys{
 			BarId: barID,
+		},
+		Cause: &psm_pb.Cause{
+			Type: &psm_pb.Cause_ExternalEvent{
+				ExternalEvent: &psm_pb.ExternalEventCause{
+					SystemName: "a",
+					EventName:  "b",
+				},
+			},
 		},
 	}
 	mod(e)

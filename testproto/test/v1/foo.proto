@@ -98,14 +98,6 @@ message FooState {
     field_identifier: "tsv_description"
   }];
 
-  google.protobuf.Timestamp created_at = 8 [(psm.list.v1.field).timestamp = {
-    filtering: {filterable: true},
-    sorting: {
-      sortable: true,
-      default_sort: true
-    }
-  }];
-
   FooCharacteristics characteristics = 9;
   repeated FooProfile profiles = 10;
 }
