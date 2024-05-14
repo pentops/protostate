@@ -80,7 +80,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 		}
 	}
 
-	ss.StepC("Create", func(ctx context.Context, a flowtest.Asserter) {
+	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
 		ti := 0
 		for tenant, fooIDs := range ids {
 			tkn := &token{
@@ -115,8 +115,8 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 				if err != nil {
 					t.Fatal(err.Error())
 				}
-				a.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
-				a.Equal(tenants[ti], *stateOut.Keys.TenantId)
+				t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+				t.Equal(tenants[ti], *stateOut.Keys.TenantId)
 			}
 
 			ti++

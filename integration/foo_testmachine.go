@@ -34,9 +34,8 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 	}
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
-		Do(testpb.FooPSMFunc(func(
+		Transition(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			tb testpb.FooPSMTransitionBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Created,
 		) error {
@@ -49,7 +48,6 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			state.Profiles = event.Profiles
 			return nil
 		}))
@@ -81,7 +79,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 			event *testpb.FooEventType_Updated,
 		) error {
 			if event.Delete {
-				baton.DeriveEvent(&testpb.FooEventType_Deleted{})
+				baton.ChainEvent(&testpb.FooEventType_Deleted{})
 			}
 			return nil
 		}))

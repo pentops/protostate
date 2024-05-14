@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"testing"
+	"time"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
@@ -27,7 +28,7 @@ func TestDefaultFiltering(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss := flowtest.NewStepper[*testing.T]("TestDefaultFiltering")
+	ss := flowtest.NewStepper[*testing.T](t.Name())
 	defer ss.RunSteps(t)
 
 	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
@@ -153,17 +154,17 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s (%s)", ii, state.Field, state.Metadata.CreatedAt.AsTime().Format(time.RFC3339Nano))
 		}
 
 		for ii, state := range res.Foos {
+			if *state.Keys.TenantId != tenantID1 {
+				t.Fatalf("expected tenant ID %s, got %s", tenantID1, state.Keys.TenantId)
+			}
 			if state.Characteristics.Weight != int64(15-ii) {
 				t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
 			}
 
-			if *state.Keys.TenantId != tenantID1 {
-				t.Fatalf("expected tenant ID %s, got %s", tenantID1, state.Keys.TenantId)
-			}
 		}
 
 		if res.Page != nil {

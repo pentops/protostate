@@ -49,9 +49,8 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	}))
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
-		Do(testpb.FooPSMFunc(func(
+		Transition(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			tb testpb.FooPSMTransitionBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Created,
 		) error {
@@ -64,7 +63,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.CreatedAt = tb.FullCause().Metadata.Timestamp
 			state.Profiles = event.Profiles
 			return nil
 		}))
@@ -96,15 +94,14 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			event *testpb.FooEventType_Updated,
 		) error {
 			if event.Delete {
-				baton.DeriveEvent(&testpb.FooEventType_Deleted{})
+				baton.ChainEvent(&testpb.FooEventType_Deleted{})
 			}
 			return nil
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Do(testpb.FooPSMFunc(func(
+		Transition(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			tb testpb.FooPSMTransitionBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Deleted,
 		) error {
@@ -139,9 +136,8 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 		Where(func(event testpb.BarPSMEvent) bool {
 			return true
 		}).
-		Do(testpb.BarPSMFunc(func(
+		Transition(testpb.BarPSMTransition(func(
 			ctx context.Context,
-			tb testpb.BarPSMTransitionBaton,
 			state *testpb.BarState,
 			event *testpb.BarEventType_Created,
 		) error {
