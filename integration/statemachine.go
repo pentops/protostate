@@ -49,14 +49,42 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	}))
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
-		Transition(testpb.FooPSMTransition(func(
+		OnEvent(testpb.FooPSMEventCreated).
+		SetStatus(testpb.FooStatus_ACTIVE).
+		Mutate(testpb.FooPSMTransition(func(
 			ctx context.Context,
+			data *testpb.FooStateData,
+			event *testpb.FooEventType_Created,
+		) error {
+			data.Name = event.Name
+			data.Field = event.Field
+			data.Description = event.Description
+			data.Characteristics = &testpb.FooCharacteristics{
+				Weight: event.GetWeight(),
+				Height: event.GetHeight(),
+				Length: event.GetLength(),
+			}
+			data.Profiles = event.Profiles
+			return nil
+		})).
+		Hook(testpb.FooPSMHook(func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton testpb.FooPSMHookBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Created,
 		) error {
-			state.Status = testpb.FooStatus_ACTIVE
-			state.Data = &testpb.FooStateData{}
-			data := state.Data
+			return nil
+		}))
+
+	sm.From(testpb.FooStatus_UNSPECIFIED).
+		OnEvent(testpb.FooPSMEventCreated).
+		SetStatus(testpb.FooStatus_ACTIVE).
+		Mutate(testpb.FooPSMTransition(func(
+			ctx context.Context,
+			data *testpb.FooStateData,
+			event *testpb.FooEventType_Created,
+		) error {
 			data.Name = event.Name
 			data.Field = event.Field
 			data.Description = event.Description
@@ -70,12 +98,12 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Transition(testpb.FooPSMTransition(func(
+		OnEvent(testpb.FooPSMEventUpdated).
+		Mutate(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			state *testpb.FooState,
+			data *testpb.FooStateData,
 			event *testpb.FooEventType_Updated,
 		) error {
-			data := state.Data
 			data.Field = event.Field
 			data.Name = event.Name
 			data.Description = event.Description
@@ -89,6 +117,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		}))
 
 	sm.From().
+		OnEvent(testpb.FooPSMEventUpdated).
 		Hook(testpb.FooPSMHook(func(
 			ctx context.Context,
 			tx sqrlx.Transaction,
@@ -103,14 +132,8 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Transition(testpb.FooPSMTransition(func(
-			ctx context.Context,
-			state *testpb.FooState,
-			event *testpb.FooEventType_Deleted,
-		) error {
-			state.Status = testpb.FooStatus_DELETED
-			return nil
-		}))
+		OnEvent(testpb.FooPSMEventDeleted).
+		SetStatus(testpb.FooStatus_DELETED)
 
 	return (*testpb.FooPSMDB)(sm.WithDB(db)), nil
 }
@@ -136,17 +159,13 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 	}
 
 	sm.From(testpb.BarStatus_UNSPECIFIED).
-		Where(func(event testpb.BarPSMEvent) bool {
-			return true
-		}).
-		Transition(testpb.BarPSMTransition(func(
+		OnEvent(testpb.BarPSMEventCreated).
+		SetStatus(testpb.BarStatus_ACTIVE).
+		Mutate(testpb.BarPSMTransition(func(
 			ctx context.Context,
-			state *testpb.BarState,
+			data *testpb.BarStateData,
 			event *testpb.BarEventType_Created,
 		) error {
-			state.Status = testpb.BarStatus_ACTIVE
-			state.Data = &testpb.BarStateData{}
-			data := state.Data
 			data.Name = event.Name
 			data.Field = event.Field
 			return nil

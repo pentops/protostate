@@ -96,6 +96,9 @@ func (msg *FooState) SetPSMKeys(inner *FooKeys) {
 }
 
 func (msg *FooState) PSMData() *FooStateData {
+	if msg.Data == nil {
+		msg.Data = &FooStateData{}
+	}
 	return msg.Data
 }
 
@@ -301,7 +304,7 @@ func NewFooPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) error) psm.PSMTransitionFunc[
+func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooStateData, SE) error) psm.PSMTransitionFunc[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum

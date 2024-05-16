@@ -34,36 +34,37 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 	}
 
 	sm.From(testpb.FooStatus_UNSPECIFIED).
-		Transition(testpb.FooPSMTransition(func(
+		OnEvent(testpb.FooPSMEventCreated).
+		SetStatus(testpb.FooStatus_ACTIVE).
+		Mutate(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			state *testpb.FooState,
+			state *testpb.FooStateData,
 			event *testpb.FooEventType_Created,
 		) error {
-			state.Status = testpb.FooStatus_ACTIVE
-			state.Data = &testpb.FooStateData{}
 
-			state.Data.Name = event.Name
-			state.Data.Field = event.Field
-			state.Data.Description = event.Description
-			state.Data.Characteristics = &testpb.FooCharacteristics{
+			state.Name = event.Name
+			state.Field = event.Field
+			state.Description = event.Description
+			state.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.Data.Profiles = event.Profiles
+			state.Profiles = event.Profiles
 			return nil
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Transition(testpb.FooPSMTransition(func(
+		OnEvent(testpb.FooPSMEventUpdated).
+		Mutate(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			state *testpb.FooState,
+			data *testpb.FooStateData,
 			event *testpb.FooEventType_Updated,
 		) error {
-			state.Data.Field = event.Field
-			state.Data.Name = event.Name
-			state.Data.Description = event.Description
-			state.Data.Characteristics = &testpb.FooCharacteristics{
+			data.Field = event.Field
+			data.Name = event.Name
+			data.Description = event.Description
+			data.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
@@ -73,6 +74,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 		}))
 
 	sm.From().
+		OnEvent(testpb.FooPSMEventUpdated).
 		Hook(testpb.FooPSMHook(func(
 			ctx context.Context,
 			tx sqrlx.Transaction,
@@ -87,14 +89,8 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Transition(testpb.FooPSMTransition(func(
-			ctx context.Context,
-			state *testpb.FooState,
-			event *testpb.FooEventType_Deleted,
-		) error {
-			state.Status = testpb.FooStatus_DELETED
-			return nil
-		}))
+		OnEvent(testpb.FooPSMEventDeleted).
+		SetStatus(testpb.FooStatus_DELETED)
 
 	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {

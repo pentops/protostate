@@ -157,6 +157,9 @@ func (ss PSMEntity) implementIState(g *protogen.GeneratedFile) {
 	g.P("}")
 	g.P()
 	g.P("func (msg *", stateMessage.GoIdent, ") PSMData() *", ss.state.dataField.Message.GoIdent, " {")
+	g.P("  if msg.", ss.state.dataField.GoName, " == nil {")
+	g.P("    msg.", ss.state.dataField.GoName, " = &", ss.state.dataField.Message.GoIdent, "{}")
+	g.P("  }")
 	g.P("  return msg.", ss.state.dataField.GoName)
 	g.P("}")
 }
@@ -263,7 +266,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 		"Transition[SE ", ss.eventName, "]",
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
-		"*", ss.state.message.GoIdent, ", SE) error) ", smTransitionFunc, "[")
+		"*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smTransitionFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
 	g.P("return ", smTransitionFunc, "[")
