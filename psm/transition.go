@@ -6,7 +6,6 @@ import (
 
 	"github.com/pentops/outbox.pg.go/outbox"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/proto"
 )
 
 type StateHookBaton[
@@ -78,85 +77,6 @@ type IStateHookHandler[
 ] interface {
 	handlesEvent(E) bool
 	runStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, E) error
-}
-
-type ICombinedHandler[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] interface {
-	ITransitionHandler[K, S, ST, SD, E, IE]
-	IStateHookHandler[K, S, ST, SD, E, IE]
-}
-
-// PSMCombinedFunc is returned by the generated FooPSMFunc, it exists for
-// compatibility with the combined Do func method.
-type PSMCombinedFunc[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-	SE IInnerEvent,
-] func(context.Context, TransitionBaton[K, S, ST, SD, E, IE], S, SE) error
-
-// RunTransition implements TransitionHandler, where SE is the specific event
-// cast from the interface IE provided in the call
-func (f PSMCombinedFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
-	ctx context.Context,
-	state S,
-	event E,
-) error {
-
-	// Creates a baton to *discard* the chains and side effects, they will be
-	// called later when the transition is used in as state hook
-	baton := &TransitionData[K, S, ST, SD, E, IE]{
-		causedBy: event,
-	}
-	// Cast the interface ET IInnerEvent to the specific type of event which
-	// this func handles
-	innerType := event.UnwrapPSMEvent()
-	asType, ok := any(innerType).(SE)
-	if !ok {
-
-		name := asType.ProtoReflect().Descriptor().FullName()
-
-		return fmt.Errorf("unexpected event type (b): %s [IE] does not match [SE] (%T)", name, new(SE))
-	}
-	return f(ctx, baton, state, asType)
-}
-
-func (f PSMCombinedFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
-	ctx context.Context,
-	tx sqrlx.Transaction,
-	baton StateHookBaton[K, S, ST, SD, E, IE],
-	state S,
-	event E,
-) error {
-	// Cast the interface ET IInnerEvent to the specific type of event which
-	// this func handles
-	innerType := event.UnwrapPSMEvent()
-	asType, ok := any(innerType).(SE)
-	if !ok {
-		name := innerType.ProtoReflect().Descriptor().FullName()
-
-		return fmt.Errorf("unexpected event type (a): %s [IE] does not match [SE] (%T)", name, new(SE))
-	}
-	stateClone := proto.Clone(state).(S)
-	// uses clone as hook should not modify the state
-	return f(ctx, baton, stateClone, asType)
-}
-
-func (f PSMCombinedFunc[K, S, ST, SD, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint:unused // used when implementing ITransitionHandler
-	// Check if the parameter passed as ET (IInnerEvent) is the specific type
-	// (IE, also IInnerEvent, but typed) which this transition handles
-	event := outerEvent.UnwrapPSMEvent()
-	_, ok := any(event).(SE)
-	return ok
 }
 
 type PSMTransitionFunc[
@@ -356,31 +276,6 @@ func (tb StateMachineTransitionBuilder[K, S, ST, SD, E, IE]) Where(filter func(e
 		return filter(innerEvent)
 	}
 	tb.eventFilter.customFilters = append(tb.customFilters, innerFilter)
-	return tb
-}
-
-// Do is a legacy method which combines a Transition and a Hook. The function
-// will run twice, the first run will transition the state machine and discard
-// the side effects, the second discards state transitions and runs only side
-// effects. Use Transition and Hook instead.
-func (tb StateMachineTransitionBuilder[K, S, ST, SD, E, IE]) Do(
-	handler ICombinedHandler[K, S, ST, SD, E, IE],
-) StateMachineTransitionBuilder[K, S, ST, SD, E, IE] {
-
-	typedTransition := &TransitionWrapper[K, S, ST, SD, E, IE]{
-		handler:     handler,
-		eventFilter: tb.eventFilter,
-	}
-
-	tb.sm.Eventer.Register(typedTransition)
-
-	typedHook := &HookWrapper[K, S, ST, SD, E, IE]{
-		handler:     handler,
-		eventFilter: tb.eventFilter,
-	}
-
-	tb.sm.AddHook(typedHook)
-
 	return tb
 }
 
