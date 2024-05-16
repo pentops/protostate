@@ -13,35 +13,39 @@ import (
 // PSM BarPSM
 
 type BarPSM = psm.StateMachine[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 type BarPSMDB = psm.DBStateMachine[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 type BarPSMEventer = psm.Eventer[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 type BarPSMEventSpec = psm.EventSpec[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 type BarPSMEventKey = string
@@ -85,6 +89,17 @@ func (msg *BarState) PSMKeys() *BarKeys {
 
 func (msg *BarState) SetPSMKeys(inner *BarKeys) {
 	msg.Keys = inner
+}
+
+func (msg *BarState) PSMData() *BarStateData {
+	return msg.Data
+}
+
+// EXTEND BarStateData with the psm.IStateData interface
+
+// PSMIsSet is a helper for != nil, which does not work with generic parameters
+func (msg *BarStateData) PSMIsSet() bool {
+	return msg != nil
 }
 
 // EXTEND BarEvent with the psm.IEvent interface
@@ -195,11 +210,12 @@ func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 }
 
 type BarPSMTableSpec = psm.PSMTableSpec[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 var DefaultBarPSMTableSpec = BarPSMTableSpec{
@@ -243,117 +259,131 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 }
 
 func DefaultBarPSMConfig() *psm.StateMachineConfig[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ] {
 	return psm.NewStateMachineConfig[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
 	](DefaultBarPSMTableSpec)
 }
 
 func NewBarPSM(config *psm.StateMachineConfig[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]) (*BarPSM, error) {
 	return psm.NewStateMachine[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
 	](config)
 }
 
 type BarPSMTransitionBaton = psm.TransitionBaton[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, *BarState, SE) error) psm.PSMCombinedFunc[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
 ] {
 	return psm.PSMCombinedFunc[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
 	](cb)
 }
 func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) error) psm.PSMTransitionFunc[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
 ] {
 	return psm.PSMTransitionFunc[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
 	](cb)
 }
 
 type BarPSMHookBaton = psm.StateHookBaton[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ]
 
 func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarPSMHookBaton, *BarState, SE) error) psm.PSMHookFunc[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
 ] {
 	return psm.PSMHookFunc[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
 	](cb)
 }
 func BarPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *BarState, *BarEvent) error) psm.GeneralStateHook[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
 ] {
 	return psm.GeneralStateHook[
-		*BarKeys,    // implements psm.IKeyset
-		*BarState,   // implements psm.IState
-		BarStatus,   // implements psm.IStatusEnum
-		*BarEvent,   // implements psm.IEvent
-		BarPSMEvent, // implements psm.IInnerEvent
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
 	](cb)
 }

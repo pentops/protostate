@@ -67,6 +67,8 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 	g.P()
 	ss.implementIState(g)
 	g.P()
+	ss.implementIStateData(g)
+	g.P()
 	ss.implementIEvent(g)
 	g.P()
 	ss.implementIInnerEvent(g)
@@ -76,11 +78,12 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 	ss.transitionFuncTypes(g)
 }
 
-// prints the generic type parameters K, S, ST, E, IE
+// prints the generic type parameters K, S, ST, SD, E, IE
 func (ss PSMEntity) writeBaseTypes(g *protogen.GeneratedFile) {
 	g.P("*", ss.keyMessage.GoIdent.GoName, ", // implements psm.IKeyset")
 	g.P("*", ss.state.message.GoIdent.GoName, ", // implements psm.IState")
 	g.P(ss.state.statusField.Enum.GoIdent.GoName, ", // implements psm.IStatusEnum")
+	g.P("*", ss.state.dataField.Message.GoIdent.GoName, ", // implements psm.IStateData")
 	g.P("*", ss.event.message.GoIdent.GoName, ", // implements psm.IEvent")
 	g.P(ss.eventName, ", // implements psm.IInnerEvent")
 }
@@ -128,53 +131,65 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMFullName() string {")
 	g.P("  return \"", ss.keyMessage.Desc.ParentFile().Package(), ".", ss.specifiedName, "\"")
 	g.P("}")
-
 }
 
 // implements psm.IState for the state message
 func (ss PSMEntity) implementIState(g *protogen.GeneratedFile) {
-	g.P("// EXTEND ", ss.state.message.GoIdent, " with the psm.IState interface")
-	ss.implementIPSMMessage(g, ss.state.message)
+	stateMessage := ss.state.message
+	g.P("// EXTEND ", stateMessage.GoIdent, " with the psm.IState interface")
+	ss.implementIPSMMessage(g, stateMessage)
 	g.P()
-	g.P("func (msg *", ss.state.message.GoIdent, ") PSMMetadata() *", psmStateMetadataStruct, " {")
+	g.P("func (msg *", stateMessage.GoIdent, ") PSMMetadata() *", psmStateMetadataStruct, " {")
 	g.P("  if msg.", ss.state.metadataField.GoName, " == nil {")
 	g.P("    msg.", ss.state.metadataField.GoName, " = &", psmStateMetadataStruct, "{}")
 	g.P("  }")
 	g.P("  return msg.", ss.state.metadataField.GoName)
 	g.P("}")
 	g.P()
-	g.P("func (msg *", ss.state.message.GoIdent, ") PSMKeys() *", ss.keyMessage.GoIdent, " {")
+	g.P("func (msg *", stateMessage.GoIdent, ") PSMKeys() *", ss.keyMessage.GoIdent, " {")
 	g.P("  return msg.", ss.state.keyField.GoName)
 	g.P("}")
 	g.P()
-	g.P("func (msg *", ss.state.message.GoIdent, ") SetPSMKeys(inner *", ss.keyMessage.GoIdent, ") {")
+	g.P("func (msg *", stateMessage.GoIdent, ") SetPSMKeys(inner *", ss.keyMessage.GoIdent, ") {")
 	g.P("  msg.", ss.state.keyField.GoName, " = inner")
 	g.P("}")
+	g.P()
+	g.P("func (msg *", stateMessage.GoIdent, ") PSMData() *", ss.state.dataField.Message.GoIdent, " {")
+	g.P("  return msg.", ss.state.dataField.GoName)
+	g.P("}")
+}
+
+// implements psm.IStateData for the key message
+func (ss PSMEntity) implementIStateData(g *protogen.GeneratedFile) {
+	dataMessage := ss.state.dataField.Message
+	g.P("// EXTEND ", dataMessage.GoIdent, " with the psm.IStateData interface")
+	ss.implementIPSMMessage(g, dataMessage)
 }
 
 // implements psm.IEvent for the event message
 func (ss PSMEntity) implementIEvent(g *protogen.GeneratedFile) {
-	g.P("// EXTEND ", ss.event.message.GoIdent, " with the psm.IEvent interface")
+	eventMessage := ss.event.message
+	g.P("// EXTEND ", eventMessage.GoIdent, " with the psm.IEvent interface")
 	g.P()
-	ss.implementIPSMMessage(g, ss.event.message)
+	ss.implementIPSMMessage(g, eventMessage)
 	g.P()
-	g.P("func (msg *", ss.event.message.GoIdent, ") PSMMetadata() *", psmEventMetadataStruct, " {")
+	g.P("func (msg *", eventMessage.GoIdent, ") PSMMetadata() *", psmEventMetadataStruct, " {")
 	g.P("  if msg.", ss.event.metadataField.GoName, " == nil {")
 	g.P("    msg.", ss.event.metadataField.GoName, " = &", psmEventMetadataStruct, "{}")
 	g.P("  }")
 	g.P("  return msg.", ss.event.metadataField.GoName)
 	g.P("}")
 	g.P()
-	g.P("func (msg *", ss.event.message.GoIdent, ") PSMKeys() *", ss.keyMessage.GoIdent, " {")
+	g.P("func (msg *", eventMessage.GoIdent, ") PSMKeys() *", ss.keyMessage.GoIdent, " {")
 	g.P("  return msg.", ss.event.keyField.GoName)
 	g.P("}")
 	g.P()
-	g.P("func (msg *", ss.event.message.GoIdent, ") SetPSMKeys(inner *", ss.keyMessage.GoIdent, ") {")
+	g.P("func (msg *", eventMessage.GoIdent, ") SetPSMKeys(inner *", ss.keyMessage.GoIdent, ") {")
 	g.P("  msg.", ss.event.keyField.GoName, " = inner")
 	g.P("}")
 	g.P()
 	g.P("// PSMEventKey returns the ", ss.eventName, "PSMEventKey for the event, implementing psm.IEvent")
-	g.P("func (msg *", ss.event.message.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
+	g.P("func (msg *", eventMessage.GoIdent, ") PSMEventKey() ", ss.namePrefix, "PSMEventKey {")
 	g.P("   tt := msg.UnwrapPSMEvent()")
 	g.P("   if tt == nil {")
 	g.P("     return ", ss.namePrefix, "PSMEventNil")
@@ -183,7 +198,7 @@ func (ss PSMEntity) implementIEvent(g *protogen.GeneratedFile) {
 	g.P("}")
 	g.P()
 	g.P("// UnwrapPSMEvent implements psm.IEvent, returning the inner event message")
-	g.P("func (msg *", ss.event.message.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
+	g.P("func (msg *", eventMessage.GoIdent, ") UnwrapPSMEvent() ", ss.eventName, " {")
 	g.P("   if msg == nil {")
 	g.P("     return nil")
 	g.P("   }")

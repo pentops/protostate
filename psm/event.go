@@ -9,9 +9,10 @@ import (
 
 type EventSpec[
 	K IKeyset,
-	S IState[K, ST],
+	S IState[K, ST, SD],
 	ST IStatusEnum,
-	E IEvent[K, S, ST, IE],
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
 	// Keys must be set, to identify the state machine.
@@ -30,7 +31,7 @@ type EventSpec[
 	Timestamp time.Time
 }
 
-func (es EventSpec[K, S, ST, E, IE]) validateIncomming() error {
+func (es EventSpec[K, S, ST, SD, E, IE]) validateIncomming() error {
 	if es.EventID == "" {
 		return fmt.Errorf("EventSpec.EventID must be set")
 	}
