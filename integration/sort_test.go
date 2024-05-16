@@ -55,7 +55,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{Field: "characteristics.weight"},
+					{Field: "data.characteristics.weight"},
 				},
 			},
 		}
@@ -71,12 +71,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(10+ii) {
-				t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+			if state.Data.Characteristics.Weight != int64(10+ii) {
+				t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 			}
 
 			if *state.Keys.TenantId != tenantID1 {
@@ -106,7 +106,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{Field: "characteristics.weight"},
+					{Field: "data.characteristics.weight"},
 				},
 			},
 		}
@@ -122,12 +122,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(15+ii) {
-				t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+			if state.Data.Characteristics.Weight != int64(15+ii) {
+				t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 			}
 
 			if *state.Keys.TenantId != tenantID1 {
@@ -178,7 +178,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{Field: "characteristics.weight"},
+					{Field: "data.characteristics.weight"},
 				},
 			},
 		}
@@ -194,12 +194,12 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(10+ii) {
-				t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+			if state.Data.Characteristics.Weight != int64(10+ii) {
+				t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 			}
 		}
 
@@ -225,7 +225,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 			},
 			Query: &psml_pb.QueryRequest{
 				Sorts: []*psml_pb.Sort{
-					{Field: "characteristics.weight"},
+					{Field: "data.characteristics.weight"},
 				},
 			},
 		}
@@ -241,12 +241,12 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		for ii, state := range res.Foos {
-			if state.Characteristics.Weight != int64(15+ii) {
-				t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+			if state.Data.Characteristics.Weight != int64(15+ii) {
+				t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 			}
 		}
 
@@ -309,12 +309,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(10+ii) {
-					t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(10+ii) {
+					t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -354,12 +354,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(15+ii) {
-					t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(15+ii) {
+					t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -383,7 +383,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "characteristics.weight"},
+						{Field: "data.characteristics.weight"},
 					},
 				},
 			}
@@ -399,12 +399,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(10+ii) {
-					t.Fatalf("expected weight %d, got %d", 10+ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(10+ii) {
+					t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -428,7 +428,7 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "characteristics.weight"},
+						{Field: "data.characteristics.weight"},
 					},
 				},
 			}
@@ -444,12 +444,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(15+ii) {
-					t.Fatalf("expected weight %d, got %d", 15+ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(15+ii) {
+					t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -473,8 +473,8 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "characteristics.length"},
-						{Field: "characteristics.weight"},
+						{Field: "data.characteristics.length"},
+						{Field: "data.characteristics.weight"},
 					},
 				},
 			}
@@ -490,16 +490,16 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			if res.Foos[0].Characteristics.Weight != int64(10) {
-				t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Characteristics.Weight)
+			if res.Foos[0].Data.Characteristics.Weight != int64(10) {
+				t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Data.Characteristics.Weight)
 			}
 
 			for _, state := range res.Foos {
-				if state.Characteristics.Weight%2 != 0 {
-					t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight%2 != 0 {
+					t.Fatalf("expected even number weight, got %d", state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -523,8 +523,8 @@ func TestDynamicSorting(t *testing.T) {
 				},
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
-						{Field: "characteristics.length"},
-						{Field: "characteristics.weight"},
+						{Field: "data.characteristics.length"},
+						{Field: "data.characteristics.weight"},
 					},
 				},
 			}
@@ -540,16 +540,16 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			if res.Foos[0].Characteristics.Weight != int64(20) {
-				t.Fatalf("expected list to start with weight %d, got %d", 20, res.Foos[0].Characteristics.Weight)
+			if res.Foos[0].Data.Characteristics.Weight != int64(20) {
+				t.Fatalf("expected list to start with weight %d, got %d", 20, res.Foos[0].Data.Characteristics.Weight)
 			}
 
 			for _, state := range res.Foos {
-				if state.Characteristics.Weight%2 != 0 {
-					t.Fatalf("expected even number weight, got %d", state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight%2 != 0 {
+					t.Fatalf("expected even number weight, got %d", state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -574,7 +574,7 @@ func TestDynamicSorting(t *testing.T) {
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
 						{
-							Field:      "characteristics.weight",
+							Field:      "data.characteristics.weight",
 							Descending: true,
 						},
 					},
@@ -592,12 +592,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(39-ii) {
-					t.Fatalf("expected weight %d, got %d", 39-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(39-ii) {
+					t.Fatalf("expected weight %d, got %d", 39-ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -622,7 +622,7 @@ func TestDynamicSorting(t *testing.T) {
 				Query: &psml_pb.QueryRequest{
 					Sorts: []*psml_pb.Sort{
 						{
-							Field:      "characteristics.weight",
+							Field:      "data.characteristics.weight",
 							Descending: true,
 						},
 					},
@@ -640,12 +640,12 @@ func TestDynamicSorting(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(34-ii) {
-					t.Fatalf("expected weight %d, got %d", 34-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(34-ii) {
+					t.Fatalf("expected weight %d, got %d", 34-ii, state.Data.Characteristics.Weight)
 				}
 			}
 

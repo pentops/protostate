@@ -47,7 +47,7 @@ func TestDynamicSearching(t *testing.T) {
 				Query: &psml_pb.QueryRequest{
 					Searches: []*psml_pb.Search{
 						{
-							Field: "field",
+							Field: "data.field",
 							Value: "weighted 30",
 						},
 					},
@@ -65,12 +65,12 @@ func TestDynamicSearching(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(30-ii) {
-					t.Fatalf("expected weight %d, got %d", 30-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(30-ii) {
+					t.Fatalf("expected weight %d, got %d", 30-ii, state.Data.Characteristics.Weight)
 				}
 			}
 

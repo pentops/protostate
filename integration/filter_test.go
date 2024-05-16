@@ -71,7 +71,7 @@ func TestDefaultFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for _, state := range res.Foos {
@@ -129,7 +129,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 					{
 						Type: &psml_pb.Filter_Field{
 							Field: &psml_pb.Field{
-								Name: "characteristics.weight",
+								Name: "data.characteristics.weight",
 								Type: &psml_pb.Field_Range{
 									Range: &psml_pb.Range{
 										Min: "12",
@@ -154,15 +154,15 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s (%s)", ii, state.Field, state.Metadata.CreatedAt.AsTime().Format(time.RFC3339Nano))
+			t.Logf("%d: %s (%s)", ii, state.Data.Field, state.Metadata.CreatedAt.AsTime().Format(time.RFC3339Nano))
 		}
 
 		for ii, state := range res.Foos {
 			if *state.Keys.TenantId != tenantID1 {
 				t.Fatalf("expected tenant ID %s, got %s", tenantID1, state.Keys.TenantId)
 			}
-			if state.Characteristics.Weight != int64(15-ii) {
-				t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+			if state.Data.Characteristics.Weight != int64(15-ii) {
+				t.Fatalf("expected weight %d, got %d", 15-ii, state.Data.Characteristics.Weight)
 			}
 
 		}
@@ -207,7 +207,7 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &psml_pb.Filter_Field{
 								Field: &psml_pb.Field{
-									Name: "characteristics.weight",
+									Name: "data.characteristics.weight",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Min: "12",
@@ -232,12 +232,12 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(15-ii) {
-					t.Fatalf("expected weight %d, got %d", 15-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(15-ii) {
+					t.Fatalf("expected weight %d, got %d", 15-ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -258,7 +258,7 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &psml_pb.Filter_Field{
 								Field: &psml_pb.Field{
-									Name: "characteristics.weight",
+									Name: "data.characteristics.weight",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Min: "12",
@@ -282,12 +282,12 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for _, state := range res.Foos {
-				if state.Characteristics.Weight < int64(12) {
-					t.Fatalf("expected weights greater than or equal to %d, got %d", 12, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight < int64(12) {
+					t.Fatalf("expected weights greater than or equal to %d, got %d", 12, state.Data.Characteristics.Weight)
 				}
 			}
 		})
@@ -304,7 +304,7 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &psml_pb.Filter_Field{
 								Field: &psml_pb.Field{
-									Name: "characteristics.weight",
+									Name: "data.characteristics.weight",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Max: "15",
@@ -328,12 +328,12 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for _, state := range res.Foos {
-				if state.Characteristics.Weight > int64(15) {
-					t.Fatalf("expected weight less than or equal to %d, got %d", 15, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight > int64(15) {
+					t.Fatalf("expected weight less than or equal to %d, got %d", 15, state.Data.Characteristics.Weight)
 				}
 			}
 		})
@@ -355,7 +355,7 @@ func TestDynamicFiltering(t *testing.T) {
 										{
 											Type: &psml_pb.Filter_Field{
 												Field: &psml_pb.Field{
-													Name: "characteristics.weight",
+													Name: "data.characteristics.weight",
 													Type: &psml_pb.Field_Range{
 														Range: &psml_pb.Range{
 															Min: "12",
@@ -368,7 +368,7 @@ func TestDynamicFiltering(t *testing.T) {
 										{
 											Type: &psml_pb.Filter_Field{
 												Field: &psml_pb.Field{
-													Name: "characteristics.height",
+													Name: "data.characteristics.height",
 													Type: &psml_pb.Field_Range{
 														Range: &psml_pb.Range{
 															Min: "16",
@@ -393,7 +393,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			if len(res.Foos) != 10 {
@@ -401,14 +401,14 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos[:3] {
-				if state.Characteristics.Weight != int64(44-ii) {
-					t.Fatalf("expected weight %d, got %d", 44-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(44-ii) {
+					t.Fatalf("expected weight %d, got %d", 44-ii, state.Data.Characteristics.Weight)
 				}
 			}
 
 			for ii, state := range res.Foos[3:] {
-				if state.Characteristics.Weight != int64(20-ii) {
-					t.Fatalf("expected weight %d, got %d", 20-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(20-ii) {
+					t.Fatalf("expected weight %d, got %d", 20-ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -439,7 +439,7 @@ func TestDynamicFiltering(t *testing.T) {
 										{
 											Type: &psml_pb.Filter_Field{
 												Field: &psml_pb.Field{
-													Name: "characteristics.weight",
+													Name: "data.characteristics.weight",
 													Type: &psml_pb.Field_Range{
 														Range: &psml_pb.Range{
 															Min: "12",
@@ -452,7 +452,7 @@ func TestDynamicFiltering(t *testing.T) {
 										{
 											Type: &psml_pb.Filter_Field{
 												Field: &psml_pb.Field{
-													Name: "characteristics.height",
+													Name: "data.characteristics.height",
 													Type: &psml_pb.Field_Range{
 														Range: &psml_pb.Range{
 															Min: "16",
@@ -477,7 +477,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			if len(res.Foos) != 2 {
@@ -485,8 +485,8 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				if state.Characteristics.Weight != int64(13-ii) {
-					t.Fatalf("expected weight %d, got %d", 13-ii, state.Characteristics.Weight)
+				if state.Data.Characteristics.Weight != int64(13-ii) {
+					t.Fatalf("expected weight %d, got %d", 13-ii, state.Data.Characteristics.Weight)
 				}
 			}
 
@@ -559,7 +559,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for _, state := range res.Foos {
@@ -601,7 +601,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Field)
+				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
 			for _, state := range res.Foos {
@@ -652,7 +652,7 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &psml_pb.Filter_Field{
 								Field: &psml_pb.Field{
-									Name: "profiles.place",
+									Name: "data.profiles.place",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Min: "15",
@@ -673,7 +673,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Profiles)
+				t.Logf("%d: %s", ii, state.Data.Profiles)
 			}
 
 			if len(res.Foos) != 5 {
@@ -682,7 +682,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 			for _, state := range res.Foos {
 				matched := false
-				for _, profile := range state.Profiles {
+				for _, profile := range state.Data.Profiles {
 					if profile.Place >= 17 && profile.Place <= 21 {
 						matched = true
 						break
@@ -717,7 +717,7 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &psml_pb.Filter_Field{
 								Field: &psml_pb.Field{
-									Name: "profiles.place",
+									Name: "data.profiles.place",
 									Type: &psml_pb.Field_Range{
 										Range: &psml_pb.Range{
 											Min: "15",
@@ -738,7 +738,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Profiles)
+				t.Logf("%d: %s", ii, state.Data.Profiles)
 			}
 
 			if len(res.Foos) != 2 {
@@ -747,7 +747,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 			for _, state := range res.Foos {
 				matched := false
-				for _, profile := range state.Profiles {
+				for _, profile := range state.Data.Profiles {
 					if profile.Place >= 15 && profile.Place <= 16 {
 						matched = true
 						break

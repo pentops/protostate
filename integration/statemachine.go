@@ -29,7 +29,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		event *testpb.FooEvent,
 	) error {
 
-		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
+		if state.Data.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
 			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
 			if err != nil {
 				return err
@@ -38,9 +38,9 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		}
 
 		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
-			Set("weight", state.Characteristics.Weight).
-			Set("height", state.Characteristics.Height).
-			Set("length", state.Characteristics.Length))
+			Set("weight", state.Data.Characteristics.Weight).
+			Set("height", state.Data.Characteristics.Height).
+			Set("length", state.Data.Characteristics.Length))
 		if err != nil {
 			return err
 		}
@@ -55,15 +55,17 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			event *testpb.FooEventType_Created,
 		) error {
 			state.Status = testpb.FooStatus_ACTIVE
-			state.Name = event.Name
-			state.Field = event.Field
-			state.Description = event.Description
-			state.Characteristics = &testpb.FooCharacteristics{
+			state.Data = &testpb.FooStateData{}
+			data := state.Data
+			data.Name = event.Name
+			data.Field = event.Field
+			data.Description = event.Description
+			data.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.Profiles = event.Profiles
+			data.Profiles = event.Profiles
 			return nil
 		}))
 
@@ -73,10 +75,11 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			state *testpb.FooState,
 			event *testpb.FooEventType_Updated,
 		) error {
-			state.Field = event.Field
-			state.Name = event.Name
-			state.Description = event.Description
-			state.Characteristics = &testpb.FooCharacteristics{
+			data := state.Data
+			data.Field = event.Field
+			data.Name = event.Name
+			data.Description = event.Description
+			data.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
@@ -142,8 +145,10 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 			event *testpb.BarEventType_Created,
 		) error {
 			state.Status = testpb.BarStatus_ACTIVE
-			state.Name = event.Name
-			state.Field = event.Field
+			state.Data = &testpb.BarStateData{}
+			data := state.Data
+			data.Name = event.Name
+			data.Field = event.Field
 			return nil
 		}))
 
