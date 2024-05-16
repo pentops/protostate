@@ -30,9 +30,10 @@ var ErrDuplicateChainedEventID = errors.New("duplicate chained event ID")
 // The generated default is called DefaultFooPSMTableSpec
 type PSMTableSpec[
 	K IKeyset,
-	S IState[K, ST], // Outer State Entity
+	S IState[K, ST, SD], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[K, S, ST, IE], // Event Wrapper, with IDs and Metadata
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
 	// Primary Key derives the *State* primary key, and thus event foreign key
@@ -76,7 +77,7 @@ func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
 
 // StateTableSpec derives the Query spec table elements from the StateMachine
 // specs. The Query spec is a subset of the TableSpec
-func (spec PSMTableSpec[K, S, ST, E, IE]) StateTableSpec() QueryTableSpec {
+func (spec PSMTableSpec[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 	return QueryTableSpec{
 		State: EntityTableSpec{
 			TableName:    spec.State.TableName,
@@ -93,7 +94,7 @@ func (spec PSMTableSpec[K, S, ST, E, IE]) StateTableSpec() QueryTableSpec {
 	}
 }
 
-func (spec PSMTableSpec[K, S, ST, E, IE]) Validate() error {
+func (spec PSMTableSpec[K, S, ST, SD, E, IE]) Validate() error {
 	if spec.PrimaryKey == nil {
 		return fmt.Errorf("missing PrimaryKey func")
 	}
@@ -140,48 +141,50 @@ type SystemActor interface {
 // with overrides for table configuration.
 type StateMachine[
 	K IKeyset,
-	S IState[K, ST], // Outer State Entity
+	S IState[K, ST, SD], // Outer State Entity
 	ST IStatusEnum, // Status Enum in State Entity
-	E IEvent[K, S, ST, IE], // Event Wrapper, with IDs and Metadata
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	spec PSMTableSpec[K, S, ST, E, IE]
-	*Eventer[K, S, ST, E, IE]
+	spec PSMTableSpec[K, S, ST, SD, E, IE]
+	*Eventer[K, S, ST, SD, E, IE]
 	SystemActor SystemActor
 
-	hooks []IStateHook[K, S, ST, E, IE]
+	hooks []IStateHook[K, S, ST, SD, E, IE]
 }
 
 func NewStateMachine[
 	K IKeyset,
-	S IState[K, ST],
+	S IState[K, ST, SD],
 	ST IStatusEnum,
-	E IEvent[K, S, ST, IE],
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ](
-	cb *StateMachineConfig[K, S, ST, E, IE],
-) (*StateMachine[K, S, ST, E, IE], error) {
+	cb *StateMachineConfig[K, S, ST, SD, E, IE],
+) (*StateMachine[K, S, ST, SD, E, IE], error) {
 
 	if err := cb.spec.Validate(); err != nil {
 		return nil, err
 	}
 
-	ee := &Eventer[K, S, ST, E, IE]{}
+	ee := &Eventer[K, S, ST, SD, E, IE]{}
 
-	return &StateMachine[K, S, ST, E, IE]{
+	return &StateMachine[K, S, ST, SD, E, IE]{
 		spec:        cb.spec,
 		Eventer:     ee,
 		SystemActor: cb.systemActor,
 	}, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) AddHook(hook IStateHook[K, S, ST, E, IE]) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) AddHook(hook IStateHook[K, S, ST, SD, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) FindHooks(status ST, event E) []IStateHook[K, S, ST, E, IE] {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) FindHooks(status ST, event E) []IStateHook[K, S, ST, SD, E, IE] {
 
-	hooks := []IStateHook[K, S, ST, E, IE]{}
+	hooks := []IStateHook[K, S, ST, SD, E, IE]{}
 
 	for _, hook := range sm.hooks {
 		if hook.Matches(status, event) {
@@ -192,11 +195,11 @@ func (sm *StateMachine[K, S, ST, E, IE]) FindHooks(status ST, event E) []IStateH
 	return hooks
 }
 
-func (sm StateMachine[K, S, ST, E, IE]) StateTableSpec() QueryTableSpec {
+func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 	return sm.spec.StateTableSpec()
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
 	state := (*new(S)).ProtoReflect().New().Interface().(S)
 
 	primaryKey, err := sm.spec.PrimaryKey(keys)
@@ -235,13 +238,13 @@ func (sm *StateMachine[K, S, ST, E, IE]) getCurrentState(ctx context.Context, tx
 	return state, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) storeCallback(tx sqrlx.Transaction) eventerCallback[K, S, ST, E, IE] {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) storeCallback(tx sqrlx.Transaction) eventerCallback[K, S, ST, SD, E, IE] {
 	return func(ctx context.Context, statusBefore ST, state S, event E) error {
 		return sm.store(ctx, tx, state, event)
 	}
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) store(
+func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	state S,
@@ -302,7 +305,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) store(
 	return nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) eventQuery(ctx context.Context, tx sqrlx.Transaction, eventID string, keys K) (*sq.SelectBuilder, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) eventQuery(ctx context.Context, tx sqrlx.Transaction, eventID string, keys K) (*sq.SelectBuilder, error) {
 	primaryKey, err := sm.spec.EventPrimaryKey(eventID, keys)
 	if err != nil {
 		return nil, fmt.Errorf("primary key: %w", err)
@@ -321,7 +324,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) eventQuery(ctx context.Context, tx sqrl
 	return selectQuery, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, E, IE]) (S, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	if err := outerEvent.validateIncomming(); err != nil {
 		return *new(S), fmt.Errorf("event validation: %w", err)
@@ -353,7 +356,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) runTx(ctx context.Context, tx sqrlx.Tra
 // is unique in the event table. If not, it checks if the event is a repeat
 // processing of the same event, and returns the state after the initial
 // transition.
-func (sm *StateMachine[K, S, ST, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, E, IE]) (S, bool, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, bool, error) {
 	var s S
 	selectQuery, err := sm.eventQuery(ctx, tx, event.EventID, event.Keys)
 	if err != nil {
@@ -392,7 +395,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) firstEventUniqueCheck(ctx context.Conte
 	return state.Interface().(S), true, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) eventsMustBeUnique(ctx context.Context, tx sqrlx.Transaction, events ...*EventSpec[K, S, ST, E, IE]) error {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) eventsMustBeUnique(ctx context.Context, tx sqrlx.Transaction, events ...*EventSpec[K, S, ST, SD, E, IE]) error {
 	for _, event := range events {
 		if event.EventID == "" {
 			continue // UUID Gen Later
@@ -416,7 +419,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) eventsMustBeUnique(ctx context.Context,
 
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) runInputEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, E, IE]) (S, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runInputEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	var returnState S
 
@@ -438,7 +441,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) runInputEvent(ctx context.Context, tx s
 	return returnState, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) runChainedEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, E, IE]) error {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runChainedEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, SD, E, IE]) error {
 	err := sm.Eventer.RunEvent(ctx, state, spec, sm.storeCallback(tx), sm.runHooksCallback(tx))
 	if err != nil {
 		return fmt.Errorf("runChained: %w", err)
@@ -447,7 +450,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) runChainedEvent(ctx context.Context, tx
 	return nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) runHooksCallback(tx sqrlx.Transaction) eventerCallback[K, S, ST, E, IE] {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runHooksCallback(tx sqrlx.Transaction) eventerCallback[K, S, ST, SD, E, IE] {
 	return func(ctx context.Context, statusBefore ST, state S, event E) error {
 		if err := sm.runHooks(ctx, tx, statusBefore, state, event); err != nil {
 			return fmt.Errorf("run hooks: %w", err)
@@ -456,14 +459,14 @@ func (sm *StateMachine[K, S, ST, E, IE]) runHooksCallback(tx sqrlx.Transaction) 
 	}
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, statusBefore ST, state S, event E) error {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runHooks(ctx context.Context, tx sqrlx.Transaction, statusBefore ST, state S, event E) error {
 
-	chain := []*EventSpec[K, S, ST, E, IE]{}
+	chain := []*EventSpec[K, S, ST, SD, E, IE]{}
 	hooks := sm.FindHooks(statusBefore, event)
 
 	for _, hook := range hooks {
 
-		baton := &TransitionData[K, S, ST, E, IE]{
+		baton := &TransitionData[K, S, ST, SD, E, IE]{
 			causedBy: event,
 		}
 
@@ -504,7 +507,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) runHooks(ctx context.Context, tx sqrlx.
 }
 
 // TransitionInTx uses an existing transaction to transition the state machine.
-func (sm *StateMachine[K, S, ST, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, E, IE]) (S, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 	var state S
 	var err error
 	state, err = sm.runTx(ctx, tx, event)
@@ -514,11 +517,11 @@ func (sm *StateMachine[K, S, ST, E, IE]) TransitionInTx(ctx context.Context, tx 
 	return state, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) Transition(ctx context.Context, db Transactor, event *EventSpec[K, S, ST, E, IE]) (S, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, db Transactor, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 	return sm.WithDB(db).Transition(ctx, event)
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) deriveEvent(cause E, chained IE) (evt *EventSpec[K, S, ST, E, IE], err error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (evt *EventSpec[K, S, ST, SD, E, IE], err error) {
 	if sm.SystemActor == nil {
 		err = fmt.Errorf("no system actor defined, cannot derive events")
 		return
@@ -529,7 +532,7 @@ func (sm *StateMachine[K, S, ST, E, IE]) deriveEvent(cause E, chained IE) (evt *
 	eventID := sm.SystemActor.NewEventID(causeMetadata.EventId, eventKey)
 	psmKeys := cause.PSMKeys()
 
-	eventOut := &EventSpec[K, S, ST, E, IE]{
+	eventOut := &EventSpec[K, S, ST, SD, E, IE]{
 		Keys:      psmKeys,
 		Timestamp: time.Now(),
 		Event:     chained,
@@ -547,8 +550,8 @@ func (sm *StateMachine[K, S, ST, E, IE]) deriveEvent(cause E, chained IE) (evt *
 	return eventOut, nil
 }
 
-func (sm *StateMachine[K, S, ST, E, IE]) WithDB(db Transactor) *DBStateMachine[K, S, ST, E, IE] {
-	return &DBStateMachine[K, S, ST, E, IE]{
+func (sm *StateMachine[K, S, ST, SD, E, IE]) WithDB(db Transactor) *DBStateMachine[K, S, ST, SD, E, IE] {
+	return &DBStateMachine[K, S, ST, SD, E, IE]{
 		StateMachine: sm,
 		db:           db,
 	}
@@ -558,12 +561,13 @@ func (sm *StateMachine[K, S, ST, E, IE]) WithDB(db Transactor) *DBStateMachine[K
 // runs the transition in a new transaction from the state machine's database
 type DBStateMachine[
 	K IKeyset,
-	S IState[K, ST],
+	S IState[K, ST, SD],
 	ST IStatusEnum,
-	E IEvent[K, S, ST, IE],
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	*StateMachine[K, S, ST, E, IE]
+	*StateMachine[K, S, ST, SD, E, IE]
 	db Transactor
 }
 
@@ -575,7 +579,7 @@ var TxOptions = &sqrlx.TxOptions{
 
 // Transition transitions the state machine in a new transaction from the state
 // machine's database pool
-func (sm *DBStateMachine[K, S, ST, E, IE]) Transition(ctx context.Context, event *EventSpec[K, S, ST, E, IE]) (S, error) {
+func (sm *DBStateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 	var state S
 	opts := &sqrlx.TxOptions{
 		Isolation: sql.LevelReadCommitted,

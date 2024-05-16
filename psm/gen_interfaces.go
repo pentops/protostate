@@ -10,15 +10,17 @@ import (
 
 Two sets of generic type sets exist:
 
-`K S ST E IE`
-`K S ST E IE SE`
+`K S ST SD E IE`
+`K S ST SD E IE SE`
 
 Both share the same types, as follows, and defined below
 
 ### `K IKeyset`
-### `S IState[K, ST]`
+### `S IState[K, ST, SD]`
 ### `ST IStatusEnum`
-### `E IEvent[K, S, ST, IE]`
+### `SD IStateData`
+### `SD IStateData,
+E IEvent[K, S, ST, SD, IE]`
 ### `IE IInnerEvent`
 ### `SE IInnerEvent`
 
@@ -53,21 +55,28 @@ type IKeyset interface {
 	PSMFullName() string
 }
 
-// IState is the main State Entity e.g. *testpb.FooState
-type IState[K IKeyset, ST IStatusEnum] interface {
+// IState[K, ST, SD]is the main State Entity e.g. *testpb.FooState
+type IState[K IKeyset, ST IStatusEnum, SD IStateData] interface {
 	IPSMMessage
 	GetStatus() ST
 	PSMMetadata() *psm_pb.StateMetadata
 	PSMKeys() K
 	SetPSMKeys(K)
+	PSMData() SD
+}
+
+// IStateData is the Data Entity e.g. *testpb.FooStateData
+type IStateData interface {
+	IPSMMessage
 }
 
 // IEvent is the Event Wrapper, the top level which has metadata, foreign keys to the state, and the event itself.
 // e.g. *testpb.FooEvent, the concrete proto message
 type IEvent[
 	K IKeyset,
-	S IState[K, ST],
+	S IState[K, ST, SD],
 	ST IStatusEnum,
+	SD IStateData,
 	Inner any,
 ] interface {
 	proto.Message
