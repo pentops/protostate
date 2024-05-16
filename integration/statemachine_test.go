@@ -134,7 +134,7 @@ func TestStateMachineHook(t *testing.T) {
 		state *testpb.FooState,
 		event *testpb.FooEvent,
 	) error {
-		if state.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
+		if state.Data.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
 			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
 			if err != nil {
 				return err
@@ -143,9 +143,9 @@ func TestStateMachineHook(t *testing.T) {
 		}
 
 		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
-			Set("weight", state.Characteristics.Weight).
-			Set("height", state.Characteristics.Height).
-			Set("length", state.Characteristics.Length))
+			Set("weight", state.Data.Characteristics.Weight).
+			Set("height", state.Data.Characteristics.Height).
+			Set("length", state.Data.Characteristics.Length))
 		if err != nil {
 			return err
 		}
@@ -284,8 +284,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 			t.Fatalf("expected state ACTIVE, got %s", state.GetStatus().ShortString())
 		}
 
-		if state.Name != "1" {
-			t.Fatalf("expected state name 1, got %s", state.Name)
+		if state.Data.Name != "1" {
+			t.Fatalf("expected state name 1, got %s", state.Data.Name)
 		}
 
 	})
@@ -298,8 +298,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if state.Name != "2" {
-			t.Fatalf("expected state name 2, got %s", state.Name)
+		if state.Data.Name != "2" {
+			t.Fatalf("expected state name 2, got %s", state.Data.Name)
 		}
 	})
 
@@ -310,8 +310,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 		}
 
 		// Should return the state after the initial Create, i.e. name = 1
-		if state.Name != "1" {
-			t.Fatalf("expected state name 1, got %s", state.Name)
+		if state.Data.Name != "1" {
+			t.Fatalf("expected state name 1, got %s", state.Data.Name)
 		}
 
 	})

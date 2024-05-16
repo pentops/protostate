@@ -40,15 +40,17 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 			event *testpb.FooEventType_Created,
 		) error {
 			state.Status = testpb.FooStatus_ACTIVE
-			state.Name = event.Name
-			state.Field = event.Field
-			state.Description = event.Description
-			state.Characteristics = &testpb.FooCharacteristics{
+			state.Data = &testpb.FooStateData{}
+
+			state.Data.Name = event.Name
+			state.Data.Field = event.Field
+			state.Data.Description = event.Description
+			state.Data.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
 			}
-			state.Profiles = event.Profiles
+			state.Data.Profiles = event.Profiles
 			return nil
 		}))
 
@@ -58,10 +60,10 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 			state *testpb.FooState,
 			event *testpb.FooEventType_Updated,
 		) error {
-			state.Field = event.Field
-			state.Name = event.Name
-			state.Description = event.Description
-			state.Characteristics = &testpb.FooCharacteristics{
+			state.Data.Field = event.Field
+			state.Data.Name = event.Name
+			state.Data.Description = event.Description
+			state.Data.Characteristics = &testpb.FooCharacteristics{
 				Weight: event.GetWeight(),
 				Height: event.GetHeight(),
 				Length: event.GetLength(),
@@ -123,7 +125,7 @@ func (ft *FooTester) GetFoo(t testing.TB, id string) *testpb.FooState {
 
 func (ft *FooTester) AssertFooName(t testing.TB, id string, name string) {
 	state := ft.GetFoo(t, id)
-	if state.Name != name {
-		t.Fatalf("expected name %s, got %s", name, state.Name)
+	if state.Data.Name != name {
+		t.Fatalf("expected name %s, got %s", name, state.Data.Name)
 	}
 }

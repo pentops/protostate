@@ -9,8 +9,7 @@ import (
 )
 
 var (
-	// all imports from PSM are defined here, i.e. this is the committed PSM
-	// interface.
+	// all imports from PSM are defined here, i.e. this is the committed PSM interface.
 	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
 	smEventer               = smImportPath.Ident("Eventer")
 	smStateMachine          = smImportPath.Ident("StateMachine")

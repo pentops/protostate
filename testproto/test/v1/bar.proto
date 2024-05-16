@@ -57,6 +57,15 @@ message BarState {
 
   BarKeys keys = 2;
 
+  BarStatus status = 6 [(psm.list.v1.field).enum.filtering = {
+    filterable: true,
+    default_filters: ["BAR_STATUS_ACTIVE"]
+  }];
+
+  BarStateData data = 7;
+}
+
+message BarStateData {
   string tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
@@ -66,14 +75,10 @@ message BarState {
     searchable: true
     field_identifier: "tsv_name"
   }];
+
   string field = 5 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_field"
-  }];
-
-  BarStatus status = 6 [(psm.list.v1.field).enum.filtering = {
-    filterable: true,
-    default_filters: ["BAR_STATUS_ACTIVE"]
   }];
 }
 

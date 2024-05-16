@@ -59,12 +59,12 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Description == nil {
+			if res.State.Data.Description == nil {
 				t.Fatalf("expected description to be non nil")
 			}
 
-			if *res.State.Description != "" {
-				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
+			if *res.State.Data.Description != "" {
+				t.Fatalf("expected description to be empty, got %s", *res.State.Data.Description)
 			}
 
 			stateJSON, err := getRawState(db, fooID)
@@ -106,12 +106,12 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Description == nil {
+			if res.State.Data.Description == nil {
 				t.Fatalf("expected description to be non nil")
 			}
 
-			if *res.State.Description == "" {
-				t.Fatalf("expected description to be empty, got %s", *res.State.Description)
+			if *res.State.Data.Description == "" {
+				t.Fatalf("expected description to be empty, got %s", *res.State.Data.Description)
 			}
 
 			stateJSON, err := getRawState(db, fooID)
@@ -154,7 +154,7 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Description != nil {
+			if res.State.Data.Description != nil {
 				t.Fatalf("expected description to be nil")
 			}
 
@@ -203,7 +203,7 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Field != "" {
+			if res.State.Data.Field != "" {
 				t.Fatalf("expected description to be empty")
 			}
 
@@ -248,7 +248,7 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Field == "" {
+			if res.State.Data.Field == "" {
 				t.Fatalf("expected description to be non empty")
 			}
 

@@ -80,7 +80,7 @@ func TestPagination(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		pageResp = res.Page
@@ -113,7 +113,7 @@ func TestPagination(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		if len(res.Foos) != 10 {
@@ -327,7 +327,7 @@ func TestPageSize(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		pageResp = res.Page
@@ -359,7 +359,7 @@ func TestPageSize(t *testing.T) {
 		}
 
 		for ii, state := range res.Foos {
-			t.Logf("%d: %s", ii, state.Field)
+			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
 		pageResp = res.Page

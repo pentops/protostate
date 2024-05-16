@@ -152,6 +152,7 @@ type stateEntityState struct {
 	keyField      *protogen.Field
 	metadataField *protogen.Field
 	statusField   *protogen.Field
+	dataField     *protogen.Field
 }
 
 type stateEntityEvent struct {
@@ -181,13 +182,30 @@ func (stateSet *StateEntityGenerateSet) addStateMessage(ww walkingMessage) error
 		metadataField: ww.metadataField,
 	}
 
-	for _, field := range ww.message.Fields {
-		if field.Desc.Kind() == protoreflect.EnumKind && field.Desc.Name() == "status" {
+	for _, field := range ww.unusedFields {
+		switch field.Desc.Name() {
+		case "status":
 			entity.statusField = field
+			if field.Desc.Kind() != protoreflect.EnumKind {
+				return fmt.Errorf("status field must be an enum")
+			}
+		case "data":
+			entity.dataField = field
+			if field.Desc.Kind() != protoreflect.MessageKind {
+				return fmt.Errorf("data field must be a message")
+			}
+		default:
+			return fmt.Errorf("field %s in %s unknown for protostate State entity", field.Desc.Name(), ww.message.Desc.Name())
 		}
 	}
 	if entity.statusField == nil {
 		return fmt.Errorf("missing status enum field")
+	}
+	if entity.dataField == nil {
+		return fmt.Errorf("missing data field")
+	}
+	if entity.dataField.Desc.Kind() != protoreflect.MessageKind {
+		return fmt.Errorf("data field must be a message")
 	}
 
 	stateSet.state = entity
@@ -200,7 +218,7 @@ func (stateSet *StateEntityGenerateSet) addEventMessage(ww walkingMessage) error
 	}
 
 	if len(ww.unusedFields) != 1 {
-		return fmt.Errorf("should have exactly three fields, but has %d", 2+len(ww.unusedFields))
+		return fmt.Errorf("should have exactly three fields, (metadata, keys, event) but has %d", len(ww.message.Fields))
 	}
 	entity := &stateEntityEvent{
 		message:        ww.message,

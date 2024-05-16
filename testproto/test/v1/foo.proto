@@ -83,6 +83,10 @@ message FooState {
     default_filters: ["FOO_STATUS_ACTIVE"]
   }];
 
+  FooStateData data = 4;
+}
+
+message FooStateData {
   string name = 5 [(psm.list.v1.field).string.open_text.searching = {
     searchable: true,
     field_identifier: "tsv_name"
