@@ -59,6 +59,7 @@ type IKeyset interface {
 type IState[K IKeyset, ST IStatusEnum, SD IStateData] interface {
 	IPSMMessage
 	GetStatus() ST
+	SetStatus(ST)
 	PSMMetadata() *psm_pb.StateMetadata
 	PSMKeys() K
 	SetPSMKeys(K)

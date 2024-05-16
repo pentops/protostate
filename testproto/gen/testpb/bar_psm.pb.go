@@ -96,6 +96,9 @@ func (msg *BarState) SetPSMKeys(inner *BarKeys) {
 }
 
 func (msg *BarState) PSMData() *BarStateData {
+	if msg.Data == nil {
+		msg.Data = &BarStateData{}
+	}
 	return msg.Data
 }
 
@@ -298,7 +301,7 @@ func NewBarPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) error) psm.PSMTransitionFunc[
+func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarStateData, SE) error) psm.PSMTransitionFunc[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState
 	BarStatus,     // implements psm.IStatusEnum

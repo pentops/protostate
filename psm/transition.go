@@ -21,15 +21,6 @@ type StateHookBaton[
 	FullCause() E
 }
 
-type TransitionBaton[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] StateHookBaton[K, S, ST, SD, E, IE]
-
 type TransitionData[
 	K IKeyset,
 	S IState[K, ST, SD],
@@ -63,8 +54,7 @@ type ITransitionHandler[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	handlesEvent(E) bool
-	runTransition(context.Context, S, E) error
+	runTransition(context.Context, SD, E) error
 }
 
 type IStateHookHandler[
@@ -87,11 +77,11 @@ type PSMTransitionFunc[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, S, SE) error
+] func(context.Context, SD, SE) error
 
 func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
 	ctx context.Context,
-	state S,
+	stateData SD,
 	event E,
 ) error {
 	// Cast the interface ET IInnerEvent to the specific type of event which
@@ -102,18 +92,10 @@ func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: un
 
 		name := innerType.ProtoReflect().Descriptor().FullName()
 
-		return fmt.Errorf("unexpected event type (b): %s [IE] does not match [SE] (%T)", name, new(SE))
+		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 	}
 
-	return f(ctx, state, asType)
-}
-
-func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing ITransitionHandler
-	// Check if the parameter passed as ET (IInnerEvent) is the specific type
-	// (IE, also IInnerEvent, but typed) which this transition handles
-	event := outerEvent.UnwrapPSMEvent()
-	_, ok := any(event).(SE)
-	return ok
+	return f(ctx, stateData, asType)
 }
 
 type PSMHookFunc[
@@ -139,7 +121,7 @@ func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused //
 	asType, ok := any(innerType).(SE)
 	if !ok {
 		name := innerType.ProtoReflect().Descriptor().FullName()
-		return fmt.Errorf("unexpected event type (c): %s [IE] does not match [SE] (%T)", name, new(SE))
+		return fmt.Errorf("unexpected event typein hook: %s [IE] does not match [SE] (%T)", name, new(SE))
 	}
 	return f(ctx, tx, baton, state, asType)
 }
@@ -161,11 +143,11 @@ type eventFilter[
 	IE IInnerEvent,
 
 ] struct {
-	fromStatus    []ST
-	customFilters []func(E) bool
+	fromStatus []ST
+	onEvents   []string
 }
 
-func (ef eventFilter[K, S, ST, SD, E, IE]) matches(currentStatus ST, outerEvent E) bool {
+func (ef eventFilter[K, S, ST, SD, E, IE]) Matches(currentStatus ST, outerEvent E) bool {
 	if ef.fromStatus != nil {
 		didMatch := false
 		for _, fromStatus := range ef.fromStatus {
@@ -179,11 +161,20 @@ func (ef eventFilter[K, S, ST, SD, E, IE]) matches(currentStatus ST, outerEvent 
 		}
 	}
 
-	for _, filter := range ef.customFilters {
-		if !filter(outerEvent) {
+	if ef.onEvents != nil {
+		eventKey := outerEvent.UnwrapPSMEvent().PSMEventKey()
+		didMatch := false
+		for _, onEvent := range ef.onEvents {
+			if onEvent == eventKey {
+				didMatch = true
+				break
+			}
+		}
+		if !didMatch {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -195,16 +186,9 @@ type TransitionWrapper[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	handler ITransitionHandler[K, S, ST, SD, E, IE]
+	handler  ITransitionHandler[K, S, ST, SD, E, IE]
+	toStatus ST
 	eventFilter[K, S, ST, SD, E, IE]
-}
-
-func (f TransitionWrapper[K, S, ST, SD, E, IE]) Matches(status ST, outerEvent E) bool {
-	if !f.handler.handlesEvent(outerEvent) {
-		return false
-	}
-
-	return f.eventFilter.matches(status, outerEvent)
 }
 
 func (f TransitionWrapper[K, S, ST, SD, E, IE]) RunTransition(
@@ -212,7 +196,17 @@ func (f TransitionWrapper[K, S, ST, SD, E, IE]) RunTransition(
 	state S,
 	event E,
 ) error {
-	return f.handler.runTransition(ctx, state, event)
+	sd := state.PSMData()
+	if f.toStatus != 0 {
+		state.SetStatus(f.toStatus)
+	}
+	if f.handler != nil {
+		err := f.handler.runTransition(ctx, sd, event)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type HookWrapper[
@@ -227,18 +221,6 @@ type HookWrapper[
 	eventFilter[K, S, ST, SD, E, IE]
 }
 
-func (f HookWrapper[K, S, ST, SD, E, IE]) matches(status ST, outerEvent E) bool {
-	if !f.handler.handlesEvent(outerEvent) {
-		return false
-	}
-
-	return f.eventFilter.matches(status, outerEvent)
-}
-
-func (f HookWrapper[K, S, ST, SD, E, IE]) Matches(status ST, outerEvent E) bool {
-	return f.matches(status, outerEvent)
-}
-
 func (f HookWrapper[K, S, ST, SD, E, IE]) RunStateHook(
 	ctx context.Context,
 	tx sqrlx.Transaction,
@@ -247,64 +229,6 @@ func (f HookWrapper[K, S, ST, SD, E, IE]) RunStateHook(
 	event E,
 ) error {
 	return f.handler.runStateHook(ctx, tx, baton, state, event)
-}
-
-type StateMachineTransitionBuilder[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] struct {
-	sm *StateMachine[K, S, ST, SD, E, IE]
-	eventFilter[K, S, ST, SD, E, IE]
-}
-
-func (ee *StateMachine[K, S, ST, SD, E, IE]) From(states ...ST) StateMachineTransitionBuilder[K, S, ST, SD, E, IE] {
-	return StateMachineTransitionBuilder[K, S, ST, SD, E, IE]{
-		sm: ee,
-		eventFilter: eventFilter[K, S, ST, SD, E, IE]{
-			fromStatus: states,
-		},
-	}
-}
-
-func (tb StateMachineTransitionBuilder[K, S, ST, SD, E, IE]) Where(filter func(event IE) bool) StateMachineTransitionBuilder[K, S, ST, SD, E, IE] {
-	innerFilter := func(fullEvent E) bool {
-		innerEvent := fullEvent.UnwrapPSMEvent()
-		return filter(innerEvent)
-	}
-	tb.eventFilter.customFilters = append(tb.customFilters, innerFilter)
-	return tb
-}
-
-func (tb StateMachineTransitionBuilder[K, S, ST, SD, E, IE]) Transition(
-	transition ITransitionHandler[K, S, ST, SD, E, IE],
-) StateMachineTransitionBuilder[K, S, ST, SD, E, IE] {
-
-	typedTransition := &TransitionWrapper[K, S, ST, SD, E, IE]{
-		handler:     transition,
-		eventFilter: tb.eventFilter,
-	}
-
-	tb.sm.Eventer.Register(typedTransition)
-
-	return tb
-}
-
-func (tb StateMachineTransitionBuilder[K, S, ST, SD, E, IE]) Hook(
-	hook IStateHookHandler[K, S, ST, SD, E, IE],
-) StateMachineTransitionBuilder[K, S, ST, SD, E, IE] {
-
-	typedHook := &HookWrapper[K, S, ST, SD, E, IE]{
-		handler:     hook,
-		eventFilter: tb.eventFilter,
-	}
-
-	tb.sm.AddHook(typedHook)
-
-	return tb
 }
 
 // StateHook runs after a state machine transition. Very similar to a
