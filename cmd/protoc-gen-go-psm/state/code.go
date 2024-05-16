@@ -19,12 +19,10 @@ var (
 	smStateMachineConfig    = smImportPath.Ident("StateMachineConfig")
 	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
 	smNewStateMachine       = smImportPath.Ident("NewStateMachine")
-	smTransitionBaton       = smImportPath.Ident("TransitionBaton")
 	smStateHookBaton        = smImportPath.Ident("StateHookBaton")
 	smTransitionFunc        = smImportPath.Ident("PSMTransitionFunc")
 	smHookFunc              = smImportPath.Ident("PSMHookFunc")
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
-	smCombinedFunc          = smImportPath.Ident("PSMCombinedFunc")
 	smEventSpec             = smImportPath.Ident("EventSpec")
 	smIInnerEvent           = smImportPath.Ident("IInnerEvent")
 
@@ -150,6 +148,10 @@ func (ss PSMEntity) implementIState(g *protogen.GeneratedFile) {
 	g.P("  return msg.", ss.state.keyField.GoName)
 	g.P("}")
 	g.P()
+	g.P("func (msg *", stateMessage.GoIdent, ") SetStatus(status ", ss.state.statusField.Enum.GoIdent, ") {")
+	g.P("  msg.", ss.state.statusField.GoName, " = status")
+	g.P("}")
+	g.P()
 	g.P("func (msg *", stateMessage.GoIdent, ") SetPSMKeys(inner *", ss.keyMessage.GoIdent, ") {")
 	g.P("  msg.", ss.state.keyField.GoName, " = inner")
 	g.P("}")
@@ -255,21 +257,6 @@ func (ss PSMEntity) implementIInnerEvent(g *protogen.GeneratedFile) {
 }
 
 func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
-
-	// FooPSMFunc - This is for backwards compatibility
-	transitionBatonType := ss.typeAlias(g, "TransitionBaton", smTransitionBaton)
-	g.P("func ", ss.machineName,
-		"Func[SE ", ss.eventName, "]",
-		"(cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		transitionBatonType, ", *",
-		ss.state.message.GoIdent, ", SE) error) ", smCombinedFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("] {")
-	g.P("return ", smCombinedFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("](cb)")
-	g.P("}")
 
 	// FooPSMTransition
 	g.P("func ", ss.machineName,

@@ -87,6 +87,10 @@ func (msg *BarState) PSMKeys() *BarKeys {
 	return msg.Keys
 }
 
+func (msg *BarState) SetStatus(status BarStatus) {
+	msg.Status = status
+}
+
 func (msg *BarState) SetPSMKeys(inner *BarKeys) {
 	msg.Keys = inner
 }
@@ -294,34 +298,6 @@ func NewBarPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-type BarPSMTransitionBaton = psm.TransitionBaton[
-	*BarKeys,      // implements psm.IKeyset
-	*BarState,     // implements psm.IState
-	BarStatus,     // implements psm.IStatusEnum
-	*BarStateData, // implements psm.IStateData
-	*BarEvent,     // implements psm.IEvent
-	BarPSMEvent,   // implements psm.IInnerEvent
-]
-
-func BarPSMFunc[SE BarPSMEvent](cb func(context.Context, BarPSMTransitionBaton, *BarState, SE) error) psm.PSMCombinedFunc[
-	*BarKeys,      // implements psm.IKeyset
-	*BarState,     // implements psm.IState
-	BarStatus,     // implements psm.IStatusEnum
-	*BarStateData, // implements psm.IStateData
-	*BarEvent,     // implements psm.IEvent
-	BarPSMEvent,   // implements psm.IInnerEvent
-	SE,            // Specific event type for the transition
-] {
-	return psm.PSMCombinedFunc[
-		*BarKeys,      // implements psm.IKeyset
-		*BarState,     // implements psm.IState
-		BarStatus,     // implements psm.IStatusEnum
-		*BarStateData, // implements psm.IStateData
-		*BarEvent,     // implements psm.IEvent
-		BarPSMEvent,   // implements psm.IInnerEvent
-		SE,            // Specific event type for the transition
-	](cb)
-}
 func BarPSMTransition[SE BarPSMEvent](cb func(context.Context, *BarState, SE) error) psm.PSMTransitionFunc[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState

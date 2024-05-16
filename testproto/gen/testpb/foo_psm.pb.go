@@ -87,6 +87,10 @@ func (msg *FooState) PSMKeys() *FooKeys {
 	return msg.Keys
 }
 
+func (msg *FooState) SetStatus(status FooStatus) {
+	msg.Status = status
+}
+
 func (msg *FooState) SetPSMKeys(inner *FooKeys) {
 	msg.Keys = inner
 }
@@ -297,34 +301,6 @@ func NewFooPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-type FooPSMTransitionBaton = psm.TransitionBaton[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-]
-
-func FooPSMFunc[SE FooPSMEvent](cb func(context.Context, FooPSMTransitionBaton, *FooState, SE) error) psm.PSMCombinedFunc[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-	SE,            // Specific event type for the transition
-] {
-	return psm.PSMCombinedFunc[
-		*FooKeys,      // implements psm.IKeyset
-		*FooState,     // implements psm.IState
-		FooStatus,     // implements psm.IStatusEnum
-		*FooStateData, // implements psm.IStateData
-		*FooEvent,     // implements psm.IEvent
-		FooPSMEvent,   // implements psm.IInnerEvent
-		SE,            // Specific event type for the transition
-	](cb)
-}
 func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooState, SE) error) psm.PSMTransitionFunc[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState

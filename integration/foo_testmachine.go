@@ -87,9 +87,8 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 		}))
 
 	sm.From(testpb.FooStatus_ACTIVE).
-		Do(testpb.FooPSMFunc(func(
+		Transition(testpb.FooPSMTransition(func(
 			ctx context.Context,
-			tb testpb.FooPSMTransitionBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Deleted,
 		) error {
