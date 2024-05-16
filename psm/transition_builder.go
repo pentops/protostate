@@ -22,8 +22,7 @@ type BuilderFrom[
 	fromStatus []ST
 }
 
-// OnEvent identifying a specific transition from state(s) for an event.
-// FROM -> TBD : OnEvent
+// OnEvent identifies a specific transition from state(s) for an event.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	return &TransitionBuilder[K, S, ST, SD, E, IE]{
 		sm: tb.sm,
@@ -32,6 +31,24 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuil
 			onEvents:   []string{event},
 		},
 	}
+}
+
+// Mutate is a shortcut for OnEvent().Mutate() with the event type matching callback
+// function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
+	transition ITransitionHandler[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	eventType := transition.eventType()
+	return tb.OnEvent(eventType).Mutate(transition)
+}
+
+// Hook is a shortcut for OnEvent().Hook() with the event type matching callback
+// function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) Hook(
+	hook IStateHookHandler[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	eventType := hook.eventType()
+	return tb.OnEvent(eventType).Hook(hook)
 }
 
 type TransitionBuilder[

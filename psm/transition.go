@@ -55,6 +55,7 @@ type ITransitionHandler[
 	IE IInnerEvent,
 ] interface {
 	runTransition(context.Context, SD, E) error
+	eventType() string
 }
 
 type IStateHookHandler[
@@ -66,6 +67,7 @@ type IStateHookHandler[
 	IE IInnerEvent,
 ] interface {
 	handlesEvent(E) bool
+	eventType() string
 	runStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, E) error
 }
 
@@ -98,6 +100,10 @@ func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: un
 	return f(ctx, stateData, asType)
 }
 
+func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint: unused // used when implementing ITransitionHandler
+	return (*new(SE)).PSMEventKey()
+}
+
 type PSMHookFunc[
 	K IKeyset,
 	S IState[K, ST, SD],
@@ -108,7 +114,8 @@ type PSMHookFunc[
 	SE IInnerEvent,
 ] func(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, SE) error
 
-func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused // used when implementing IStateHookHandler
+func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused // Implements IStateHookHandler
+
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	baton StateHookBaton[K, S, ST, SD, E, IE],
@@ -126,12 +133,16 @@ func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused //
 	return f(ctx, tx, baton, state, asType)
 }
 
-func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // used when implementing IStateHookHandler
+func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) handlesEvent(outerEvent E) bool { // nolint: unused // Implements IStateHookHandler
 	// Check if the parameter passed as ET (IInnerEvent) is the specific type
 	// (IE, also IInnerEvent, but typed) which this transition handles
 	event := outerEvent.UnwrapPSMEvent()
 	_, ok := any(event).(SE)
 	return ok
+}
+
+func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint: unused // linter seems broken.
+	return (*new(SE)).PSMEventKey()
 }
 
 type eventFilter[
@@ -230,20 +241,6 @@ func (f HookWrapper[K, S, ST, SD, E, IE]) RunStateHook(
 ) error {
 	return f.handler.runStateHook(ctx, tx, baton, state, event)
 }
-
-// StateHook runs after a state machine transition. Very similar to a
-// TransitionHandler, but it has access to the database transaction and is
-// designed for either business logic requiring the database, or for more
-// generic hooks which need to run after all transitions.
-type StateHook[
-	K IKeyset,
-	S IState[K, ST, SD], // Outer State Entity
-	ST IStatusEnum, // Status Enum in State Entity
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
-	IE IInnerEvent, // Inner Event, the typed event but untyped
-	SE IInnerEvent, // Typed Inner Event, the specifically typed event *interface*
-] func(context.Context, sqrlx.Transaction, S, E) error
 
 // GeneralStateHook is a StateHook that should do something after all or most
 // transitions, e.g. publishing to a global event bus or updating a cache.

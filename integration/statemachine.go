@@ -97,8 +97,8 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 			return nil
 		}))
 
+	// Testing Mutate() without OnEvent, the callback implies the event type.
 	sm.From(testpb.FooStatus_ACTIVE).
-		OnEvent(testpb.FooPSMEventUpdated).
 		Mutate(testpb.FooPSMTransition(func(
 			ctx context.Context,
 			data *testpb.FooStateData,
