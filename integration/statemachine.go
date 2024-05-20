@@ -22,9 +22,10 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 		return nil, err
 	}
 
-	sm.AddHook(testpb.FooPSMGeneralHook(func(
+	sm.GeneralHook(testpb.FooPSMGeneralHook(func(
 		ctx context.Context,
 		tx sqrlx.Transaction,
+		tb testpb.FooPSMHookBaton,
 		state *testpb.FooState,
 		event *testpb.FooEvent,
 	) error {

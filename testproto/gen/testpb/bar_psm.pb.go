@@ -349,7 +349,7 @@ func BarPSMHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, BarP
 		SE,            // Specific event type for the transition
 	](cb)
 }
-func BarPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *BarState, *BarEvent) error) psm.GeneralStateHook[
+func BarPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, BarPSMHookBaton, *BarState, *BarEvent) error) psm.GeneralStateHook[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState
 	BarStatus,     // implements psm.IStatusEnum

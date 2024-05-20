@@ -352,7 +352,7 @@ func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooP
 		SE,            // Specific event type for the transition
 	](cb)
 }
-func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralStateHook[
+func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, *FooEvent) error) psm.GeneralStateHook[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
