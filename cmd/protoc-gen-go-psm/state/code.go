@@ -19,8 +19,8 @@ var (
 	smStateMachineConfig    = smImportPath.Ident("StateMachineConfig")
 	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
 	smNewStateMachine       = smImportPath.Ident("NewStateMachine")
-	smStateHookBaton        = smImportPath.Ident("StateHookBaton")
-	smTransitionFunc        = smImportPath.Ident("PSMTransitionFunc")
+	smStateHookBaton        = smImportPath.Ident("HookBaton")
+	smMutationFunc          = smImportPath.Ident("PSMMutationFunc")
 	smHookFunc              = smImportPath.Ident("PSMHookFunc")
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
 	smEventSpec             = smImportPath.Ident("EventSpec")
@@ -261,15 +261,13 @@ func (ss PSMEntity) implementIInnerEvent(g *protogen.GeneratedFile) {
 
 func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 
-	// FooPSMTransition
+	// FooPSMMutation
 	g.P("func ", ss.machineName,
-		"Transition[SE ", ss.eventName, "]",
-		"(cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		"*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smTransitionFunc, "[")
+		"Mutation[SE ", ss.eventName, "]",
+		"(cb func(*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smMutationFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
-	g.P("return ", smTransitionFunc, "[")
+	g.P("return ", smMutationFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("](cb)")
 	g.P("}")
@@ -281,8 +279,9 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
-		hookBatonType, ", *",
-		ss.state.message.GoIdent, ", SE) error) ", smHookFunc, "[")
+		hookBatonType, ", ",
+		"*", ss.state.message.GoIdent, ", ",
+		"SE) error) ", smHookFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
 	g.P("return ", smHookFunc, "[")
@@ -296,6 +295,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		hookBatonType, ", ",
 		"*", ss.state.message.GoIdent, ", ",
 		"*", ss.event.message.GoIdent, ") error) ", smGeneralHookFunc, "[")
 	ss.writeBaseTypes(g)

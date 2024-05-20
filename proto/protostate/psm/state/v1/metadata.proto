@@ -41,6 +41,23 @@ message EventMetadata {
   Cause cause = 4;
 }
 
+message EventPublishMetadata {
+  string event_id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Sequence within the state machine. Discrete, 1,2,3
+  uint64 sequence = 2;
+
+  google.protobuf.Timestamp timestamp = 3 [
+    (buf.validate.field).required = true,
+    (psm.list.v1.field).timestamp.sorting = {
+      sortable: true,
+      default_sort: true
+    }
+  ];
+
+  Cause cause = 4;
+}
+
 // Events are caused by either an actor external to the boundary, an application
 // within the boundary, the state machine itself,
 message Cause {
@@ -70,7 +87,7 @@ message CommandCause {
   // {package}.{service}/{method}. E.g. "foo.bar.v1.FooService/BarMethod"
   string method_name = 1;
 
-  o5.auth.v1.AuthenticatedActor actor = 2;
+  o5.auth.v1.Actor actor = 2;
 }
 
 // An external system replying to a side-effect request, e.g. where the

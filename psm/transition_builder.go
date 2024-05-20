@@ -10,6 +10,10 @@ func (ee *StateMachine[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, S
 	}
 }
 
+func (ee *StateMachine[K, S, ST, SD, E, IE]) GeneralHook(hook GeneralStateHook[K, S, ST, SD, E, IE]) {
+	ee.hooks = append(ee.hooks, hook)
+}
+
 type BuilderFrom[
 	K IKeyset,
 	S IState[K, ST, SD],
@@ -108,7 +112,13 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Hook(
 		eventFilter: tb.eventFilter,
 	}
 
-	tb.sm.AddHook(typedHook)
+	tb.sm.addHook(typedHook)
 	return tb
+}
 
+// Noop registers a transition which does nothing, but prevents the machine from
+// erroring when the conditions are met.
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.transition()
+	return tb
 }

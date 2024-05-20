@@ -5,10 +5,11 @@ import (
 	"fmt"
 
 	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
-type StateHookBaton[
+type HookBaton[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -19,9 +20,10 @@ type StateHookBaton[
 	SideEffect(outbox.OutboxMessage)
 	ChainEvent(IE)
 	FullCause() E
+	AsCause() *psm_pb.Cause
 }
 
-type TransitionData[
+type hookBaton[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -34,16 +36,28 @@ type TransitionData[
 	causedBy    E
 }
 
-func (td *TransitionData[K, S, ST, SD, E, IE]) ChainEvent(inner IE) {
+func (td *hookBaton[K, S, ST, SD, E, IE]) ChainEvent(inner IE) {
 	td.chainEvents = append(td.chainEvents, inner)
 }
 
-func (td *TransitionData[K, S, ST, SD, E, IE]) SideEffect(msg outbox.OutboxMessage) {
+func (td *hookBaton[K, S, ST, SD, E, IE]) SideEffect(msg outbox.OutboxMessage) {
 	td.sideEffects = append(td.sideEffects, msg)
 }
 
-func (td *TransitionData[K, S, ST, SD, E, IE]) FullCause() E {
+func (td *hookBaton[K, S, ST, SD, E, IE]) FullCause() E {
 	return td.causedBy
+}
+
+func (td *hookBaton[K, S, ST, SD, E, IE]) AsCause() *psm_pb.Cause {
+	causeMetadata := td.causedBy.PSMMetadata()
+	return &psm_pb.Cause{
+		Type: &psm_pb.Cause_PsmEvent{
+			PsmEvent: &psm_pb.PSMEventCause{
+				EventId:      causeMetadata.EventId,
+				StateMachine: td.causedBy.PSMKeys().PSMFullName(),
+			},
+		},
+	}
 }
 
 type ITransitionHandler[
@@ -68,10 +82,10 @@ type IStateHookHandler[
 ] interface {
 	handlesEvent(E) bool
 	eventType() string
-	runStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, E) error
+	runStateHook(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
 }
 
-type PSMTransitionFunc[
+type PSMMutationFunc[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -79,9 +93,9 @@ type PSMTransitionFunc[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, SD, SE) error
+] func(SD, SE) error
 
-func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
+func (f PSMMutationFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: unused // used when implementing ITransitionHandler
 	ctx context.Context,
 	stateData SD,
 	event E,
@@ -97,10 +111,10 @@ func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) runTransition( // nolint: un
 		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 	}
 
-	return f(ctx, stateData, asType)
+	return f(stateData, asType)
 }
 
-func (f PSMTransitionFunc[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint: unused // used when implementing ITransitionHandler
+func (f PSMMutationFunc[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint: unused // used when implementing ITransitionHandler
 	return (*new(SE)).PSMEventKey()
 }
 
@@ -112,13 +126,13 @@ type PSMHookFunc[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, SE) error
+] func(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, SE) error
 
 func (f PSMHookFunc[K, S, ST, SD, E, IE, SE]) runStateHook( // nolint: unused // Implements IStateHookHandler
 
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[K, S, ST, SD, E, IE],
+	baton HookBaton[K, S, ST, SD, E, IE],
 	state S,
 	event E,
 ) error {
@@ -235,7 +249,7 @@ type HookWrapper[
 func (f HookWrapper[K, S, ST, SD, E, IE]) RunStateHook(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[K, S, ST, SD, E, IE],
+	baton HookBaton[K, S, ST, SD, E, IE],
 	state S,
 	event E,
 ) error {
@@ -251,16 +265,16 @@ type GeneralStateHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, S, E) error
+] func(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
 
 func (hook GeneralStateHook[K, S, ST, SD, E, IE]) RunStateHook(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton StateHookBaton[K, S, ST, SD, E, IE],
+	baton HookBaton[K, S, ST, SD, E, IE],
 	state S,
 	event E,
 ) error {
-	return hook(ctx, tx, state, event)
+	return hook(ctx, tx, baton, state, event)
 }
 
 func (hook GeneralStateHook[K, S, ST, SD, E, IE]) Matches(ST, E) bool {

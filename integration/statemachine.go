@@ -51,8 +51,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	sm.From(testpb.FooStatus_UNSPECIFIED).
 		OnEvent(testpb.FooPSMEventCreated).
 		SetStatus(testpb.FooStatus_ACTIVE).
-		Mutate(testpb.FooPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.FooPSMMutation(func(
 			data *testpb.FooStateData,
 			event *testpb.FooEventType_Created,
 		) error {
@@ -80,8 +79,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	sm.From(testpb.FooStatus_UNSPECIFIED).
 		OnEvent(testpb.FooPSMEventCreated).
 		SetStatus(testpb.FooStatus_ACTIVE).
-		Mutate(testpb.FooPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.FooPSMMutation(func(
 			data *testpb.FooStateData,
 			event *testpb.FooEventType_Created,
 		) error {
@@ -99,8 +97,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 
 	// Testing Mutate() without OnEvent, the callback implies the event type.
 	sm.From(testpb.FooStatus_ACTIVE).
-		Mutate(testpb.FooPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.FooPSMMutation(func(
 			data *testpb.FooStateData,
 			event *testpb.FooEventType_Updated,
 		) error {
@@ -161,8 +158,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 	sm.From(testpb.BarStatus_UNSPECIFIED).
 		OnEvent(testpb.BarPSMEventCreated).
 		SetStatus(testpb.BarStatus_ACTIVE).
-		Mutate(testpb.BarPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.BarPSMMutation(func(
 			data *testpb.BarStateData,
 			event *testpb.BarEventType_Created,
 		) error {
