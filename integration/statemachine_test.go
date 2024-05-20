@@ -128,9 +128,10 @@ func TestStateMachineHook(t *testing.T) {
 
 	controller := NewMiniFooController(db)
 
-	sm.AddHook(testpb.FooPSMGeneralHook(func(
+	sm.GeneralHook(testpb.FooPSMGeneralHook(func(
 		ctx context.Context,
 		tx sqrlx.Transaction,
+		tb testpb.FooPSMHookBaton,
 		state *testpb.FooState,
 		event *testpb.FooEvent,
 	) error {
