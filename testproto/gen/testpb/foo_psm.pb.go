@@ -304,7 +304,7 @@ func NewFooPSM(config *psm.StateMachineConfig[
 	](config)
 }
 
-func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooStateData, SE) error) psm.PSMTransitionFunc[
+func FooPSMMutation[SE FooPSMEvent](cb func(*FooStateData, SE) error) psm.PSMMutationFunc[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
@@ -313,7 +313,7 @@ func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooStateData, SE
 	FooPSMEvent,   // implements psm.IInnerEvent
 	SE,            // Specific event type for the transition
 ] {
-	return psm.PSMTransitionFunc[
+	return psm.PSMMutationFunc[
 		*FooKeys,      // implements psm.IKeyset
 		*FooState,     // implements psm.IState
 		FooStatus,     // implements psm.IStatusEnum
@@ -324,7 +324,7 @@ func FooPSMTransition[SE FooPSMEvent](cb func(context.Context, *FooStateData, SE
 	](cb)
 }
 
-type FooPSMHookBaton = psm.StateHookBaton[
+type FooPSMHookBaton = psm.HookBaton[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum

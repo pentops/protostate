@@ -129,6 +129,14 @@ func NewSystemActor(id string) (SimpleSystemActor, error) {
 	}, nil
 }
 
+func MustSystemActor(id string) SimpleSystemActor {
+	actor, err := NewSystemActor(id)
+	if err != nil {
+		panic(err)
+	}
+	return actor
+}
+
 func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) string {
 	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
 }
@@ -178,7 +186,7 @@ func NewStateMachine[
 	}, nil
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) AddHook(hook IStateHook[K, S, ST, SD, E, IE]) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) addHook(hook IStateHook[K, S, ST, SD, E, IE]) {
 	sm.hooks = append(sm.hooks, hook)
 }
 
@@ -327,7 +335,19 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) eventQuery(ctx context.Context, tx 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	if err := outerEvent.validateIncomming(); err != nil {
-		return *new(S), fmt.Errorf("event validation: %w", err)
+		return *new(S), fmt.Errorf("event %s: %w", outerEvent.Event.ProtoReflect().Descriptor().FullName(), err)
+	}
+
+	if outerEvent.EventID == "" {
+		if causeEvent := outerEvent.Cause.GetPsmEvent(); causeEvent != nil {
+			// Can derive an ID
+			if sm.SystemActor == nil {
+				return *new(S), fmt.Errorf("no system actor defined, cannot derive events, and no ID set")
+			}
+			outerEvent.EventID = sm.SystemActor.NewEventID(causeEvent.EventId, outerEvent.Event.PSMEventKey())
+		} else {
+			return *new(S), fmt.Errorf("EventSpec.EventID must be set unless the cause is a PSM Event")
+		}
 	}
 
 	if sm.spec.EventStateSnapshotColumn == nil {
@@ -435,7 +455,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInputEvent(ctx context.Context, 
 	)
 
 	if err != nil {
-		return state, fmt.Errorf("event queue: %w", err)
+		return state, err
 	}
 
 	return returnState, nil
@@ -466,7 +486,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runHooks(ctx context.Context, tx sq
 
 	for _, hook := range hooks {
 
-		baton := &TransitionData[K, S, ST, SD, E, IE]{
+		baton := &hookBaton[K, S, ST, SD, E, IE]{
 			causedBy: event,
 		}
 

@@ -31,7 +31,7 @@ type IStateHook[
 	IE IInnerEvent,
 ] interface {
 	Matches(ST, E) bool
-	RunStateHook(context.Context, sqrlx.Transaction, StateHookBaton[K, S, ST, SD, E, IE], S, E) error
+	RunStateHook(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
 }
 
 type eventerCallback[
@@ -105,9 +105,10 @@ func (ee Eventer[K, S, ST, SD, E, IE]) RunEvent(
 	stateBefore := state.GetStatus()
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
-		"eventType": typeKey,
+		"eventType":    typeKey,
+		"stateMachine": state.PSMKeys().PSMFullName(),
 		"transition": map[string]interface{}{
-			"from":  stateBefore.String(),
+			"from":  stateBefore.ShortString(),
 			"event": typeKey,
 		},
 	})
@@ -126,8 +127,8 @@ func (ee Eventer[K, S, ST, SD, E, IE]) RunEvent(
 
 	ctx = log.WithFields(ctx, map[string]interface{}{
 		"transition": map[string]string{
-			"from":  stateBefore.String(),
-			"to":    state.GetStatus().String(),
+			"from":  stateBefore.ShortString(),
+			"to":    state.GetStatus().ShortString(),
 			"event": typeKey,
 		},
 	})
@@ -140,7 +141,7 @@ func (ee Eventer[K, S, ST, SD, E, IE]) RunEvent(
 
 	for _, callback := range callbacks {
 		if err := callback(ctx, stateBefore, state, innerEvent); err != nil {
-			return fmt.Errorf("callback: %w", err)
+			return err
 		}
 	}
 

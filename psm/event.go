@@ -32,9 +32,6 @@ type EventSpec[
 }
 
 func (es EventSpec[K, S, ST, SD, E, IE]) validateIncomming() error {
-	if es.EventID == "" {
-		return fmt.Errorf("EventSpec.EventID must be set")
-	}
 
 	if !es.Keys.PSMIsSet() {
 		return fmt.Errorf("EventSpec.Keys is required")

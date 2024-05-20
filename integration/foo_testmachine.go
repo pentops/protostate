@@ -36,8 +36,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 	sm.From(testpb.FooStatus_UNSPECIFIED).
 		OnEvent(testpb.FooPSMEventCreated).
 		SetStatus(testpb.FooStatus_ACTIVE).
-		Mutate(testpb.FooPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.FooPSMMutation(func(
 			state *testpb.FooStateData,
 			event *testpb.FooEventType_Created,
 		) error {
@@ -56,8 +55,7 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 
 	sm.From(testpb.FooStatus_ACTIVE).
 		OnEvent(testpb.FooPSMEventUpdated).
-		Mutate(testpb.FooPSMTransition(func(
-			ctx context.Context,
+		Mutate(testpb.FooPSMMutation(func(
 			data *testpb.FooStateData,
 			event *testpb.FooEventType_Updated,
 		) error {
