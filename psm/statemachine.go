@@ -238,11 +238,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 		return state, err
 	}
 
-	stateKeyset := state.PSMKeys()
-	if !proto.Equal(keys, stateKeyset) {
-		return state, fmt.Errorf("event and state keysets do not match")
-	}
-
 	return state, nil
 }
 
@@ -369,6 +364,16 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		return state, err
 	}
 
+	if state.GetStatus() != 0 {
+		// If this is not the first event, the event keys can be derived from the
+		// state keys, so the non-primary keys of the event need not be set for every
+		// event.
+		// TODO: Consider checking that any key which *is* set matches.
+		// The event will be validated later using buf validate so any required non-primary keys are
+		// evaluated at that point.
+		outerEvent.Keys = state.PSMKeys()
+	}
+
 	return sm.runInputEvent(ctx, tx, state, outerEvent)
 }
 
@@ -455,7 +460,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInputEvent(ctx context.Context, 
 	)
 
 	if err != nil {
-		return state, err
+		return state, fmt.Errorf("input event %s: %w", spec.Event.PSMEventKey(), err)
 	}
 
 	return returnState, nil
@@ -464,7 +469,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInputEvent(ctx context.Context, 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runChainedEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, SD, E, IE]) error {
 	err := sm.Eventer.RunEvent(ctx, state, spec, sm.storeCallback(tx), sm.runHooksCallback(tx))
 	if err != nil {
-		return fmt.Errorf("runChained: %w", err)
+		return fmt.Errorf("chained event: %s: %w", spec.Event.PSMEventKey(), err)
 	}
 
 	return nil
@@ -611,7 +616,7 @@ func (sm *DBStateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, e
 		var err error
 		state, err = sm.runTx(ctx, tx, event)
 		if err != nil {
-			return fmt.Errorf("run tx: %w", err)
+			return err
 		}
 
 		return nil
