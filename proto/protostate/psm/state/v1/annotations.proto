@@ -9,6 +9,9 @@ option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 extend google.protobuf.MessageOptions {
   PSMOptions psm = 90443400;
   EventTypeObjectOptions event_type = 90443402;
+
+  OldPSMEvent event = 90443403;
+  OldPSMState state = 90443404;
 }
 
 message PSMOptions {
@@ -20,6 +23,9 @@ message EventTypeObjectOptions {}
 extend google.protobuf.FieldOptions {
   FieldOptions field = 90443405;
   EventTypeField event_type_field = 90443404;
+
+  OldEventField event_field = 90443403;
+  OldStateField state_field = 90443406;
 }
 
 message FieldOptions {
@@ -53,4 +59,36 @@ message StateQueryMethodOptions {
   // use name here instead of the service option to put multiple state query
   // methods in one service
   string name = 4;
+}
+
+message OldPSMEvent {
+  string name = 1;
+}
+
+message OldPSMState {
+  string name = 1;
+}
+
+message OldStateField {
+  // the field is the primary key, or is one field in a multi-key primary key
+  // for the state object.
+  bool primary_key = 1;
+}
+
+message OldEventField {
+  // the field is the enum wrapper for the event type
+  bool event_type = 1;
+
+  // the field contains the metadata for this message
+  bool metadata = 2;
+
+  // the field contains a foreign key to the state object. This must be part of
+  // the state's primary key, i.e. the state's field must be marked as
+  // primary_key = true;
+  bool state_key = 3;
+
+  // a non-primary key field used to construct initial state. When this is
+  // specified on an event for a state which already exists, it must equal the
+  // value in the state after the transition caused by the event.
+  bool state_field = 4;
 }
