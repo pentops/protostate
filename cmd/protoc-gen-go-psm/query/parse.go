@@ -245,6 +245,18 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*que
 		if src.listEventsMethod == nil {
 			return nil, fmt.Errorf("no repeated field in get response, and no list events method, cannot derive event")
 		}
+		for _, field := range src.listEventsMethod.Output.Fields {
+			if field.Message == nil {
+				continue
+			}
+			if field.Desc.Cardinality() == protoreflect.Repeated {
+				if eventMessage != nil {
+					return nil, fmt.Errorf("state get response %s should have exactly one repeated field", src.getMethod.Desc.FullName())
+				}
+				eventMessage = field.Message
+				continue
+			}
+		}
 	}
 
 	var stateMetadataField *protogen.Field
@@ -277,6 +289,11 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*que
 	}
 	if keyOptions.Name != src.name {
 		return nil, fmt.Errorf("keys message %s has a different name than the query service %s", keyMessage.Desc.FullName(), src.name)
+	}
+
+	if eventMessage == nil {
+		// No event, can't add fallbacks.
+		return nil, fmt.Errorf("no event message for %s, cannot derive event fields", keyMessage.Desc.FullName())
 	}
 
 	var eventMetadataField *protogen.Field
