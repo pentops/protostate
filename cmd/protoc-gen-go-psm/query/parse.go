@@ -151,12 +151,8 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	var statePkFields []string
-	if ss != nil {
-		statePkFields = ss.statePkFields
-	}
-
-	listReflectionSet, err := pquery.BuildListReflection(qs.listMethod.Input.Desc, qs.listMethod.Output.Desc, pquery.WithTieBreakerFields(statePkFields...))
+	// Empty table spec, the fields don't matter here.
+	listReflectionSet, err := pquery.BuildListReflection(qs.listMethod.Input.Desc, qs.listMethod.Output.Desc, pquery.TableSpec{})
 	if err != nil {
 		return nil, fmt.Errorf("pquery.BuildListReflection for %s: %w", qs.listMethod.Desc.FullName(), err)
 	}
@@ -180,12 +176,7 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		})
 	}
 
-	var fallbackPkFields []string
-	if ss != nil {
-		fallbackPkFields = ss.eventPkFields
-	}
-
-	listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.WithTieBreakerFields(fallbackPkFields...))
+	listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.TableSpec{})
 	if err != nil {
 		return nil, fmt.Errorf("pquery.BuildListReflection for %s is not compatible with PSM: %w", qs.listEventsMethod.Desc.FullName(), err)
 	}

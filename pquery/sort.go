@@ -2,66 +2,39 @@ package pquery
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 type sortSpec struct {
-	lastNode  pathNode
-	fieldPath []pathNode
-	desc      bool
+	*pgstore.NestedField
+	desc bool
 }
 
-func (ss sortSpec) jsonbPath() string {
-	out := strings.Builder{}
-	last := len(ss.fieldPath) - 1
-	for idx, part := range ss.fieldPath {
-		if part.oneof != nil {
-			panic("Oneof node on sortSpec jsonbPath")
-		}
-		// last part gets a double >
-		if idx == last {
-			out.WriteString("->>")
-		} else {
-			out.WriteString("->")
-		}
-		out.WriteString(fmt.Sprintf("'%s'", part.field.JSONName()))
-	}
-
-	return out.String()
+func (ss sortSpec) errorName() string {
+	return ss.NestedField.Path.JSONPathQuery()
 }
 
-func (ss sortSpec) fieldName() string {
-	out := strings.Builder{}
-	last := len(ss.fieldPath) - 1
-	for idx, part := range ss.fieldPath {
-		out.WriteString(part.field.JSONName())
-		if idx != last {
-			out.WriteString(".")
-		}
-	}
-
-	return out.String()
-}
-
-func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []string) ([]sortSpec, error) {
+func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []pgstore.ProtoFieldSpec) ([]sortSpec, error) {
 	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
 	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
 		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
-			spec, err := findFieldSpec(arrayField, tieBreaker)
+			spec, err := pgstore.NewProtoPath(arrayField, pgstore.ParseProtoPathSpec(tieBreaker))
 			if err != nil {
 				return nil, fmt.Errorf("field %s in annotated sort tiebreaker for %s: %w", tieBreaker, req.FullName(), err)
 			}
 
 			tieBreakerFields = append(tieBreakerFields, sortSpec{
-				lastNode:  spec.field,
-				fieldPath: spec.fieldPath,
-				desc:      false,
+				NestedField: &pgstore.NestedField{
+					RootColumn: dataColumn,
+					Path:       *spec,
+				},
+				desc: false,
 			})
 		}
 
@@ -74,127 +47,139 @@ func buildTieBreakerFields(req protoreflect.MessageDescriptor, arrayField protor
 
 	tieBreakerFields := make([]sortSpec, 0, len(fallback))
 	for _, tieBreaker := range fallback {
-		spec, err := findFieldSpec(arrayField, tieBreaker)
-		if err != nil {
-			return nil, fmt.Errorf("find field spec: %w", err)
-		}
 
-		tieBreakerFields = append(tieBreakerFields, sortSpec{
-			lastNode:  spec.field,
-			fieldPath: spec.fieldPath,
-			desc:      false,
-		})
+		if tieBreaker.ColumnName != dataColumn {
+			if len(tieBreaker.Path) > 0 {
+				return nil, fmt.Errorf("tiebreaker is a jsonb-sub-field of an unknown column %s, %v", tieBreaker.ColumnName, tieBreaker.Path)
+			}
+
+		} else if len(tieBreaker.Path) == 0 {
+			return nil, fmt.Errorf("tiebreaker is the root column %s, but no path was provided", tieBreaker.ColumnName)
+		} else {
+			path, err := pgstore.NewProtoPath(arrayField, tieBreaker.Path)
+			if err != nil {
+				return nil, fmt.Errorf("field %s in fallback sort tiebreaker for %s: %w", tieBreaker.ColumnName, req.FullName(), err)
+			}
+
+			tieBreakerFields = append(tieBreakerFields, sortSpec{
+				NestedField: &pgstore.NestedField{
+					Path:       *path,
+					RootColumn: dataColumn,
+				},
+				desc: false,
+			})
+		}
 	}
 
 	return tieBreakerFields, nil
 }
 
-func buildDefaultSorts(messageFields protoreflect.FieldDescriptors) []sortSpec {
+func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor) ([]sortSpec, error) {
 	var defaultSortFields []sortSpec
 
-	for i := 0; i < messageFields.Len(); i++ {
-		field := messageFields.Get(i)
+	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
+		field := path.LeafField()
+		if field == nil {
+			return nil // oneof or something
+		}
+
 		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 
-		if fieldOpts != nil {
-			isDefaultSort := false
-
-			switch fieldOps := fieldOpts.Type.(type) {
-			case *psml_pb.FieldConstraint_Double:
-				if fieldOps.Double.Sorting != nil && fieldOps.Double.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Fixed32:
-				if fieldOps.Fixed32.Sorting != nil && fieldOps.Fixed32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Fixed64:
-				if fieldOps.Fixed64.Sorting != nil && fieldOps.Fixed64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Float:
-				if fieldOps.Float.Sorting != nil && fieldOps.Float.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Int32:
-				if fieldOps.Int32.Sorting != nil && fieldOps.Int32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Int64:
-				if fieldOps.Int64.Sorting != nil && fieldOps.Int64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sfixed32:
-				if fieldOps.Sfixed32.Sorting != nil && fieldOps.Sfixed32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sfixed64:
-				if fieldOps.Sfixed64.Sorting != nil && fieldOps.Sfixed64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sint32:
-				if fieldOps.Sint32.Sorting != nil && fieldOps.Sint32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Sint64:
-				if fieldOps.Sint64.Sorting != nil && fieldOps.Sint64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Uint32:
-				if fieldOps.Uint32.Sorting != nil && fieldOps.Uint32.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Uint64:
-				if fieldOps.Uint64.Sorting != nil && fieldOps.Uint64.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			case *psml_pb.FieldConstraint_Timestamp:
-				if fieldOps.Timestamp.Sorting != nil && fieldOps.Timestamp.Sorting.DefaultSort {
-					isDefaultSort = true
-				}
-			}
-			if isDefaultSort {
-				node := pathNode{
-					field: field,
-					name:  field.Name(),
-				}
-				defaultSortFields = append(defaultSortFields, sortSpec{
-					lastNode:  node,
-					fieldPath: []pathNode{node},
-					desc:      true,
-				})
-			}
-		} else if field.Kind() == protoreflect.MessageKind {
-			subSort := buildDefaultSorts(field.Message().Fields())
-			for idx, subSortField := range subSort {
-				node := pathNode{
-					field: field,
-					name:  field.Name(),
-				}
-				subSortField.fieldPath = append([]pathNode{node}, subSortField.fieldPath...)
-				subSort[idx] = subSortField
-			}
-
-			defaultSortFields = append(defaultSortFields, subSort...)
+		if fieldOpts == nil {
+			return nil
 		}
+		isDefaultSort := false
+
+		switch fieldOps := fieldOpts.Type.(type) {
+		case *psml_pb.FieldConstraint_Double:
+			if fieldOps.Double.Sorting != nil && fieldOps.Double.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Fixed32:
+			if fieldOps.Fixed32.Sorting != nil && fieldOps.Fixed32.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Fixed64:
+			if fieldOps.Fixed64.Sorting != nil && fieldOps.Fixed64.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Float:
+			if fieldOps.Float.Sorting != nil && fieldOps.Float.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Int32:
+			if fieldOps.Int32.Sorting != nil && fieldOps.Int32.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Int64:
+			if fieldOps.Int64.Sorting != nil && fieldOps.Int64.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Sfixed32:
+			if fieldOps.Sfixed32.Sorting != nil && fieldOps.Sfixed32.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Sfixed64:
+			if fieldOps.Sfixed64.Sorting != nil && fieldOps.Sfixed64.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Sint32:
+			if fieldOps.Sint32.Sorting != nil && fieldOps.Sint32.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Sint64:
+			if fieldOps.Sint64.Sorting != nil && fieldOps.Sint64.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Uint32:
+			if fieldOps.Uint32.Sorting != nil && fieldOps.Uint32.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Uint64:
+			if fieldOps.Uint64.Sorting != nil && fieldOps.Uint64.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		case *psml_pb.FieldConstraint_Timestamp:
+			if fieldOps.Timestamp.Sorting != nil && fieldOps.Timestamp.Sorting.DefaultSort {
+				isDefaultSort = true
+			}
+		}
+		if isDefaultSort {
+			defaultSortFields = append(defaultSortFields, sortSpec{
+				NestedField: &pgstore.NestedField{
+					RootColumn: columnName,
+					Path:       path,
+				},
+				desc: true,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return defaultSortFields
+	return defaultSortFields, nil
 }
 
 func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortSpec, error) {
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
-		spec, err := findFieldSpec(ll.arrayField.Message(), sort.Field)
+		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
+		spec, err := pgstore.NewJSONPath(ll.arrayField.Message(), pathSpec)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dynamic filter: find field: %w", err)
+		}
+
+		biggerSpec := &pgstore.NestedField{
+			Path:       *spec,
+			RootColumn: ll.dataColumn,
 		}
 
 		results = append(results, sortSpec{
-			lastNode:  spec.field,
-			fieldPath: spec.fieldPath,
-			desc:      sort.Descending,
+			NestedField: biggerSpec,
+			desc:        sort.Descending,
 		})
 
 		// TODO: Remove this constraint, we can sort by different directions once we have the reversal logic in place
@@ -319,26 +304,26 @@ func isSortingAnnotated(opts *psml_pb.FieldConstraint) bool {
 
 func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*psml_pb.Sort) error {
 	for _, sort := range sorts {
-		// validate fields exist from the request query
-		err := validateFieldName(message, sort.GetField())
+		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
+		spec, err := pgstore.NewJSONPath(message, pathSpec)
 		if err != nil {
-			return fmt.Errorf("field name: %w", err)
+			return fmt.Errorf("find field %s: %w", sort.Field, err)
 		}
 
-		spec, err := findFieldSpec(message, sort.GetField())
-		if err != nil {
-			return fmt.Errorf("field spec: %w", err)
+		field := spec.LeafField()
+		if field == nil {
+			return fmt.Errorf("node %s is not a field", spec.DebugName())
 		}
 
 		// validate the fields are annotated correctly for the request query
-		sortOpts, ok := proto.GetExtension(spec.field.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		sortOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 		if !ok {
 			return fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
 		}
 
 		sortable := false
 		if sortOpts != nil {
-			switch spec.field.field.Kind() {
+			switch field.Kind() {
 			case protoreflect.DoubleKind:
 				sortable = sortOpts.GetDouble().GetSorting().Sortable
 			case protoreflect.Fixed32Kind:
@@ -364,7 +349,7 @@ func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*
 			case protoreflect.Uint64Kind:
 				sortable = sortOpts.GetUint64().GetSorting().Sortable
 			case protoreflect.MessageKind:
-				if spec.field.field.Message().FullName() == "google.protobuf.Timestamp" {
+				if field.Message().FullName() == "google.protobuf.Timestamp" {
 					sortable = sortOpts.GetTimestamp().GetSorting().Sortable
 				}
 			}

@@ -18,6 +18,7 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pgstore"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -39,28 +40,29 @@ type ListResponse interface {
 	proto.Message
 }
 
-type ListSpec[REQ ListRequest, RES ListResponse] struct {
-	TableName  string
-	DataColumn string
+type TableSpec struct {
+	TableName string
 
 	Auth     AuthProvider
 	AuthJoin []*LeftJoin
 
+	DataColumn string // TODO: Replace with array Columns []Column
+
+	// List of postgres column names to sort by if no other unique sort is found.
+	FallbackSortColumns []pgstore.ProtoFieldSpec
+}
+
+type Column struct {
+	Name string
+
+	// The point within the root element which is stored in the column. An empty
+	// path means this stores the root elemet,
+	MountPoint *pgstore.Path
+}
+
+type ListSpec[REQ ListRequest, RES ListResponse] struct {
+	TableSpec
 	RequestFilter func(REQ) (map[string]interface{}, error)
-}
-
-type ListerOption func(*listerOptions)
-
-type listerOptions struct {
-	tieBreakerFields []string
-}
-
-// TieBreakerFields is a list of fields to use as a tie breaker when the
-// list request message does not specify these fields.
-func WithTieBreakerFields(fields ...string) ListerOption {
-	return func(lo *listerOptions) {
-		lo.tieBreakerFields = fields
-	}
 }
 
 type ListReflectionSet struct {
@@ -78,29 +80,22 @@ type ListReflectionSet struct {
 	RequestFilterFields []protoreflect.FieldDescriptor
 
 	tsvColumnMap map[string]string
+
+	// TODO: This should be an array/map of columns to data types, allowing
+	// multiple JSONB values, as well as cached field values direcrly on the
+	// table
+	dataColumn string
 }
 
-func resolveListerOptions(options []ListerOption) listerOptions {
-	optionsStruct := listerOptions{}
-	for _, option := range options {
-		option(&optionsStruct)
-	}
-	return optionsStruct
+func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, table TableSpec) (*ListReflectionSet, error) {
+	return buildListReflection(req, res, table)
 }
 
-func ValidateListMethod(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) error {
-	_, err := buildListReflection(req, res, resolveListerOptions(options))
-	return fmt.Errorf("validate list method: %w", err)
-}
-
-func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options ...ListerOption) (*ListReflectionSet, error) {
-	return buildListReflection(req, res, resolveListerOptions(options))
-}
-
-func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, options listerOptions) (*ListReflectionSet, error) {
+func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, table TableSpec) (*ListReflectionSet, error) {
 	var err error
 	ll := ListReflectionSet{
 		defaultPageSize: uint64(20),
+		dataColumn:      table.DataColumn,
 	}
 	fields := res.Fields()
 
@@ -141,9 +136,12 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.Message().FullName(), err)
 	}
 
-	ll.defaultSortFields = buildDefaultSorts(ll.arrayField.Message().Fields())
+	ll.defaultSortFields, err = buildDefaultSorts(ll.dataColumn, ll.arrayField.Message())
+	if err != nil {
+		return nil, fmt.Errorf("default sorts: %w", err)
+	}
 
-	ll.tieBreakerFields, err = buildTieBreakerFields(req, ll.arrayField.Message(), options.tieBreakerFields)
+	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, req, ll.arrayField.Message(), table.FallbackSortColumns)
 	if err != nil {
 		return nil, fmt.Errorf("tie breaker fields: %w", err)
 	}
@@ -152,7 +150,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
-	f, err := buildDefaultFilters(ll.arrayField.Message().Fields())
+	f, err := buildDefaultFilters(ll.dataColumn, ll.arrayField.Message())
 	if err != nil {
 		return nil, fmt.Errorf("default filters: %w", err)
 	}
@@ -211,10 +209,10 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 type Lister[REQ ListRequest, RES ListResponse] struct {
 	ListReflectionSet
 
-	tableName  string
-	dataColumn string
-	auth       AuthProvider
-	authJoin   []*LeftJoin
+	tableName string
+
+	auth     AuthProvider
+	authJoin []*LeftJoin
 
 	requestFilter func(REQ) (map[string]interface{}, error)
 
@@ -224,23 +222,21 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 func NewLister[
 	REQ ListRequest,
 	RES ListResponse,
-](spec ListSpec[REQ, RES], options ...ListerOption) (*Lister[REQ, RES], error) {
+](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
 	ll := &Lister[REQ, RES]{
-		tableName:  spec.TableName,
-		dataColumn: spec.DataColumn,
-		auth:       spec.Auth,
-		authJoin:   spec.AuthJoin,
+		tableName: spec.TableName,
+		auth:      spec.Auth,
+		authJoin:  spec.AuthJoin,
 	}
 
 	descriptors := newMethodDescriptor[REQ, RES]()
 
-	optionsStruct := resolveListerOptions(options)
-
-	listFields, err := buildListReflection(descriptors.request, descriptors.response, optionsStruct)
+	listFields, err := buildListReflection(descriptors.request, descriptors.response, spec.TableSpec)
 	if err != nil {
 		return nil, err
 	}
 	ll.ListReflectionSet = *listFields
+
 	ll.requestFilter = spec.RequestFilter
 
 	ll.validator, err = protovalidate.New()
@@ -344,8 +340,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
 
-	selectQuery := sq.
-		Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
+	selectQuery := sq.Select(ll.dataColumn).
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields
@@ -412,7 +407,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		for _, spec := range ll.defaultFilterFields {
 			or := sq.Or{}
 			for _, val := range spec.filterVals {
-				and = append(and, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, spec.jsonbPath()), pg.JSONB(val)))
+				and = append(and, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, spec.Path.JSONPathQuery()), pg.JSONB(val)))
 			}
 
 			and = append(and, or)
@@ -428,7 +423,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if sortField.desc {
 			direction = "DESC"
 		}
-		selectQuery.OrderBy(fmt.Sprintf("%s.%s%s %s", tableAlias, ll.dataColumn, sortField.jsonbPath(), direction))
+		selectQuery.OrderBy(fmt.Sprintf("%s %s", sortField.Selector(tableAlias), direction))
 	}
 
 	if ll.auth != nil {
@@ -484,16 +479,12 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		rhsPlaceholders := make([]string, 0, len(sortFields))
 
 		for _, sortField := range sortFields {
-			rowSelecter := fmt.Sprintf("%s.%s%s",
-				tableAlias,
-				ll.dataColumn,
-				sortField.jsonbPath(),
-			)
+			rowSelecter := sortField.Selector(tableAlias)
 			valuePlaceholder := "?"
 
-			fieldVal, err := findFieldValue(rowMessage, sortField.fieldPath)
+			fieldVal, err := sortField.Path.GetValue(rowMessage)
 			if err != nil {
-				return nil, fmt.Errorf("sort field %s: %w", sortField.fieldName(), err)
+				return nil, fmt.Errorf("sort field %s: %w", sortField.errorName(), err)
 			}
 
 			dbVal := fieldVal.Interface()
@@ -522,7 +513,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					}
 					dbVal = intVal
 				default:
-					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.lastNode.name, name)
+					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.errorName(), name)
 				}
 
 			case string:
@@ -531,7 +522,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 					// String fields aren't valid for sorting, they can only be used
 					// for the tie-breaker so the order itself is not important, only
 					// that it is consistent
-					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.lastNode.name)
+					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.errorName())
 				}
 
 			case int64:
@@ -563,7 +554,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			// TODO: Reversals for the other types that are sortable
 
 			default:
-				return nil, fmt.Errorf("sort field %s is of type %T", sortField.lastNode.name, dbVal)
+				return nil, fmt.Errorf("sort field %s is of type %T", sortField.errorName(), dbVal)
 			}
 
 			lhsFields = append(lhsFields, rowSelecter)
@@ -672,127 +663,4 @@ func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) er
 	}
 
 	return nil
-}
-
-func validateFieldName(message protoreflect.MessageDescriptor, path string) error {
-	var name protoreflect.Name
-	var remainder string
-
-	parts := strings.SplitN(path, ".", 2)
-	if len(parts) == 2 {
-		name = protoreflect.Name(camelToSnake(parts[0]))
-		remainder = parts[1]
-	} else {
-		name = protoreflect.Name(camelToSnake(path))
-	}
-
-	field := message.Fields().ByName(name)
-	if field == nil {
-		oneof := message.Oneofs().ByName(name)
-		if oneof == nil {
-			return fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-		}
-	}
-
-	if remainder != "" {
-		if field.Kind() != protoreflect.MessageKind {
-			return fmt.Errorf("field %s is not a message", name)
-		}
-
-		return validateFieldName(field.Message(), remainder)
-	}
-
-	return nil
-}
-
-type fieldSpec struct {
-	field     pathNode
-	fieldPath []pathNode
-}
-
-type pathNode struct {
-	name  protoreflect.Name
-	field protoreflect.FieldDescriptor
-	oneof protoreflect.OneofDescriptor
-}
-
-func findFieldSpec(message protoreflect.MessageDescriptor, path string) (*fieldSpec, error) {
-	var name protoreflect.Name
-	var remainder string
-
-	parts := strings.SplitN(path, ".", 2)
-	if len(parts) == 2 {
-		name = protoreflect.Name(camelToSnake(parts[0]))
-		remainder = parts[1]
-	} else {
-		name = protoreflect.Name(camelToSnake(path))
-	}
-
-	node := pathNode{name: name}
-	field := message.Fields().ByName(name)
-	if field != nil {
-		node.field = field
-	} else {
-		oneof := message.Oneofs().ByName(name)
-		if oneof != nil {
-			node.oneof = oneof
-		} else {
-			return nil, fmt.Errorf("no field named '%s' in %s", name, message.FullName())
-		}
-	}
-
-	node.field = field
-
-	if remainder == "" {
-		return &fieldSpec{
-			field:     node,
-			fieldPath: []pathNode{node},
-		}, nil
-	}
-
-	if field.Kind() != protoreflect.MessageKind {
-		return nil, fmt.Errorf("field %s is not a message", name)
-	}
-
-	spec, err := findFieldSpec(field.Message(), remainder)
-	if err != nil {
-		return nil, fmt.Errorf("field %s: %w", name, err)
-	}
-
-	return &fieldSpec{
-		field:     spec.field,
-		fieldPath: append([]pathNode{node}, spec.fieldPath...),
-	}, nil
-}
-
-func findFieldValue(msg protoreflect.Message, path []pathNode) (protoreflect.Value, error) {
-	if len(path) == 0 {
-		return protoreflect.Value{}, fmt.Errorf("empty path")
-	}
-	var val protoreflect.Value
-	node := path[0]
-
-	if node.field == nil {
-		if node.oneof == nil {
-			return protoreflect.Value{}, fmt.Errorf("no field or oneof")
-		}
-		// oneof doesn't appear in the proto walk.
-		return findFieldValue(msg, path[1:])
-	}
-
-	field := node.field
-
-	// Has vs Get, Has returns false if the field is set to the default value for
-	// scalar types. We still want the fields if they are set to the default value,
-	// and can use validation of a field's existence before this point to ensure
-	// that the field is available.
-	val = msg.Get(field)
-	if len(path) == 1 {
-		return val, nil
-	}
-	if field.Kind() != protoreflect.MessageKind {
-		return protoreflect.Value{}, fmt.Errorf("field %s is not a message", field.Name())
-	}
-
-	return findFieldValue(val.Message(), path[1:])
 }
