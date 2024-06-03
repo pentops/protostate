@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -34,6 +35,8 @@ var (
 	smKeyColumn      = smImportPath.Ident("KeyColumn")
 	pgProtoPathSpec  = pgStoreImportPath.Ident("ProtoPathSpec")
 	pgProtoFieldSpec = pgStoreImportPath.Ident("ProtoFieldSpec")
+
+	protoreflectImportPath = protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -345,7 +348,7 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 		if len(path) == 0 {
 			pathString = ""
 		}
-		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, columnName, `", `, `Path: `, pgProtoPathSpec, `{`, pathString, `} },`)
+		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, columnName, `", `, `PathFromRoot: `, pgProtoPathSpec, `{`, pathString, `} },`)
 	}
 
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
@@ -355,15 +358,15 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	g.P("State: ", smStateTableSpec, "{")
 	g.P("  TableName: \"", ss.specifiedName, "\",")
 	fieldSpec("Root", "state")
-	fieldSpec("Key", "state", ss.state.keyField.Desc.Name())
+	//fieldSpec("Key", "state", ss.state.keyField.Desc.Name())
 	g.P("},")
 	// END STATE
 
 	// EVENT
 	g.P("Event: ", smEventTableSpec, "{")
 	g.P("  TableName: \"", ss.specifiedName, "_event\",")
-	fieldSpec("Root", "event")
-	fieldSpec("Key", "event", ss.event.keyField.Desc.Name())
+	fieldSpec("Root", "data")
+	//fieldSpec("Key", "event", ss.event.keyField.Desc.Name())
 	fieldSpec("ID", "id", ss.event.metadataField.Desc.Name(), protoreflect.Name("event_id"))
 	fieldSpec("Timestamp", "timestamp", ss.event.metadataField.Desc.Name())
 	fieldSpec("Sequence", "sequence", ss.event.metadataField.Desc.Name())
@@ -372,14 +375,26 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	g.P("},")
 	// END EVENT
 
+	keyColumns := make([]psm.KeyColumn, len(ss.keyFields))
+	for idx, field := range ss.keyFields {
+		keyColumns[idx] = psm.KeyColumn{
+			ColumnName: string(field.field.Desc.Name()),
+			ProtoName:  field.field.Desc.Name(),
+			Primary:    field.PrimaryKey,
+			Required:   field.PrimaryKey || !field.field.Desc.HasOptionalKeyword(),
+		}
+	}
+
 	// KEY COLUMNS
 	g.P("KeyColumns: []", smKeyColumn, "{{")
-	for _, field := range ss.keyFields {
-		g.P("  ColumnName: \"", field.field.Desc.Name(), "\",")
-		g.P("  ProtoName: \"", field.field.Desc.Name(), "\",")
-		g.P("  Primary: ", boolString(field.PrimaryKey), ",")
-		g.P("  Required: ", boolString(field.PrimaryKey || !field.field.Desc.HasOptionalKeyword()), ",")
-		g.P("}, {")
+	for idx, field := range keyColumns {
+		if idx > 0 {
+			g.P("}, {")
+		}
+		g.P("  ColumnName: \"", field.ColumnName, "\",")
+		g.P("  ProtoName: ", protoreflectImportPath.Ident("Name"), "(\"", field.ProtoName, "\"),")
+		g.P("  Primary: ", boolString(field.Primary), ",")
+		g.P("  Required: ", boolString(field.Required), ",")
 	}
 	g.P("}},")
 	// END KEY COLUMNS
@@ -388,17 +403,25 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	g.P("},")
 
 	g.P("KeyValues: func(keys *", ss.keyMessage.GoIdent, ") (map[string]string, error) {")
-	g.P("    return map[string]string{")
-	for _, field := range ss.keyFields {
-		if !field.PrimaryKey {
+	g.P("  keyset := map[string]string{")
+	for idx, columnSpec := range keyColumns {
+		if !columnSpec.Required {
 			continue
 		}
-		// stripping the prefix foo_ from the name in the event. In the DB, we
-		// expect the primary key to be called just id, so foo_id -> id
-		keyName := strings.TrimPrefix(string(field.field.Desc.Name()), ss.specifiedName+"_")
-		g.P("      \"", keyName, "\": keys.", field.field.GoName, ",")
+		field := ss.keyFields[idx].field
+		g.P("      \"", columnSpec.ColumnName, "\": keys.", field.GoName, ",")
 	}
-	g.P("    }, nil")
+	g.P("  }")
+	for idx, columnSpec := range keyColumns {
+		if columnSpec.Required {
+			continue
+		}
+		field := ss.keyFields[idx].field
+		g.P("if keys.", field.GoName, " != nil {")
+		g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *keys.", field.GoName)
+		g.P("}")
+	}
+	g.P("  return keyset, nil")
 	g.P("},")
 
 	g.P("}")

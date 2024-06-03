@@ -65,6 +65,8 @@ type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	RequestFilter func(REQ) (map[string]interface{}, error)
 }
 
+type QueryLogger func(sqrlx.Sqlizer)
+
 type ListReflectionSet struct {
 	defaultPageSize uint64
 
@@ -211,6 +213,8 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 
 	tableName string
 
+	queryLogger QueryLogger
+
 	auth     AuthProvider
 	authJoin []*LeftJoin
 
@@ -245,6 +249,10 @@ func NewLister[
 	}
 
 	return ll, nil
+}
+
+func (ll *Lister[REQ, RES]) SetQueryLogger(logger QueryLogger) {
+	ll.queryLogger = logger
 }
 
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
@@ -294,6 +302,10 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		stmt, _, _ := selectQuery.ToSql()
 		log.WithField(ctx, "query", stmt).Error("list query")
 		return fmt.Errorf("list query: %w", err)
+	}
+
+	if ll.queryLogger != nil {
+		ll.queryLogger(selectQuery)
 	}
 
 	list := res.Mutable(ll.arrayField).List()

@@ -21,8 +21,16 @@ type NestedField struct {
 }
 
 type ProtoFieldSpec struct {
+	// The column holding the data, either directly or JSONB from here using the
+	// path
 	ColumnName string
-	Path       ProtoPathSpec
+
+	// The path from the column root to the node being specified (not the path
+	// of the node from a 'root node' of the table)
+	Path ProtoPathSpec
+
+	// The path from the nominal table root message to the node being specified
+	PathFromRoot ProtoPathSpec
 }
 
 func (nf *NestedField) ProtoChild(name protoreflect.Name) (*NestedField, error) {
@@ -97,16 +105,26 @@ func (pp Path) Child(name protoreflect.Name) (*Path, error) {
 }
 
 func (pp Path) DebugName() string {
-	return fmt.Sprintf("%s.%s", pp.root.FullName(), pp.JSONPathQuery())
+	return fmt.Sprintf("%s:%s", pp.root.FullName(), pp.pathNodeNames())
+}
+
+func (pp Path) pathNodeNames() string {
+	names := make([]string, 0, len(pp.path))
+	for _, node := range pp.path {
+		names = append(names, string(node.name))
+	}
+	return strings.Join(names, ".")
 }
 
 func (pp *Path) JSONBArrowPath() string {
-
 	elements := make([]string, 0, len(pp.path))
 	end, path := pp.path[len(pp.path)-1], pp.path[:len(pp.path)-1]
 	for _, part := range path {
 		if part.oneof != nil {
 			continue // Ignore the node, it isn't in the JSONB tree
+		}
+		if part.field.IsList() {
+			panic("list fields not supported by JSONBArrowPath()")
 		}
 		elements = append(elements, fmt.Sprintf("->'%s'", part.field.JSONName()))
 	}
@@ -120,6 +138,9 @@ func (pp *Path) JSONPathQuery() string {
 	for _, part := range pp.path {
 		if part.oneof != nil {
 			continue // Ignore the node, it isn't in the JSONB tree
+		}
+		if part.field == nil {
+			panic(fmt.Sprintf("invalid path: %v", pp.DebugName()))
 		}
 		elements = append(elements, fmt.Sprintf(".%s", part.field.JSONName()))
 		if part.field.IsList() {
@@ -241,9 +262,7 @@ func NewProtoPath(message protoreflect.MessageDescriptor, fieldPath ProtoPathSpe
 			continue
 		}
 
-		if field.IsList() {
-			return nil, fmt.Errorf("unimplemented: list fields in path spec")
-		} else if field.IsMap() {
+		if field.IsMap() {
 			return nil, fmt.Errorf("unimplemented: map fields in path spec")
 		}
 
@@ -284,7 +303,7 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 
 	pathSpec := &Path{
 		root: message,
-		path: make([]pathNode, len(fieldPath)),
+		path: make([]pathNode, 0, len(fieldPath)),
 	}
 
 	walkMessage := message
@@ -297,25 +316,37 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 		node := pathNode{
 			name: protoreflect.Name(pathElem),
 		}
-		field := walkMessage.Fields().ByName(protoreflect.Name(pathElem))
+		field := walkMessage.Fields().ByJSONName(pathElem)
 		if field == nil {
-			return nil, fmt.Errorf("field %s not found in message %s", pathElem, walkMessage.FullName())
+
+			// Very Special Edge Case: Oneof wrapper types allow the client to
+			// filter based on the type of the oneof. So the oneof can be at the
+			// end of the path, and the field can be the oneof wrapper type.
+
+			if len(walkPath) == 0 && pathElem == "type" {
+				oneof := walkMessage.Oneofs().ByName(protoreflect.Name("type"))
+				if oneof != nil {
+					node.oneof = oneof
+					pathSpec.path = append(pathSpec.path, node)
+					pathSpec.leafOneof = oneof
+					break
+				}
+			}
+
+			return nil, fmt.Errorf("JSON field '%s' not found in message %s", pathElem, walkMessage.FullName())
 		}
 
 		node.field = field
 
-		if field.IsList() {
-			return nil, fmt.Errorf("unimplemented: list fields in path spec")
-		} else if field.IsMap() {
+		if field.IsMap() {
 			return nil, fmt.Errorf("unimplemented: map fields in path spec")
 		}
 
+		pathSpec.path = append(pathSpec.path, node)
 		if len(walkPath) == 0 {
 			pathSpec.leafField = node.field
 			break
 		}
-
-		pathSpec.path = append(pathSpec.path, node)
 
 		if field.Kind() != protoreflect.MessageKind {
 			return nil, fmt.Errorf("field %s is not a message, but path elements remain", pathElem)

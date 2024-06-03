@@ -10,6 +10,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -87,6 +88,17 @@ func TestDefaultFiltering(t *testing.T) {
 	})
 }
 
+func testLogger(t *testing.T) pquery.QueryLogger {
+	return func(query sqrlx.Sqlizer) {
+		queryString, args, err := query.ToSql()
+		if err != nil {
+			t.Logf("Query Error: %s", err.Error())
+			return
+		}
+		t.Logf("Query %s; ARGS %#v", queryString, args)
+	}
+}
+
 func TestFilteringWithAuthScope(t *testing.T) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
 	db, err := sqrlx.New(conn, sq.Dollar)
@@ -106,6 +118,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	queryer.SetQueryLogger(testLogger(t))
 
 	tenantID1 := uuid.NewString()
 	tenantID2 := uuid.NewString()
@@ -192,6 +205,7 @@ func TestDynamicFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	queryer.SetQueryLogger(testLogger(t))
 
 	tenants := []string{uuid.NewString()}
 	ids := setupFooListableData(t, ss, sm, tenants, 60)

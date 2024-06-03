@@ -110,6 +110,8 @@ type Getter[
 	auth       AuthProvider
 	authJoin   *LeftJoin
 
+	queryLogger QueryLogger
+
 	validator *protovalidate.Validator
 
 	join *getJoin
@@ -187,6 +189,10 @@ func NewGetter[
 	return sc, nil
 }
 
+func (gc *Getter[REQ, RES]) SetQueryLogger(logger QueryLogger) {
+	gc.queryLogger = logger
+}
+
 func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
 
 	as := newAliasSet()
@@ -260,6 +266,10 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 
 	var foundJSON []byte
 	var joinedJSON pq.StringArray
+
+	if gc.queryLogger != nil {
+		gc.queryLogger(selectQuery)
+	}
 
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
 		ReadOnly:  true,

@@ -3,7 +3,6 @@ package psm
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/pentops/protostate/pgstore"
 	"github.com/pentops/protostate/pquery"
@@ -40,10 +39,6 @@ func (tm *TableMap) Validate() error {
 	if tm.State.Root == nil {
 		return fmt.Errorf("missing State.Data in TableMap")
 	}
-	if tm.State.Key == nil {
-		return fmt.Errorf("missing State.Key in TableMap")
-	}
-
 	if tm.Event.TableName == "" {
 		return fmt.Errorf("missing Event.TableName in TableMap")
 	}
@@ -74,9 +69,6 @@ type EventTableSpec struct {
 	// The entire event mesage as JSONB
 	Root *pgstore.ProtoFieldSpec
 
-	// The name of the field in the event message which holds the PSM keys
-	Key *pgstore.ProtoFieldSpec
-
 	// a UUID holding the primary key of the event
 	// TODO: Multi-column ID for Events?
 	ID *pgstore.ProtoFieldSpec
@@ -99,13 +91,11 @@ type StateTableSpec struct {
 
 	// The entire state message, as a JSONB
 	Root *pgstore.ProtoFieldSpec
-
-	Key *pgstore.ProtoFieldSpec
 }
 
 type KeyColumn struct {
 	ColumnName string
-	ProtoName  string
+	ProtoName  protoreflect.Name
 	Primary    bool
 	Required   bool
 	Unique     bool
@@ -207,6 +197,16 @@ func (gc *StateQuerySet[
 	GetREQ, GetRES,
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
+]) SetQueryLogger(logger pquery.QueryLogger) {
+	gc.Getter.SetQueryLogger(logger)
+	gc.MainLister.SetQueryLogger(logger)
+	gc.EventLister.SetQueryLogger(logger)
+}
+
+func (gc *StateQuerySet[
+	GetREQ, GetRES,
+	ListREQ, ListRES,
+	ListEventsREQ, ListEventsRES,
 ]) Get(ctx context.Context, db Transactor, reqMsg GetREQ, resMsg GetRES) error {
 	return gc.Getter.Get(ctx, db, reqMsg, resMsg)
 }
@@ -252,19 +252,33 @@ func BuildStateQuerySet[
 		AuthJoin:   options.AuthJoin,
 	}
 
-	pkFields := map[string]protoreflect.FieldDescriptor{}
 	eventJoinMap := pquery.JoinFields{}
 	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
 
+	unmappedRequestFields := map[protoreflect.Name]protoreflect.FieldDescriptor{}
 	for i := 0; i < requestReflect.Fields().Len(); i++ {
 		field := requestReflect.Fields().Get(i)
-		fullKey := string(field.Name())
-		rootKey := strings.TrimPrefix(fullKey, smSpec.State.TableName+"_")
-		pkFields[rootKey] = field
-		eventJoinMap = append(eventJoinMap, pquery.JoinField{
-			RootColumn: rootKey,
-			JoinColumn: fullKey,
-		})
+		unmappedRequestFields[field.Name()] = field
+	}
+
+	pkFields := map[string]protoreflect.FieldDescriptor{}
+	for _, keyColumn := range smSpec.KeyColumns {
+		matchingRequestField, ok := unmappedRequestFields[keyColumn.ProtoName]
+		if ok {
+			delete(unmappedRequestFields, keyColumn.ProtoName)
+			pkFields[keyColumn.ColumnName] = matchingRequestField
+		}
+
+		if keyColumn.Primary {
+			eventJoinMap = append(eventJoinMap, pquery.JoinField{
+				RootColumn: keyColumn.ColumnName,
+				JoinColumn: keyColumn.ColumnName,
+			})
+		}
+	}
+
+	if len(unmappedRequestFields) > 0 {
+		return nil, fmt.Errorf("unmapped fields in Get request: %v", unmappedRequestFields)
 	}
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
