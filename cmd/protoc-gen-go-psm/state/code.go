@@ -6,11 +6,13 @@ import (
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
 	// all imports from PSM are defined here, i.e. this is the committed PSM interface.
 	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
+	pgStoreImportPath       = protogen.GoImportPath("github.com/pentops/protostate/pgstore")
 	smEventer               = smImportPath.Ident("Eventer")
 	smStateMachine          = smImportPath.Ident("StateMachine")
 	smDBStateMachine        = smImportPath.Ident("DBStateMachine")
@@ -25,6 +27,13 @@ var (
 	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
 	smEventSpec             = smImportPath.Ident("EventSpec")
 	smIInnerEvent           = smImportPath.Ident("IInnerEvent")
+	smTableMap              = smImportPath.Ident("TableMap")
+	smStateTableSpec        = smImportPath.Ident("StateTableSpec")
+	smEventTableSpec        = smImportPath.Ident("EventTableSpec")
+
+	smKeyColumn      = smImportPath.Ident("KeyColumn")
+	pgProtoPathSpec  = pgStoreImportPath.Ident("ProtoPathSpec")
+	pgProtoFieldSpec = pgStoreImportPath.Ident("ProtoFieldSpec")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -306,6 +315,13 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
+func boolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
+
 func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 
 	FooPSMTableSpec := ss.typeAlias(g, "TableSpec", smPSMTableSpec)
@@ -319,63 +335,60 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	// 'event_id', 'message_id' or 'id' as a string
 	// If all the above match, we can automate the ExtractMetadata function
 
+	fieldSpec := func(name string, columnName string, path ...protoreflect.Name) {
+		pathElem := make([]string, len(path))
+		for i, p := range path {
+			pathElem[i] = string(p)
+		}
+
+		pathString := fmt.Sprintf(`"%s"`, strings.Join(pathElem, `","`))
+		if len(path) == 0 {
+			pathString = ""
+		}
+		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, columnName, `", `, `Path: `, pgProtoPathSpec, `{`, pathString, `} },`)
+	}
+
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
-	g.P("  State: ", smTableSpec, "[*", ss.state.message.GoIdent, "] {")
-	g.P("    TableName: \"", ss.specifiedName, "\",")
-	g.P("    DataColumn: \"state\",")
-	g.P("    StoreExtraColumns: func(state *", ss.state.message.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("      return map[string]interface{}{")
+	g.P("  TableMap: ", smTableMap, "{")
 
-	// Assume the NON KEY fields are stored as columns in the state table
-	for _, field := range ss.keyFields {
-		if field.PrimaryKey {
-			continue
-		}
-		// stripping the prefix foo_ from the name in the event. In the DB, we
-		// expect the primary key to be called just id, so foo_id -> id
-		keyName := strings.TrimPrefix(string(field.field.Desc.Name()), ss.specifiedName+"_")
-		g.P("      \"", keyName, "\": state.", ss.state.keyField.GoName, ".", field.field.GoName, ",")
-	}
-	g.P("      }, nil")
-	g.P("    },")
-	g.P("    PKFieldPaths: []string{")
-	for _, field := range ss.keyFields {
-		if !field.PrimaryKey {
-			continue
-		}
-		g.P("\"", ss.state.keyField.Desc.Name(), ".", field.field.Desc.Name(), "\",")
-	}
-	g.P("    },")
-	g.P("  },")
+	// STATE
+	g.P("State: ", smStateTableSpec, "{")
+	g.P("  TableName: \"", ss.specifiedName, "\",")
+	fieldSpec("Root", "state")
+	fieldSpec("Key", "state", ss.state.keyField.Desc.Name())
+	g.P("},")
+	// END STATE
 
-	g.P("  Event: ", smTableSpec, "[*", ss.event.message.GoIdent, "] {")
+	// EVENT
+	g.P("Event: ", smEventTableSpec, "{")
 	g.P("  TableName: \"", ss.specifiedName, "_event\",")
-	g.P("    DataColumn: \"data\",")
-	g.P("    StoreExtraColumns: func(event *", ss.event.message.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("      metadata := event.", ss.event.metadataField.GoName)
-	g.P("      return map[string]interface{}{")
-	g.P("        \"id\": metadata.EventId,")
-	g.P("        \"timestamp\": metadata.Timestamp,")
-	g.P("        \"cause\": metadata.Cause,")
-	g.P("        \"sequence\": metadata.Sequence,")
-	// Assumes that all key fields should be stored by default
+	fieldSpec("Root", "event")
+	fieldSpec("Key", "event", ss.event.keyField.Desc.Name())
+	fieldSpec("ID", "id", ss.event.metadataField.Desc.Name(), protoreflect.Name("event_id"))
+	fieldSpec("Timestamp", "timestamp", ss.event.metadataField.Desc.Name())
+	fieldSpec("Sequence", "sequence", ss.event.metadataField.Desc.Name())
+	fieldSpec("Cause", "cause", ss.event.metadataField.Desc.Name())
+	fieldSpec("StateSnapshot", "state", ss.state.keyField.Desc.Name())
+	g.P("},")
+	// END EVENT
+
+	// KEY COLUMNS
+	g.P("KeyColumns: []", smKeyColumn, "{{")
 	for _, field := range ss.keyFields {
-		keyName := string(field.field.Desc.Name())
-		g.P("      \"", keyName, "\": event.", ss.event.keyField.GoName, ".", field.field.GoName, ",")
+		g.P("  ColumnName: \"", field.field.Desc.Name(), "\",")
+		g.P("  ProtoName: \"", field.field.Desc.Name(), "\",")
+		g.P("  Primary: ", boolString(field.PrimaryKey), ",")
+		g.P("  Required: ", boolString(field.PrimaryKey || !field.field.Desc.HasOptionalKeyword()), ",")
+		g.P("}, {")
 	}
-	g.P("      }, nil")
-	g.P("    },")
-	g.P("    PKFieldPaths: []string{")
-	g.P("      \"", ss.event.metadataField.Desc.Name(), ".EventId\",")
-	g.P("    },")
-	g.P("  },")
-	g.P("  EventPrimaryKey: func(id string, keys *", ss.keyMessage.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("    return map[string]interface{}{")
-	g.P("      \"id\": id,")
-	g.P("    }, nil")
-	g.P("  },")
-	g.P("  PrimaryKey: func(keys *", ss.keyMessage.GoIdent, ") (map[string]interface{}, error) {")
-	g.P("    return map[string]interface{}{")
+	g.P("}},")
+	// END KEY COLUMNS
+
+	// END TABLE MAP
+	g.P("},")
+
+	g.P("KeyValues: func(keys *", ss.keyMessage.GoIdent, ") (map[string]string, error) {")
+	g.P("    return map[string]string{")
 	for _, field := range ss.keyFields {
 		if !field.PrimaryKey {
 			continue
@@ -386,9 +399,10 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 		g.P("      \"", keyName, "\": keys.", field.field.GoName, ",")
 	}
 	g.P("    }, nil")
-	g.P("  },")
+	g.P("},")
 
 	g.P("}")
+	// END DEFAULT TABLE SPEC
 
 	g.P("func Default", ss.machineName, "Config() *", smStateMachineConfig, "[")
 	ss.writeBaseTypes(g)

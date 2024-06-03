@@ -5,149 +5,10 @@ import (
 	"testing"
 
 	"github.com/pentops/flowtest/prototest"
+	"github.com/pentops/protostate/pgstore"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
-
-func TestValidateFieldName(t *testing.T) {
-	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
-		"test.proto": `
-		syntax = "proto3";
-
-		import "psm/list/v1/page.proto";
-		import "psm/list/v1/query.proto";
-
-		package test;
-
-		message Foo {
-			string id = 1;
-			Profile profile = 2;
-		}
-
-		message Profile {
-			int64 weight = 1;
-
-			oneof type {
-				Card card = 2;
-			}
-		}
-
-		message Card {
-			int64 size = 1;
-		}
-	`})
-
-	fooDesc := descFiles.MessageByName(t, "test.Foo")
-
-	tcs := []struct {
-		name string
-	}{
-		{name: "id"},
-		{name: "profile.weight"},
-		{name: "profile.type"},
-		{name: "profile.card.size"},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateFieldName(fooDesc, tc.name)
-			if err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-
-	tcs = []struct {
-		name string
-	}{
-		{name: "foo"},
-		{name: "profile.weight.size"},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateFieldName(fooDesc, tc.name)
-			if err == nil {
-				t.Fatal("expected error")
-			}
-		})
-	}
-}
-
-func TestFindFieldSpec(t *testing.T) {
-	descFiles := prototest.DescriptorsFromSource(t, map[string]string{
-		"test.proto": `
-		syntax = "proto3";
-
-		import "psm/list/v1/page.proto";
-		import "psm/list/v1/query.proto";
-
-		package test;
-
-		message Foo {
-			string id = 1;
-			Profile profile = 2;
-		}
-
-		message Profile {
-			int64 weight = 1;
-
-			oneof type {
-				Card card = 2;
-			}
-		}
-
-		message Card {
-			int64 size = 1;
-		}
-	`})
-
-	fooDesc := descFiles.MessageByName(t, "test.Foo")
-
-	tcs := []struct {
-		name string
-	}{
-		{name: "id"},
-		{name: "profile.weight"},
-		{name: "profile.card.size"},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			spec, err := findFieldSpec(fooDesc, tc.name)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if spec.field.field == nil {
-				t.Fatal("expected field")
-			}
-
-			parts := strings.Split(tc.name, ".")
-			name := parts[len(parts)-1]
-			assert.Equal(t, string(spec.field.field.Name()), name)
-		})
-	}
-
-	tcs = []struct {
-		name string
-	}{
-		{name: "foo"},
-		{name: "profile.weight.size"},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			spec, err := findFieldSpec(fooDesc, tc.name)
-			if err == nil {
-				t.Fatal("expected error")
-			}
-
-			if spec != nil {
-				t.Fatal("expected no spec")
-			}
-		})
-	}
-}
 
 type composed struct {
 	ListFoosRequest  string
@@ -190,7 +51,10 @@ func (c composed) toString() string {
 }
 
 func TestBuildListReflection(t *testing.T) {
-	build := func(t testing.TB, input string, options listerOptions) (*ListReflectionSet, error) {
+
+	type tableMod func(t testing.TB, spec *TableSpec, req, res protoreflect.MessageDescriptor)
+
+	build := func(t testing.TB, input string, spec tableMod) (*ListReflectionSet, error) {
 		pdf := prototest.DescriptorsFromSource(t, map[string]string{
 			"test.proto": `
 				syntax = "proto3";
@@ -206,16 +70,21 @@ func TestBuildListReflection(t *testing.T) {
 				` + input,
 		})
 
-		responseDesc := pdf.MessageByName(t, "test.ListFoosResponse")
 		requestDesc := pdf.MessageByName(t, "test.ListFoosRequest")
+		responseDesc := pdf.MessageByName(t, "test.ListFoosResponse")
 
-		return buildListReflection(requestDesc, responseDesc, options)
+		table := &TableSpec{}
+		if spec != nil {
+			spec(t, table, requestDesc, responseDesc)
+		}
+
+		return buildListReflection(requestDesc, responseDesc, *table)
 	}
 
-	runHappy := func(name string, input string, options listerOptions, callback func(*testing.T, *ListReflectionSet)) {
+	runHappy := func(name string, input string, spec tableMod, callback func(*testing.T, *ListReflectionSet)) {
 		t.Run(name, func(t *testing.T) {
 			t.Helper()
-			set, err := build(t, input, options)
+			set, err := build(t, input, spec)
 
 			if err != nil {
 				t.Fatal(err)
@@ -223,9 +92,11 @@ func TestBuildListReflection(t *testing.T) {
 			callback(t, set)
 		})
 	}
-	runSad := func(name string, input string, options listerOptions, wantError string) {
+	runSad := func(name string, input string, spec tableMod, wantError string) {
+		t.Helper()
 		t.Run(name, func(t *testing.T) {
-			_, err := build(t, input, options)
+			t.Helper()
+			_, err := build(t, input, spec)
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -256,13 +127,13 @@ func TestBuildListReflection(t *testing.T) {
 			string id = 1;
 		}
 		`,
-		listerOptions{},
+		nil,
 		func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->>'id'", field.jsonbPath())
+				assert.Equal(t, "->>'id'", field.Path.JSONBArrowPath())
 			}
 			assert.Equal(t, uint64(20), lr.defaultPageSize)
 		})
@@ -288,7 +159,7 @@ func TestBuildListReflection(t *testing.T) {
 			string id = 1;
 		}
 		`,
-		listerOptions{},
+		nil,
 		func(t *testing.T, lr *ListReflectionSet) {
 			assert.EqualValues(t, int(10), int(lr.defaultPageSize))
 		})
@@ -299,15 +170,18 @@ func TestBuildListReflection(t *testing.T) {
 			psm.list.v1.QueryRequest query = 2;
 		`,
 	}.toString(),
-		listerOptions{
-			tieBreakerFields: []string{"id"},
+		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
+			table.FallbackSortColumns = []pgstore.ProtoFieldSpec{{
+				ColumnName: table.DataColumn,
+				Path:       pgstore.ProtoPathSpec{"id"},
+			}}
 		},
 		func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->>'id'", field.jsonbPath())
+				assert.Equal(t, "->>'id'", field.Path.JSONBArrowPath())
 			}
 		})
 
@@ -335,19 +209,14 @@ func TestBuildListReflection(t *testing.T) {
 			string id = 1;
 		}
 		`,
-		listerOptions{},
+		nil,
 		func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 1 {
 				t.Error("expected one sort tiebreaker")
 			} else {
 				field := lr.tieBreakerFields[0]
-				assert.Equal(t, "->'bar'->>'id'", field.jsonbPath())
-
-				fieldPath := make([]string, len(field.fieldPath))
-				for i, field := range field.fieldPath {
-					fieldPath[i] = string(field.field.Name())
-				}
-				assert.Equal(t, []string{"bar", "id"}, fieldPath)
+				assert.Equal(t, "->'bar'->>'id'", field.Path.JSONBArrowPath())
+				assert.Equal(t, "$.bar.id", field.Path.JSONPathQuery())
 			}
 		})
 
@@ -381,7 +250,7 @@ func TestBuildListReflection(t *testing.T) {
 			];
 		}
 		`,
-		listerOptions{},
+		nil,
 		func(t *testing.T, lr *ListReflectionSet) {
 			if len(lr.tieBreakerFields) != 0 {
 				t.Error("expected no sort tiebreaker")
@@ -391,13 +260,8 @@ func TestBuildListReflection(t *testing.T) {
 				t.Error("expected one sort tiebreaker, got", len(lr.tieBreakerFields))
 			} else {
 				field := lr.defaultSortFields[0]
-				assert.Equal(t, "->'bar'->>'timestamp'", field.jsonbPath())
-
-				fieldPath := make([]string, len(field.fieldPath))
-				for i, field := range field.fieldPath {
-					fieldPath[i] = string(field.field.Name())
-				}
-				assert.Equal(t, []string{"bar", "timestamp"}, fieldPath)
+				assert.Equal(t, "->'bar'->>'timestamp'", field.Path.JSONBArrowPath())
+				assert.Equal(t, "$.bar.timestamp", field.Path.JSONPathQuery())
 			}
 		})
 
@@ -410,7 +274,7 @@ func TestBuildListReflection(t *testing.T) {
 			Foo dangling = 3;
 		`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"unknown field")
 
 	runSad("non message in response", composed{
@@ -420,7 +284,7 @@ func TestBuildListReflection(t *testing.T) {
 			string dangling = 3;
 		`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"should be a message",
 	)
 
@@ -431,7 +295,7 @@ func TestBuildListReflection(t *testing.T) {
 			repeated Foo dangling = 3;
 		`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"multiple repeated fields")
 
 	runSad("no array field in response", composed{
@@ -439,7 +303,7 @@ func TestBuildListReflection(t *testing.T) {
 			psm.list.v1.PageResponse page = 2;
 			`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no repeated field in response",
 	)
 
@@ -448,7 +312,7 @@ func TestBuildListReflection(t *testing.T) {
 			repeated Foo foos = 1;
 			`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no page field in response",
 	)
 
@@ -460,7 +324,7 @@ func TestBuildListReflection(t *testing.T) {
 			psm.list.v1.QueryRequest query = 2;
 		`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no default sort field",
 	)
 
@@ -473,7 +337,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 			`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no field named 'missing'",
 	)
 
@@ -486,7 +350,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 			`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no page field in request",
 	)
 
@@ -499,7 +363,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 			`,
 	}.toString(),
-		listerOptions{},
+		nil,
 		"no query field in request",
 	)
 
@@ -520,7 +384,7 @@ func TestBuildListReflection(t *testing.T) {
 			repeated int64 weight = 3 [(psm.list.v1.field).int64.sorting.sortable = true];
 		}
 		`,
-		listerOptions{},
+		nil,
 		"sorting not allowed on repeated field",
 	)
 
@@ -546,7 +410,7 @@ func TestBuildListReflection(t *testing.T) {
 			int64 weight = 2 [(psm.list.v1.field).int64.sorting.sortable = true];
 		}
 		`,
-		listerOptions{},
+		nil,
 		"sorting not allowed on subfield of repeated parent",
 	)
 }

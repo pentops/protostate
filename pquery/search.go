@@ -5,6 +5,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -153,26 +154,26 @@ func validateSearchAnnotationsField(ids map[string]protoreflect.Name, field prot
 
 func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*psml_pb.Search) error {
 	for _, search := range searches {
-		// validate fields exist from the request query
-		err := validateFieldName(message, search.GetField())
-		if err != nil {
-			return fmt.Errorf("field name: %w", err)
-		}
 
-		spec, err := findFieldSpec(message, search.GetField())
+		spec, err := pgstore.NewJSONPath(message, pgstore.ParseJSONPathSpec(search.GetField()))
 		if err != nil {
 			return fmt.Errorf("field spec: %w", err)
 		}
 
+		field := spec.LeafField()
+		if field == nil {
+			return fmt.Errorf("leaf '%s' is not a field", spec.JSONPathQuery())
+		}
+
 		// validate the fields are annotated correctly for the request query
-		searchOpts, ok := proto.GetExtension(spec.field.field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		searchOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
 		if !ok {
 			return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
 		}
 
 		searchable := false
 		if searchOpts != nil {
-			switch spec.field.field.Kind() {
+			switch field.Kind() {
 			case protoreflect.StringKind:
 				switch searchOpts.GetString_().WellKnown.(type) {
 				case *psml_pb.StringRules_OpenText:

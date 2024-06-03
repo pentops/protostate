@@ -6,6 +6,7 @@ import (
 	context "context"
 	fmt "fmt"
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
+	pgstore "github.com/pentops/protostate/pgstore"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -226,40 +227,31 @@ type BarPSMTableSpec = psm.PSMTableSpec[
 ]
 
 var DefaultBarPSMTableSpec = BarPSMTableSpec{
-	State: psm.TableSpec[*BarState]{
-		TableName:  "bar",
-		DataColumn: "state",
-		StoreExtraColumns: func(state *BarState) (map[string]interface{}, error) {
-			return map[string]interface{}{}, nil
+	TableMap: psm.TableMap{
+		State: psm.StateTableSpec{
+			TableName: "bar",
+			Root:      &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{}},
+			Key:       &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{"keys"}},
 		},
-		PKFieldPaths: []string{
-			"keys.bar_id",
+		Event: psm.EventTableSpec{
+			TableName:     "bar_event",
+			Root:          &pgstore.ProtoFieldSpec{ColumnName: "event", Path: pgstore.ProtoPathSpec{}},
+			Key:           &pgstore.ProtoFieldSpec{ColumnName: "event", Path: pgstore.ProtoPathSpec{"keys"}},
+			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", Path: pgstore.ProtoPathSpec{"metadata", "event_id"}},
+			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", Path: pgstore.ProtoPathSpec{"metadata"}},
+			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", Path: pgstore.ProtoPathSpec{"metadata"}},
+			Cause:         &pgstore.ProtoFieldSpec{ColumnName: "cause", Path: pgstore.ProtoPathSpec{"metadata"}},
+			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{"keys"}},
 		},
+		KeyColumns: []psm.KeyColumn{{
+			ColumnName: "bar_id",
+			ProtoName:  "bar_id",
+			Primary:    true,
+			Required:   true,
+		}, {}},
 	},
-	Event: psm.TableSpec[*BarEvent]{
-		TableName:  "bar_event",
-		DataColumn: "data",
-		StoreExtraColumns: func(event *BarEvent) (map[string]interface{}, error) {
-			metadata := event.Metadata
-			return map[string]interface{}{
-				"id":        metadata.EventId,
-				"timestamp": metadata.Timestamp,
-				"cause":     metadata.Cause,
-				"sequence":  metadata.Sequence,
-				"bar_id":    event.Keys.BarId,
-			}, nil
-		},
-		PKFieldPaths: []string{
-			"metadata.EventId",
-		},
-	},
-	EventPrimaryKey: func(id string, keys *BarKeys) (map[string]interface{}, error) {
-		return map[string]interface{}{
-			"id": id,
-		}, nil
-	},
-	PrimaryKey: func(keys *BarKeys) (map[string]interface{}, error) {
-		return map[string]interface{}{
+	KeyValues: func(keys *BarKeys) (map[string]string, error) {
+		return map[string]string{
 			"id": keys.BarId,
 		}, nil
 	},

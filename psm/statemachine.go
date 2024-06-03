@@ -36,75 +36,30 @@ type PSMTableSpec[
 	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	// Primary Key derives the *State* primary key, and thus event foreign key
-	// to state, from the event.
-	PrimaryKey      func(K) (map[string]interface{}, error)
-	EventPrimaryKey func(string, K) (map[string]interface{}, error)
+	TableMap
 
-	State TableSpec[S]
-	Event TableSpec[E]
-
-	// When set, stores the current state in the event table.
-	EventStateSnapshotColumn *string
-}
-
-type TableSpec[T proto.Message] struct {
-	TableName         string
-	StoreExtraColumns func(T) (map[string]interface{}, error)
-	// DataColumn is the JSONB column which stores the main data chunk
-	DataColumn   string
-	PKFieldPaths []string
-}
-
-func (ts TableSpec[T]) storeDBMap(obj T) (map[string]interface{}, error) {
-	var columnMap map[string]interface{}
-	if ts.StoreExtraColumns != nil {
-		var err error
-		columnMap, err = ts.StoreExtraColumns(obj)
-		if err != nil {
-			return nil, fmt.Errorf("extra columns: %w", err)
-		}
-	}
-
-	if columnMap == nil {
-		columnMap = make(map[string]interface{})
-	}
-
-	columnMap[ts.DataColumn] = obj
-
-	return dbconvert.FieldsToDBValues(columnMap)
+	// KeyFields derives the key values from the Key entity. Should return
+	// UUID Strings, and omit entries for NULL values
+	KeyValues func(K) (map[string]string, error)
 }
 
 // StateTableSpec derives the Query spec table elements from the StateMachine
 // specs. The Query spec is a subset of the TableSpec
 func (spec PSMTableSpec[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 	return QueryTableSpec{
-		State: EntityTableSpec{
-			TableName:    spec.State.TableName,
-			DataColumn:   spec.State.DataColumn,
-			PKFieldPaths: spec.State.PKFieldPaths,
-		},
-		Event: EntityTableSpec{
-			TableName:    spec.Event.TableName,
-			DataColumn:   spec.Event.DataColumn,
-			PKFieldPaths: spec.Event.PKFieldPaths,
-		},
+		TableMap:      spec.TableMap,
 		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
 		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
 	}
 }
 
 func (spec PSMTableSpec[K, S, ST, SD, E, IE]) Validate() error {
-	if spec.PrimaryKey == nil {
-		return fmt.Errorf("missing PrimaryKey func")
+	if spec.KeyValues == nil {
+		return fmt.Errorf("missing KeyValues func")
 	}
 
-	if spec.State.TableName == "" {
-		return fmt.Errorf("missing StateTable func")
-	}
-
-	if spec.Event.TableName == "" {
-		return fmt.Errorf("missing EventTable func")
+	if err := spec.TableMap.Validate(); err != nil {
+		return fmt.Errorf("table map: %w", err)
 	}
 
 	return nil
@@ -210,13 +165,13 @@ func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
 	state := (*new(S)).ProtoReflect().New().Interface().(S)
 
-	primaryKey, err := sm.spec.PrimaryKey(keys)
+	primaryKey, err := sm.spec.KeyValues(keys)
 	if err != nil {
 		return state, fmt.Errorf("primary key: %w", err)
 	}
 
 	selectQuery := sq.
-		Select(sm.spec.State.DataColumn).
+		Select(sm.spec.State.Root.ColumnName).
 		From(sm.spec.State.TableName)
 	for k, v := range primaryKey {
 		selectQuery = selectQuery.Where(sq.Eq{k: v})
@@ -247,61 +202,118 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) storeCallback(tx sqrlx.Transaction)
 	}
 }
 
+type keyValue struct {
+	value string
+	KeyColumn
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) ([]keyValue, error) {
+	rawValues, err := sm.spec.KeyValues(keysMessage)
+	if err != nil {
+		return nil, err
+	}
+
+	values := make([]keyValue, 0, len(rawValues))
+
+	for _, def := range sm.spec.KeyColumns {
+		gotValue, ok := rawValues[def.ColumnName]
+		if !ok {
+			if def.Required || def.Primary {
+				return nil, fmt.Errorf("KeyValues() did not return a value for required key field %s", def.ColumnName)
+			}
+			continue
+		}
+		delete(rawValues, def.ColumnName)
+
+		if _, err := uuid.Parse(gotValue); err != nil {
+			return nil, fmt.Errorf("key field %s is not a valid UUID: %w", def.ColumnName, err)
+		}
+
+		values = append(values, keyValue{value: gotValue, KeyColumn: def})
+
+	}
+
+	if len(rawValues) > 0 {
+		return nil, fmt.Errorf("KeyValues() returned unexpected keys: %v", rawValues)
+	}
+
+	return values, nil
+
+}
+
 func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	state S,
 	event E,
 ) error {
-	var err error
 
-	keys := state.PSMKeys()
-
-	stateSpec := sm.spec
-
-	stateSetMap, err := stateSpec.State.storeDBMap(state)
+	stateDBValue, err := dbconvert.MarshalProto(state)
 	if err != nil {
-		return fmt.Errorf("state fields: %w", err)
+		return fmt.Errorf("state field: %w", err)
 	}
 
-	primaryKey, err := stateSpec.PrimaryKey(keys)
+	causeDBValue, err := dbconvert.MarshalProto(event.PSMMetadata())
 	if err != nil {
-		return fmt.Errorf("primary key: %w", err)
+		return fmt.Errorf("cause field: %w", err)
 	}
 
-	stateKeyMap, err := dbconvert.FieldsToDBValues(primaryKey)
+	eventDBValue, err := dbconvert.MarshalProto(event.UnwrapPSMEvent())
+
+	// TODO: This does not change during transitions, so should be calculated
+	// early and once.
+	keyValues, err := sm.keyValues(state.PSMKeys())
 	if err != nil {
-		return fmt.Errorf("failed to map state primary key to DB values: %w", err)
+		return fmt.Errorf("key fields: %w", err)
 	}
 
-	_, err = tx.Insert(ctx, sqrlx.
-		Upsert(sm.spec.State.TableName).
-		KeyMap(stateKeyMap).
-		SetMap(stateSetMap))
+	eventMeta := event.PSMMetadata()
 
+	upsertStateQuery := sqrlx.Upsert(sm.spec.State.TableName)
+
+	insertEventQuery := sq.Insert(sm.spec.Event.TableName).
+		Columns(sm.spec.Event.ID.ColumnName).Values(eventMeta.EventId)
+
+	for _, key := range keyValues {
+		if key.Primary {
+			upsertStateQuery.Key(key.ColumnName, key.value)
+		} else {
+			upsertStateQuery.Set(key.ColumnName, key.value)
+		}
+		insertEventQuery.Columns(key.ColumnName).Values(key.value)
+	}
+
+	insertEventQuery.Columns(
+		sm.spec.Event.Timestamp.ColumnName,
+		sm.spec.Event.Sequence.ColumnName,
+		sm.spec.Event.Cause.ColumnName,
+		sm.spec.Event.Root.ColumnName,
+		sm.spec.Event.StateSnapshot.ColumnName,
+	).Values(
+		eventMeta.Timestamp,
+		eventMeta.Sequence,
+		causeDBValue,
+		eventDBValue,
+		stateDBValue,
+	)
+
+	upsertStateQuery.Set(sm.spec.State.Root.ColumnName, stateDBValue)
+
+	_, err = tx.Insert(ctx, upsertStateQuery)
 	if err != nil {
 		log.WithFields(ctx, map[string]interface{}{
-			"stateKeyMap": stateKeyMap,
-			"stateSetMap": stateSetMap,
-			"error":       err.Error(),
+			"keys":  keyValues,
+			"error": err.Error(),
 		}).Error("failed to upsert state")
 		return fmt.Errorf("upsert state: %w", err)
 	}
 
-	eventSetMap, err := stateSpec.Event.storeDBMap(event)
+	_, err = tx.Insert(ctx, insertEventQuery)
 	if err != nil {
-		return fmt.Errorf("event fields: %w", err)
-	}
-
-	if stateSpec.EventStateSnapshotColumn != nil {
-		columnName := *stateSpec.EventStateSnapshotColumn
-		eventSetMap[columnName] = stateSetMap[stateSpec.State.DataColumn]
-	}
-
-	_, err = tx.Insert(ctx, sq.
-		Insert(sm.spec.Event.TableName).
-		SetMap(eventSetMap))
-	if err != nil {
+		log.WithFields(ctx, map[string]interface{}{
+			"keys":  keyValues,
+			"error": err.Error(),
+		}).Error("failed to insert event")
 		return fmt.Errorf("insert event: %w", err)
 	}
 
@@ -309,20 +321,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) eventQuery(ctx context.Context, tx sqrlx.Transaction, eventID string, keys K) (*sq.SelectBuilder, error) {
-	primaryKey, err := sm.spec.EventPrimaryKey(eventID, keys)
-	if err != nil {
-		return nil, fmt.Errorf("primary key: %w", err)
-	}
-
-	pkMap, err := dbconvert.FieldsToDBValues(primaryKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to map event primary key to DB values: %w", err)
-	}
 
 	selectQuery := sq.
-		Select(sm.spec.Event.DataColumn).
+		Select(sm.spec.Event.Root.ColumnName).
 		From(sm.spec.Event.TableName).
-		Where(sq.Eq(pkMap))
+		Where(sq.Eq{sm.spec.Event.ID.ColumnName: eventID})
 
 	return selectQuery, nil
 }
@@ -345,18 +348,10 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		}
 	}
 
-	if sm.spec.EventStateSnapshotColumn == nil {
-		// With no snapshot column, we can't correctly return the state after
-		// the first time we received the event, so duplicates must be an error.
-		if err := sm.eventsMustBeUnique(ctx, tx, outerEvent); err != nil {
-			return *new(S), fmt.Errorf("events must be unique: %w", err)
-		}
-	} else {
-		if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent); err != nil {
-			return existingState, err
-		} else if didExist {
-			return existingState, nil
-		}
+	if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent); err != nil {
+		return existingState, err
+	} else if didExist {
+		return existingState, nil
 	}
 
 	state, err := sm.getCurrentState(ctx, tx, outerEvent.Keys)
@@ -387,11 +382,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.C
 	if err != nil {
 		return s, false, fmt.Errorf("event query: %w", err)
 	}
-	if sm.spec.EventStateSnapshotColumn == nil {
-		return s, false, fmt.Errorf("no snapshot column defined")
-	}
 
-	selectQuery.Column(*sm.spec.EventStateSnapshotColumn)
+	selectQuery.Column(sm.spec.Event.StateSnapshot.ColumnName)
 
 	var eventData, stateData []byte
 	err = tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)

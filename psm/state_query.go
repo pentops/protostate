@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pentops/protostate/pgstore"
 	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -15,9 +16,99 @@ import (
 type QueryTableSpec struct {
 	EventTypeName protoreflect.FullName
 	StateTypeName protoreflect.FullName
+	TableMap
+}
 
-	State EntityTableSpec
-	Event EntityTableSpec
+type TableMap struct {
+
+	// KeyColumns are stored in both state and event tables.
+	// Keys marked primary combine to form the primary key of the State table,
+	// and therefore a foreign key from the event table.
+	// Non primary keys are included but not referenced.
+	// All columns must be UUID.
+	KeyColumns []KeyColumn
+
+	State StateTableSpec
+	Event EventTableSpec
+}
+
+func (tm *TableMap) Validate() error {
+
+	if tm.State.TableName == "" {
+		return fmt.Errorf("missing State.TableName in TableMap")
+	}
+	if tm.State.Root == nil {
+		return fmt.Errorf("missing State.Data in TableMap")
+	}
+	if tm.State.Key == nil {
+		return fmt.Errorf("missing State.Key in TableMap")
+	}
+
+	if tm.Event.TableName == "" {
+		return fmt.Errorf("missing Event.TableName in TableMap")
+	}
+	if tm.Event.ID == nil {
+		return fmt.Errorf("missing Event.Data in TableMap")
+	}
+	if tm.Event.Timestamp == nil {
+		return fmt.Errorf("missing Event.Timestamp in TableMap")
+	}
+	if tm.Event.Cause == nil {
+		return fmt.Errorf("missing Event.Cause in TableMap")
+	}
+	if tm.Event.Root == nil {
+		return fmt.Errorf("missing Event.Data in TableMap")
+	}
+	if tm.Event.Sequence == nil {
+		return fmt.Errorf("missing Event.Sequence in TableMap")
+	}
+	if tm.Event.StateSnapshot == nil {
+		return fmt.Errorf("missing Event.StateSnapshot in TableMap")
+	}
+	return nil
+}
+
+type EventTableSpec struct {
+	TableName string
+
+	// The entire event mesage as JSONB
+	Root *pgstore.ProtoFieldSpec
+
+	// The name of the field in the event message which holds the PSM keys
+	Key *pgstore.ProtoFieldSpec
+
+	// a UUID holding the primary key of the event
+	// TODO: Multi-column ID for Events?
+	ID *pgstore.ProtoFieldSpec
+
+	// timestamptz The time of the event
+	Timestamp *pgstore.ProtoFieldSpec
+
+	// int, The descrete integer for the event in the state machine
+	Sequence *pgstore.ProtoFieldSpec
+
+	// jsonb, the event cause
+	Cause *pgstore.ProtoFieldSpec
+
+	// jsonb, holds the state after the event
+	StateSnapshot *pgstore.ProtoFieldSpec
+}
+
+type StateTableSpec struct {
+	TableName string
+
+	// The entire state message, as a JSONB
+	Root *pgstore.ProtoFieldSpec
+
+	Key *pgstore.ProtoFieldSpec
+}
+
+type KeyColumn struct {
+	ColumnName string
+	ProtoName  string
+	Primary    bool
+	Required   bool
+	Unique     bool
 }
 
 type EntityTableSpec struct {
@@ -27,6 +118,54 @@ type EntityTableSpec struct {
 	// PKFieldPaths is a list of 'field paths' which constitute the primary key
 	// of the entity, dot-notated protobuf field names.
 	PKFieldPaths []string
+
+	Fields []KeyField
+}
+
+type KeyField struct {
+	ColumnName *string // Optional, stores in the table as a column.
+	Primary    bool
+	Unique     bool
+	Path       *pgstore.Path
+}
+
+func (spec QueryTableSpec) BuildStateMachineMigration() ([]byte, error) {
+
+	stateTable, err := buildStateTable(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	eventTable, err := buildEventTable(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	fileData, err := pgstore.PrintCreateMigration(stateTable, eventTable)
+	if err != nil {
+		return nil, err
+	}
+	return fileData, nil
+}
+
+func buildStateTable(spec QueryTableSpec) (*pgstore.CreateTableBuilder, error) {
+	tt := pgstore.CreateTable(spec.State.TableName).
+		Column("id", "uuid", pgstore.PrimaryKey).
+		Column(spec.State.Root.ColumnName, "jsonb", pgstore.NotNull)
+
+	return tt, nil
+}
+
+func buildEventTable(spec QueryTableSpec) (*pgstore.CreateTableBuilder, error) {
+	tt := pgstore.CreateTable(spec.Event.TableName).
+		Column("id", "uuid", pgstore.PrimaryKey).
+		Column("timestamp", "timestamptz", pgstore.NotNull).
+		Column("sequence", "int", pgstore.NotNull).
+		Column("cause", "jsonb", pgstore.NotNull).
+		Column("data", "jsonb", pgstore.NotNull).
+		Column("state", "jsonb", pgstore.NotNull)
+
+	return tt, nil
 }
 
 // QuerySpec is the configuration for the query service side of the state
@@ -108,7 +247,7 @@ func BuildStateQuerySet[
 
 	getSpec := pquery.GetSpec[GetREQ, GetRES]{
 		TableName:  smSpec.State.TableName,
-		DataColumn: smSpec.State.DataColumn,
+		DataColumn: smSpec.State.Root.ColumnName,
 		Auth:       options.Auth,
 		AuthJoin:   options.AuthJoin,
 	}
@@ -158,12 +297,12 @@ func BuildStateQuerySet[
 		if smSpec.Event.TableName == "" {
 			return nil, fmt.Errorf("missing EventTable in state spec for %s", smSpec.State.TableName)
 		}
-		if smSpec.Event.DataColumn == "" {
+		if smSpec.Event.Root == nil {
 			return nil, fmt.Errorf("missing EventDataColumn in state spec for %s", smSpec.State.TableName)
 		}
 		getSpec.Join = &pquery.GetJoinSpec{
 			TableName:     smSpec.Event.TableName,
-			DataColumn:    smSpec.Event.DataColumn,
+			DataColumn:    smSpec.Event.Root.ColumnName,
 			FieldInParent: eventsInGet,
 			On:            eventJoinMap,
 		}
@@ -174,17 +313,32 @@ func BuildStateQuerySet[
 		return nil, fmt.Errorf("build getter for state query '%s': %w", smSpec.State.TableName, err)
 	}
 
+	statePrimaryKeys := []pgstore.ProtoFieldSpec{}
+
+	for _, field := range smSpec.KeyColumns {
+		if !field.Primary {
+			continue
+		}
+		statePrimaryKeys = append(statePrimaryKeys, pgstore.ProtoFieldSpec{
+			ColumnName: field.ColumnName,
+			// No Path
+		})
+	}
+
 	listSpec := pquery.ListSpec[ListREQ, ListRES]{
-		TableName:     smSpec.State.TableName,
-		DataColumn:    smSpec.State.DataColumn,
-		Auth:          options.Auth,
+		TableSpec: pquery.TableSpec{
+			TableName:           smSpec.State.TableName,
+			DataColumn:          smSpec.State.Root.ColumnName,
+			Auth:                options.Auth,
+			FallbackSortColumns: statePrimaryKeys,
+		},
 		RequestFilter: smSpec.ListRequestFilter,
 	}
 	if options.AuthJoin != nil {
 		listSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
-	lister, err := pquery.NewLister(listSpec, pquery.WithTieBreakerFields(smSpec.State.PKFieldPaths...))
+	lister, err := pquery.NewLister(listSpec)
 	if err != nil {
 		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.State.TableName, err)
 	}
@@ -209,14 +363,17 @@ func BuildStateQuerySet[
 	}
 
 	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
-		TableName:     smSpec.Event.TableName,
-		DataColumn:    smSpec.Event.DataColumn,
-		Auth:          options.Auth,
-		AuthJoin:      eventsAuthJoin,
+		TableSpec: pquery.TableSpec{
+			TableName:           smSpec.Event.TableName,
+			DataColumn:          smSpec.Event.Root.ColumnName,
+			Auth:                options.Auth,
+			AuthJoin:            eventsAuthJoin,
+			FallbackSortColumns: []pgstore.ProtoFieldSpec{*smSpec.Event.ID},
+		},
 		RequestFilter: smSpec.ListEventsRequestFilter,
 	}
 
-	eventLister, err := pquery.NewLister(eventListSpec, pquery.WithTieBreakerFields(smSpec.Event.PKFieldPaths...))
+	eventLister, err := pquery.NewLister(eventListSpec)
 	if err != nil {
 		return nil, fmt.Errorf("build event lister for state query '%s' lister: %w", smSpec.Event.TableName, err)
 	}
