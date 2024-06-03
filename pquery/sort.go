@@ -50,7 +50,7 @@ func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor
 
 		if tieBreaker.ColumnName != dataColumn {
 			if len(tieBreaker.Path) > 0 {
-				return nil, fmt.Errorf("tiebreaker is a jsonb-sub-field of an unknown column %s, %v", tieBreaker.ColumnName, tieBreaker.Path)
+				return nil, fmt.Errorf("tiebreaker is a jsonb-sub-field of an unknown column '%s', with path %#v", tieBreaker.ColumnName, tieBreaker.Path)
 			}
 
 		} else if len(tieBreaker.Path) == 0 {

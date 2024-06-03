@@ -27,7 +27,6 @@ func NewFooTestMachine(t *testing.T, db *sqrlx.Wrapper) *FooTester {
 	}
 	sm, err := testpb.NewFooPSM(testpb.
 		DefaultFooPSMConfig().
-		StoreEventStateSnapshot().
 		SystemActor(systemActor))
 	if err != nil {
 		t.Fatal(err.Error())

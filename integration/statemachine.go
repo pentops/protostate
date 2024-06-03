@@ -16,7 +16,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, er
 	}
 	sm, err := testpb.NewFooPSM(testpb.
 		DefaultFooPSMConfig().
-		StoreEventStateSnapshot().
 		SystemActor(systemActor))
 	if err != nil {
 		return nil, err
@@ -140,18 +139,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
 	sm, err := testpb.DefaultBarPSMConfig().
 		StateTableName("bar").
 		EventTableName("bar_event").
-		StoreExtraEventColumns(func(event *testpb.BarEvent) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"bar_id":    event.Keys.BarId,
-				"id":        event.Metadata.EventId,
-				"timestamp": event.Metadata.Timestamp,
-			}, nil
-		}).
-		PrimaryKey(func(keys *testpb.BarKeys) (map[string]interface{}, error) {
-			return map[string]interface{}{
-				"id": keys.BarId,
-			}, nil
-		}).NewStateMachine()
+		NewStateMachine()
 	if err != nil {
 		return nil, err
 	}

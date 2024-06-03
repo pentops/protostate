@@ -33,6 +33,8 @@ func TestMarshaling(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	queryer.SetQueryLogger(testLogger(t))
+
 	tenantID := uuid.NewString()
 
 	t.Run("Optional field", func(t *testing.T) {

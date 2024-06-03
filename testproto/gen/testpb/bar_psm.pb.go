@@ -9,6 +9,7 @@ import (
 	pgstore "github.com/pentops/protostate/pgstore"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // PSM BarPSM
@@ -230,30 +231,29 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 	TableMap: psm.TableMap{
 		State: psm.StateTableSpec{
 			TableName: "bar",
-			Root:      &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{}},
-			Key:       &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{"keys"}},
+			Root:      &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{}},
 		},
 		Event: psm.EventTableSpec{
 			TableName:     "bar_event",
-			Root:          &pgstore.ProtoFieldSpec{ColumnName: "event", Path: pgstore.ProtoPathSpec{}},
-			Key:           &pgstore.ProtoFieldSpec{ColumnName: "event", Path: pgstore.ProtoPathSpec{"keys"}},
-			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", Path: pgstore.ProtoPathSpec{"metadata", "event_id"}},
-			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", Path: pgstore.ProtoPathSpec{"metadata"}},
-			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", Path: pgstore.ProtoPathSpec{"metadata"}},
-			Cause:         &pgstore.ProtoFieldSpec{ColumnName: "cause", Path: pgstore.ProtoPathSpec{"metadata"}},
-			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", Path: pgstore.ProtoPathSpec{"keys"}},
+			Root:          &pgstore.ProtoFieldSpec{ColumnName: "data", PathFromRoot: pgstore.ProtoPathSpec{}},
+			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", PathFromRoot: pgstore.ProtoPathSpec{"metadata", "event_id"}},
+			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
+			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
+			Cause:         &pgstore.ProtoFieldSpec{ColumnName: "cause", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
+			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{"keys"}},
 		},
 		KeyColumns: []psm.KeyColumn{{
 			ColumnName: "bar_id",
-			ProtoName:  "bar_id",
+			ProtoName:  protoreflect.Name("bar_id"),
 			Primary:    true,
 			Required:   true,
-		}, {}},
+		}},
 	},
 	KeyValues: func(keys *BarKeys) (map[string]string, error) {
-		return map[string]string{
-			"id": keys.BarId,
-		}, nil
+		keyset := map[string]string{
+			"bar_id": keys.BarId,
+		}
+		return keyset, nil
 	},
 }
 

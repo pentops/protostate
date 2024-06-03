@@ -165,16 +165,19 @@ func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
 	state := (*new(S)).ProtoReflect().New().Interface().(S)
 
-	primaryKey, err := sm.spec.KeyValues(keys)
-	if err != nil {
-		return state, fmt.Errorf("primary key: %w", err)
-	}
-
 	selectQuery := sq.
 		Select(sm.spec.State.Root.ColumnName).
 		From(sm.spec.State.TableName)
-	for k, v := range primaryKey {
-		selectQuery = selectQuery.Where(sq.Eq{k: v})
+
+	allKeys, err := sm.keyValues(keys)
+	if err != nil {
+		return state, fmt.Errorf("primary key: %w", err)
+	}
+	for _, key := range allKeys {
+		if !key.Primary {
+			continue
+		}
+		selectQuery = selectQuery.Where(sq.Eq{key.ColumnName: key.value})
 	}
 
 	var stateJSON []byte
@@ -258,7 +261,10 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 		return fmt.Errorf("cause field: %w", err)
 	}
 
-	eventDBValue, err := dbconvert.MarshalProto(event.UnwrapPSMEvent())
+	eventDBValue, err := dbconvert.MarshalProto(event)
+	if err != nil {
+		return fmt.Errorf("event field: %w", err)
+	}
 
 	// TODO: This does not change during transitions, so should be calculated
 	// early and once.
@@ -271,8 +277,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 
 	upsertStateQuery := sqrlx.Upsert(sm.spec.State.TableName)
 
-	insertEventQuery := sq.Insert(sm.spec.Event.TableName).
-		Columns(sm.spec.Event.ID.ColumnName).Values(eventMeta.EventId)
+	insertValues := []interface{}{}
+	insertColumns := []string{}
+
+	insertEventQuery := sq.Insert(sm.spec.Event.TableName)
+
+	insertColumns = append(insertColumns, sm.spec.Event.ID.ColumnName)
+	insertValues = append(insertValues, eventMeta.EventId)
 
 	for _, key := range keyValues {
 		if key.Primary {
@@ -280,22 +291,26 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 		} else {
 			upsertStateQuery.Set(key.ColumnName, key.value)
 		}
-		insertEventQuery.Columns(key.ColumnName).Values(key.value)
+
+		insertColumns = append(insertColumns, key.ColumnName)
+		insertValues = append(insertValues, key.value)
 	}
 
-	insertEventQuery.Columns(
+	insertColumns = append(insertColumns,
 		sm.spec.Event.Timestamp.ColumnName,
 		sm.spec.Event.Sequence.ColumnName,
 		sm.spec.Event.Cause.ColumnName,
 		sm.spec.Event.Root.ColumnName,
 		sm.spec.Event.StateSnapshot.ColumnName,
-	).Values(
-		eventMeta.Timestamp,
+	)
+	insertValues = append(insertValues,
+		eventMeta.Timestamp.AsTime(),
 		eventMeta.Sequence,
 		causeDBValue,
 		eventDBValue,
 		stateDBValue,
 	)
+	insertEventQuery.Columns(insertColumns...).Values(insertValues...)
 
 	upsertStateQuery.Set(sm.spec.State.Root.ColumnName, stateDBValue)
 
