@@ -239,7 +239,6 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", PathFromRoot: pgstore.ProtoPathSpec{"metadata", "event_id"}},
 			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
 			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
-			Cause:         &pgstore.ProtoFieldSpec{ColumnName: "cause", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
 			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{"keys"}},
 		},
 		KeyColumns: []psm.KeyColumn{{
@@ -247,11 +246,17 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 			ProtoName:  protoreflect.Name("bar_id"),
 			Primary:    true,
 			Required:   true,
+		}, {
+			ColumnName: "bar_other_id",
+			ProtoName:  protoreflect.Name("bar_other_id"),
+			Primary:    true,
+			Required:   true,
 		}},
 	},
 	KeyValues: func(keys *BarKeys) (map[string]string, error) {
 		keyset := map[string]string{
-			"bar_id": keys.BarId,
+			"bar_id":       keys.BarId,
+			"bar_other_id": keys.BarOtherId,
 		}
 		return keyset, nil
 	},

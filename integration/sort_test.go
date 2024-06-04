@@ -16,7 +16,7 @@ import (
 )
 
 func TestSortingWithAuthScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -46,7 +46,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 	}
 
 	nextToken := ""
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -96,7 +96,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 		nextToken = pageResp.GetNextToken()
 	})
 
-	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -142,7 +142,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 }
 
 func TestSortingWithAuthNoScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -169,7 +169,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 	}
 
 	nextToken := ""
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -215,7 +215,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		nextToken = pageResp.GetNextToken()
 	})
 
-	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -262,7 +262,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 }
 
 func TestDynamicSorting(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -286,7 +286,7 @@ func TestDynamicSorting(t *testing.T) {
 
 	t.Run("Top Level Field", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -330,7 +330,7 @@ func TestDynamicSorting(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -376,7 +376,7 @@ func TestDynamicSorting(t *testing.T) {
 
 	t.Run("Nested Field", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -420,7 +420,7 @@ func TestDynamicSorting(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -466,7 +466,7 @@ func TestDynamicSorting(t *testing.T) {
 
 	t.Run("Multiple Nested Fields", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -515,7 +515,7 @@ func TestDynamicSorting(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -566,7 +566,7 @@ func TestDynamicSorting(t *testing.T) {
 
 	t.Run("Descending", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -613,7 +613,7 @@ func TestDynamicSorting(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),

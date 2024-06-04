@@ -239,7 +239,6 @@ var DefaultFooPSMTableSpec = FooPSMTableSpec{
 			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", PathFromRoot: pgstore.ProtoPathSpec{"metadata", "event_id"}},
 			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
 			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
-			Cause:         &pgstore.ProtoFieldSpec{ColumnName: "cause", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
 			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{"keys"}},
 		},
 		KeyColumns: []psm.KeyColumn{{
