@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/protostate/pgstore"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -53,12 +53,7 @@ type PSMEntity struct {
 	state      *stateEntityState
 	event      *stateEntityEvent
 
-	keyFields []keyField
-}
-
-type keyField struct {
-	*psm_pb.FieldOptions
-	field *protogen.Field
+	tableMap *psm.TableMap
 }
 
 func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
@@ -337,17 +332,17 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	// 'event_id', 'message_id' or 'id' as a string
 	// If all the above match, we can automate the ExtractMetadata function
 
-	fieldSpec := func(name string, columnName string, path ...protoreflect.Name) {
-		pathElem := make([]string, len(path))
-		for i, p := range path {
+	fieldSpec := func(name string, spec *pgstore.ProtoFieldSpec) {
+		pathElem := make([]string, len(spec.Path))
+		for i, p := range spec.Path {
 			pathElem[i] = string(p)
 		}
 
 		pathString := fmt.Sprintf(`"%s"`, strings.Join(pathElem, `","`))
-		if len(path) == 0 {
+		if len(spec.Path) == 0 {
 			pathString = ""
 		}
-		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, columnName, `", `, `PathFromRoot: `, pgProtoPathSpec, `{`, pathString, `} },`)
+		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, spec.ColumnName, `", `, `PathFromRoot: `, pgProtoPathSpec, `{`, pathString, `} },`)
 	}
 
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
@@ -355,33 +350,23 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 
 	// STATE
 	g.P("State: ", smStateTableSpec, "{")
-	g.P("  TableName: \"", ss.specifiedName, "\",")
-	fieldSpec("Root", "state")
-	//fieldSpec("Key", "state", ss.state.keyField.Desc.Name())
+	g.P("  TableName: \"", ss.tableMap.State.TableName, "\",")
+	fieldSpec("Root", ss.tableMap.State.Root)
 	g.P("},")
 	// END STATE
 
 	// EVENT
 	g.P("Event: ", smEventTableSpec, "{")
-	g.P("  TableName: \"", ss.specifiedName, "_event\",")
-	fieldSpec("Root", "data")
-	//fieldSpec("Key", "event", ss.event.keyField.Desc.Name())
-	fieldSpec("ID", "id", ss.event.metadataField.Desc.Name(), protoreflect.Name("event_id"))
-	fieldSpec("Timestamp", "timestamp", ss.event.metadataField.Desc.Name())
-	fieldSpec("Sequence", "sequence", ss.event.metadataField.Desc.Name())
-	fieldSpec("StateSnapshot", "state", ss.state.keyField.Desc.Name())
+	g.P("  TableName: \"", ss.tableMap.Event.TableName, "\",")
+	fieldSpec("Root", ss.tableMap.Event.Root)
+	fieldSpec("ID", ss.tableMap.Event.ID)
+	fieldSpec("Timestamp", ss.tableMap.Event.Timestamp)
+	fieldSpec("Sequence", ss.tableMap.Event.Sequence)
+	fieldSpec("StateSnapshot", ss.tableMap.Event.StateSnapshot)
 	g.P("},")
 	// END EVENT
 
-	keyColumns := make([]psm.KeyColumn, len(ss.keyFields))
-	for idx, field := range ss.keyFields {
-		keyColumns[idx] = psm.KeyColumn{
-			ColumnName: string(field.field.Desc.Name()), // Use proto names as column names.
-			ProtoName:  field.field.Desc.Name(),
-			Primary:    field.PrimaryKey,
-			Required:   field.PrimaryKey || !field.field.Desc.HasOptionalKeyword(),
-		}
-	}
+	keyColumns := ss.tableMap.KeyColumns
 
 	// KEY COLUMNS
 	g.P("KeyColumns: []", smKeyColumn, "{{")
@@ -402,19 +387,19 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 
 	g.P("KeyValues: func(keys *", ss.keyMessage.GoIdent, ") (map[string]string, error) {")
 	g.P("  keyset := map[string]string{")
-	for idx, columnSpec := range keyColumns {
+	for _, columnSpec := range keyColumns {
 		if !columnSpec.Required {
 			continue
 		}
-		field := ss.keyFields[idx].field
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
 		g.P("      \"", columnSpec.ColumnName, "\": keys.", field.GoName, ",")
 	}
 	g.P("  }")
-	for idx, columnSpec := range keyColumns {
+	for _, columnSpec := range keyColumns {
 		if columnSpec.Required {
 			continue
 		}
-		field := ss.keyFields[idx].field
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
 		g.P("if keys.", field.GoName, " != nil {")
 		g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *keys.", field.GoName)
 		g.P("}")
@@ -443,4 +428,13 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	g.P("}")
 	g.P()
 
+}
+
+func fieldByDesc(fields []*protogen.Field, desc protoreflect.Name) *protogen.Field {
+	for _, f := range fields {
+		if f.Desc.Name() == desc {
+			return f
+		}
+	}
+	return nil
 }

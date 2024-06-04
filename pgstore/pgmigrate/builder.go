@@ -1,7 +1,6 @@
 package pgmigrate
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 )
@@ -86,25 +85,6 @@ const (
 	Int         ColumnType = "int"
 )
 
-type Table struct {
-	Name        string
-	Columns     []Column
-	PrimaryKey  []string
-	ForeignKeys []ForeignKey
-}
-
-type Column struct {
-	Name  string
-	Type  string
-	Flags []string
-}
-
-type ForeignKey struct {
-	Name      string
-	TableName string
-	Columns   []ColumnPair
-}
-
 func (t *CreateTableBuilder) Build() (*Table, error) {
 	table := &Table{
 		Name: t.name,
@@ -137,73 +117,30 @@ func (t *CreateTableBuilder) Build() (*Table, error) {
 	return table, nil
 }
 
-func (t *CreateTableBuilder) ToSQL() (string, error) {
-	p := newPrinter()
-	if err := p.CreateTable(t); err != nil {
-		return "", err
-	}
-
-	return string(p.bytes()), nil
+type Table struct {
+	Name        string
+	Columns     []Column
+	PrimaryKey  []string
+	ForeignKeys []ForeignKey
 }
 
-func PrintCreateMigration(tables ...*CreateTableBuilder) ([]byte, error) {
-	p := newPrinter()
-	p.p("-- +goose Up")
-	p.setGap()
-	for _, table := range tables {
-		if err := p.CreateTable(table); err != nil {
-			return nil, err
-		}
-	}
-	p.p("-- +goose Down")
-	p.setGap()
-	for idx := len(tables) - 1; idx >= 0; idx-- {
-		table := tables[idx]
-		p.DropTable(table.name)
-	}
-
-	return p.bytes(), nil
+type Column struct {
+	Name  string
+	Type  string
+	Flags []string
 }
 
-type printer struct {
-	buf bytes.Buffer
-	gap bool
+type ForeignKey struct {
+	Name      string
+	TableName string
+	Columns   []ColumnPair
 }
 
-func newPrinter() *printer {
-	return &printer{
-		buf: bytes.Buffer{},
-	}
+func (tt *Table) DownSQL() (string, error) {
+	return fmt.Sprintf("DROP TABLE %s;", tt.Name), nil
 }
 
-func (p *printer) setGap() {
-	p.gap = true
-}
-
-func (p *printer) p(elem ...interface{}) {
-	if p.gap {
-		fmt.Fprintln(&p.buf)
-		p.gap = false
-	}
-	for _, elem := range elem {
-		fmt.Fprint(&p.buf, elem)
-	}
-	fmt.Fprintln(&p.buf)
-}
-
-func (p *printer) bytes() []byte {
-	return p.buf.Bytes()
-}
-
-func (p *printer) CreateTable(builder *CreateTableBuilder) error {
-
-	table, err := builder.Build()
-	if err != nil {
-		return err
-	}
-
-	p.p("CREATE TABLE ", table.Name, " (")
-
+func (table *Table) ToSQL() (string, error) {
 	clauses := make([]string, 0)
 
 	for _, col := range table.Columns {
@@ -229,19 +166,15 @@ func (p *printer) CreateTable(builder *CreateTableBuilder) error {
 		clauses = append(clauses, fmt.Sprintf("CONSTRAINT %s_fk_%s FOREIGN KEY (%s) REFERENCES %s(%s)", table.Name, fk.Name, strings.Join(localColumns, ", "), fk.TableName, strings.Join(remoteColumns, ", ")))
 	}
 
+	lines := make([]string, 1, len(clauses)+2)
+	lines[0] = fmt.Sprintf("CREATE TABLE %s (", table.Name)
 	for idx, clause := range clauses {
 		suffix := ","
 		if idx == len(clauses)-1 {
 			suffix = ""
 		}
-		p.p("  ", clause, suffix)
+		lines = append(lines, "  "+clause+suffix)
 	}
-	p.p(");")
-	p.setGap()
-	return nil
-}
-
-func (p *printer) DropTable(tableName string) {
-	p.p("DROP TABLE ", tableName, ";")
-	p.setGap()
+	lines = append(lines, ");")
+	return strings.Join(lines, "\n"), nil
 }

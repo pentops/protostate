@@ -3,6 +3,7 @@ package pgmigrate
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -16,17 +17,35 @@ import (
 
 func BuildStateMachineMigrations(specs ...psm.QueryTableSpec) ([]byte, error) {
 
-	allTables := make([]*CreateTableBuilder, 0, len(specs))
+	allMigrations := make([]MigrationItem, 0, len(specs)*4)
 
 	for _, spec := range specs {
 		stateTable, eventTable, err := BuildPSMTables(spec)
 		if err != nil {
 			return nil, err
 		}
-		allTables = append(allTables, stateTable, eventTable)
+		allMigrations = append(allMigrations, stateTable)
+
+		indexes, err := buildIndexes(spec.State.TableName, spec.State.Root.ColumnName, spec.StateType)
+		if err != nil {
+			return nil, err
+		}
+		for _, index := range indexes {
+			allMigrations = append(allMigrations, index)
+		}
+
+		allMigrations = append(allMigrations, eventTable)
+
+		indexes, err = buildIndexes(spec.Event.TableName, spec.Event.Root.ColumnName, spec.EventType)
+		if err != nil {
+			return nil, err
+		}
+		for _, index := range indexes {
+			allMigrations = append(allMigrations, index)
+		}
 	}
 
-	fileData, err := PrintCreateMigration(allTables...)
+	fileData, err := PrintMigrations(allMigrations...)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +58,7 @@ func CreateStateMachines(ctx context.Context, conn sqrlx.Connection, specs ...ps
 		return err
 	}
 
-	tables := make([]*CreateTableBuilder, 0, len(specs))
+	tables := make([]*Table, 0, len(specs))
 	for _, spec := range specs {
 		stateTable, eventTable, err := BuildPSMTables(spec)
 		if err != nil {
@@ -54,6 +73,7 @@ func CreateStateMachines(ctx context.Context, conn sqrlx.Connection, specs ...ps
 		}
 
 		for _, table := range tables {
+
 			statement, err := table.ToSQL()
 			if err != nil {
 				return err
@@ -72,6 +92,23 @@ type searchSpec struct {
 	tableName  string
 	columnName string
 	path       pgstore.Path
+}
+
+func (ss searchSpec) ToSQL() (string, error) {
+	statement := fmt.Sprintf("to_tsvector('english', jsonb_path_query_array(%s, '%s'))", ss.columnName, ss.path.JSONPathQuery())
+
+	lines := []string{}
+
+	lines = append(lines, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s tsvector GENERATED ALWAYS", ss.tableName, ss.tsvColumn))
+	lines = append(lines, fmt.Sprintf("  AS (%s) STORED;", statement))
+	lines = append(lines, "")
+	lines = append(lines, fmt.Sprintf("CREATE INDEX %s_%s_idx ON %s USING GIN (%s);", ss.tableName, ss.tsvColumn, ss.tableName, ss.tsvColumn))
+	return strings.Join(lines, "\n"), nil
+
+}
+
+func (ss searchSpec) DownSQL() (string, error) {
+	return fmt.Sprintf("DROP INDEX %s_%s_idx;\nALTER TABLE %s DROP COLUMN %s;", ss.tableName, ss.tsvColumn, ss.tableName, ss.tsvColumn), nil
 }
 
 func AddIndexes(ctx context.Context, conn sqrlx.Connection, specs ...psm.QueryTableSpec) error {
@@ -173,7 +210,7 @@ func writeIndexes(ctx context.Context, conn sqrlx.Connection, specs []searchSpec
 
 }
 
-func BuildPSMTables(spec psm.QueryTableSpec) (*CreateTableBuilder, *CreateTableBuilder, error) {
+func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	stateTable := CreateTable(spec.State.TableName)
 
@@ -204,5 +241,15 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*CreateTableBuilder, *CreateTableB
 		Column(spec.Event.Root.ColumnName, "jsonb", NotNull).
 		Column(spec.Event.StateSnapshot.ColumnName, "jsonb", NotNull)
 
-	return stateTable, eventTable, nil
+	state, err := stateTable.Build()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	event, err := eventTable.Build()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return state, event, nil
 }
