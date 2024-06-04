@@ -4,15 +4,11 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
 	protoPackage        = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	stateMachinePackage = protogen.GoImportPath("github.com/pentops/protostate/psm")
-
-	eventMetadataProtoName = protoreflect.FullName("psm.state.v1.EventMetadata")
-	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
 )
 
 func quoteString(s string) string {

@@ -236,10 +236,10 @@ var DefaultBarPSMTableSpec = BarPSMTableSpec{
 		Event: psm.EventTableSpec{
 			TableName:     "bar_event",
 			Root:          &pgstore.ProtoFieldSpec{ColumnName: "data", PathFromRoot: pgstore.ProtoPathSpec{}},
-			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", PathFromRoot: pgstore.ProtoPathSpec{"metadata", "event_id"}},
-			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
-			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", PathFromRoot: pgstore.ProtoPathSpec{"metadata"}},
-			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{"keys"}},
+			ID:            &pgstore.ProtoFieldSpec{ColumnName: "id", PathFromRoot: pgstore.ProtoPathSpec{}},
+			Timestamp:     &pgstore.ProtoFieldSpec{ColumnName: "timestamp", PathFromRoot: pgstore.ProtoPathSpec{}},
+			Sequence:      &pgstore.ProtoFieldSpec{ColumnName: "sequence", PathFromRoot: pgstore.ProtoPathSpec{}},
+			StateSnapshot: &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{}},
 		},
 		KeyColumns: []psm.KeyColumn{{
 			ColumnName: "bar_id",

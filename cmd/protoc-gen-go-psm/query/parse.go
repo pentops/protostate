@@ -7,6 +7,8 @@ import (
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/protostate/psm"
+	"github.com/pentops/protostate/psmreflect"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -126,12 +128,9 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	// this walks the proto to get some of the same data as the state set,
 	// however it is unlkely to duplicate work, as the states are usually
 	// defined in a separate file from the query service
-	ss, err := deriveStateDescriptorFromQueryDescriptor(qs)
+	_, err := deriveStateDescriptorFromQueryDescriptor(qs)
 	if err != nil {
 		return nil, err
-	}
-	if ss == nil {
-		return nil, fmt.Errorf("query service %s does not have a state descriptor", qs.name)
 	}
 
 	var errs []error
@@ -195,20 +194,16 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	return ww, nil
 }
 
-type queryPkFields struct {
-	statePkFields []string
-	eventPkFields []string
-}
-
 // attempts to walk through the query methods to find the descriptors for the
 // state and event messages.
-func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*queryPkFields, error) {
+func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*psm.TableMap, error) {
 	if src.getMethod == nil {
 		return nil, fmt.Errorf("no get nethod, cannot derive state fields")
 	}
 
-	var eventMessage *protogen.Message
-	var stateMessage *protogen.Message
+	var eventMessage protoreflect.MessageDescriptor
+	var stateMessage protoreflect.MessageDescriptor
+
 	//var eventMessage *protogen.Message
 	for _, field := range src.getMethod.Output.Fields {
 		if field.Message == nil {
@@ -218,14 +213,14 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*que
 			if eventMessage != nil {
 				return nil, fmt.Errorf("state get response %s should have exactly one repeated field", src.getMethod.Desc.FullName())
 			}
-			eventMessage = field.Message
+			eventMessage = field.Message.Desc
 			continue
 		}
 
 		if stateMessage != nil {
 			return nil, fmt.Errorf("state get response %s should have exactly one field", src.getMethod.Desc.FullName())
 		}
-		stateMessage = field.Message
+		stateMessage = field.Message.Desc
 	}
 
 	if stateMessage == nil {
@@ -244,99 +239,26 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*que
 				if eventMessage != nil {
 					return nil, fmt.Errorf("state get response %s should have exactly one repeated field", src.getMethod.Desc.FullName())
 				}
-				eventMessage = field.Message
+				eventMessage = field.Message.Desc
 				continue
 			}
 		}
-	}
-
-	var stateMetadataField *protogen.Field
-	var stateKeyField *protogen.Field
-	var keyMessage *protogen.Message
-	var keyOptions *psm_pb.PSMOptions
-
-	for _, field := range stateMessage.Fields {
-		if field.Message == nil {
-			continue
-		}
-		if field.Message.Desc.FullName() == stateMetadataProtoName {
-			stateMetadataField = field
-			continue
-		}
-		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
-		if ok && stateObjectAnnotation != nil {
-			keyOptions = stateObjectAnnotation
-			keyMessage = field.Message
-			stateKeyField = field
-			continue
+		if eventMessage == nil {
+			// No event, can't add fallbacks.
+			return nil, fmt.Errorf("no event message for %s, cannot derive event fields", stateMessage.FullName())
 		}
 	}
 
-	if stateMetadataField == nil {
-		return nil, fmt.Errorf("state message %s has no %s field", stateMessage.Desc.FullName(), stateMetadataProtoName)
-	}
-	if stateKeyField == nil {
-		return nil, fmt.Errorf("state message %s has no PSM Keys", stateMessage.Desc.FullName())
-	}
-	if keyOptions.Name != src.name {
-		return nil, fmt.Errorf("keys message %s has a different name than the query service %s", keyMessage.Desc.FullName(), src.name)
+	tableMap, err := psmreflect.TableMapFromStateAndEvent(stateMessage, eventMessage)
+	if err != nil {
+		return nil, fmt.Errorf("TableMapFromStateAndEvent for %s: %w", src.name, err)
 	}
 
-	if eventMessage == nil {
-		// No event, can't add fallbacks.
-		return nil, fmt.Errorf("no event message for %s, cannot derive event fields", keyMessage.Desc.FullName())
+	if tableMap.State.TableName != src.name {
+		return nil, fmt.Errorf("keys message on %s has a different name than the query service %s", stateMessage.FullName(), src.name)
 	}
 
-	var eventMetadataField *protogen.Field
-	var eventKeysField *protogen.Field
-	for _, field := range eventMessage.Fields {
-		if field.Message == nil {
-			continue
-		}
-		if field.Message.Desc.FullName() == eventMetadataProtoName {
-			eventMetadataField = field
-			continue
-		}
-
-		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
-		if ok && stateObjectAnnotation != nil {
-			if keyMessage.Desc.FullName() != field.Message.Desc.FullName() {
-				return nil, fmt.Errorf("%s.%s is a %s, but %s.%s is a %s, these should be the same",
-					stateMessage.Desc.FullName(),
-					stateKeyField.Desc.Name(),
-					keyMessage.Desc.FullName(),
-					eventMessage.Desc.FullName(),
-					field.Desc.Name(),
-					field.Message.Desc.FullName(),
-				)
-			}
-			eventKeysField = field
-			continue
-		}
-	}
-
-	if eventMetadataField == nil {
-		// No event, can't add fallbacks.
-		return nil, fmt.Errorf("event message %s has no %s field", eventMessage.Desc.FullName(), eventMetadataProtoName)
-	}
-	if eventKeysField == nil {
-		return nil, fmt.Errorf("event message %s has no PSM Keys", eventMessage.Desc.FullName())
-	}
-
-	// this function mirrors builfEventFieldDescriptors, but uses only the
-	// descriptors, as the messages will likely not be in the same file as the
-	// service, i.e. we won't have the protogen wrappers.
-	out := &queryPkFields{}
-
-	out.eventPkFields = []string{
-		fmt.Sprintf("%s.event_id", eventMetadataField.Desc.Name()),
-	}
-
-	for _, field := range keyMessage.Fields {
-		out.statePkFields = append(out.statePkFields, fmt.Sprintf("%s.%s", string(stateKeyField.Desc.Name()), string(field.Desc.Name())))
-	}
-
-	return out, nil
+	return tableMap, nil
 }
 
 func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *protogen.Field {

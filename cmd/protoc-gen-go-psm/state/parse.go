@@ -5,6 +5,7 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/protostate/psmreflect"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -263,22 +264,19 @@ func BuildStateSet(src StateEntityGenerateSet) (*PSMEntity, error) {
 		machineName:   namePrefix + "PSM",
 		eventName:     namePrefix + "PSMEvent",
 		keyMessage:    src.keyMessage,
-		keyFields:     make([]keyField, 0, len(src.keyMessage.Fields)),
 	}
 
-	for _, field := range src.keyMessage.Fields {
-
-		annotation := proto.GetExtension(field.Desc.Options(), psm_pb.E_Field).(*psm_pb.FieldOptions)
-		if annotation == nil {
-			annotation = &psm_pb.FieldOptions{}
-		}
-
-		keyField := keyField{
-			field:        field,
-			FieldOptions: annotation,
-		}
-		ss.keyFields = append(ss.keyFields, keyField)
+	reflSpec := psmreflect.StateMachine{
+		EventMetadataField: src.event.metadataField.Desc,
+		KeyMessage:         src.keyMessage.Desc,
 	}
+
+	tableMap, err := psmreflect.BuildDefaultTableMap(reflSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	ss.tableMap = tableMap
 
 	return ss, nil
 }
