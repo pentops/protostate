@@ -1,6 +1,6 @@
 module github.com/pentops/protostate
 
-go 1.21.4
+go 1.22.3
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.1-20240508200655-46a4cf4ba109.1
@@ -9,21 +9,21 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20240510221023-0114d43723cb
-	github.com/pentops/log.go v0.0.0-20231218074934-67aedcab3fa4
-	github.com/pentops/o5-go v0.0.0-20240509214217-5d45e1a08183
-	github.com/pentops/outbox.pg.go v0.0.0-20231222014950-493c01cfbcc7
-	github.com/pentops/pgtest.go v0.0.0-20231220005207-f01c870bad2e
-	github.com/pentops/sqrlx.go v0.0.0-20240108202916-8687fdf983c0
+	github.com/pentops/flowtest v0.0.0-20240525161451-19748de5798c
+	github.com/pentops/log.go v0.0.0-20240523172444-85c9292a83db
+	github.com/pentops/o5-go v0.0.0-20240528195917-c3143ac171a2
+	github.com/pentops/outbox.pg.go v0.0.0-20240523172517-f5abd3a124ee
+	github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734
+	github.com/pentops/sqrlx.go v0.0.0-20240523172712-b615a994d8c0
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20240509183442-62759503f434
-	google.golang.org/grpc v1.63.2
+	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157
+	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 )
 
 require (
-	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/bufbuild/protocompile v0.13.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.16.0 // indirect
@@ -33,16 +33,15 @@ require (
 	github.com/jhump/protoreflect v1.16.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/pentops/jsonapi v0.0.0-20240510221406-91c55f7e9b17 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pressly/goose v2.7.0+incompatible // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240509183442-62759503f434 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240521202816-d264139d666e // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

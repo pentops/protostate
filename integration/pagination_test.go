@@ -21,7 +21,7 @@ import (
 )
 
 func TestPagination(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -40,7 +40,7 @@ func TestPagination(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -66,7 +66,7 @@ func TestPagination(t *testing.T) {
 
 	var pageResp *psml_pb.PageResponse
 
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{}
 		res := &testpb.ListFoosResponse{}
 
@@ -93,7 +93,7 @@ func TestPagination(t *testing.T) {
 		}
 	})
 
-	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{
 			Page: &psml_pb.PageRequest{
 				Token: pageResp.NextToken,
@@ -126,7 +126,7 @@ func TestEventPagination(t *testing.T) {
 	// Foo event default sort is deeply nested. This tests that the nested filter
 	// works on pagination
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -146,7 +146,7 @@ func TestEventPagination(t *testing.T) {
 	}
 
 	fooID := uuid.NewString()
-	ss.StepC("CreateEvents", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("CreateEvents", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -173,7 +173,7 @@ func TestEventPagination(t *testing.T) {
 
 	var pageResp *psml_pb.PageResponse
 
-	ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 
 		req := &testpb.ListFooEventsRequest{
 			FooId: fooID,
@@ -225,7 +225,7 @@ func TestEventPagination(t *testing.T) {
 
 	})
 
-	ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 
 		req := &testpb.ListFooEventsRequest{
 			Page: &psml_pb.PageRequest{
@@ -264,7 +264,7 @@ func TestEventPagination(t *testing.T) {
 }
 
 func TestPageSize(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -283,7 +283,7 @@ func TestPageSize(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
 
 		restore := silenceLogger()
@@ -313,7 +313,7 @@ func TestPageSize(t *testing.T) {
 
 	var pageResp *psml_pb.PageResponse
 
-	ss.StepC("List Page (default)", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page (default)", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{}
 		res := &testpb.ListFoosResponse{}
 
@@ -340,7 +340,7 @@ func TestPageSize(t *testing.T) {
 		}
 	})
 
-	ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(5)
 		req := &testpb.ListFoosRequest{
 			Page: &psml_pb.PageRequest{
@@ -372,7 +372,7 @@ func TestPageSize(t *testing.T) {
 		}
 	})
 
-	ss.StepC("List Page (exceeding)", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page (exceeding)", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(50)
 		req := &testpb.ListFoosRequest{
 			Page: &psml_pb.PageRequest{

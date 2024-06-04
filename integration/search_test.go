@@ -9,14 +9,16 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/protostate/pgstore/pgmigrate"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"github.com/pressly/goose"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestDynamicSearching(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t)
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -24,6 +26,23 @@ func TestDynamicSearching(t *testing.T) {
 
 	sm, err := NewFooStateMachine(db, uuid.NewString())
 	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	stateSpecs := []psm.QueryTableSpec{
+		sm.StateTableSpec(),
+		testpb.DefaultBarPSMTableSpec.StateTableSpec(),
+	}
+
+	if err := pgmigrate.CreateStateMachines(context.Background(), conn, stateSpecs...); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if err := pgmigrate.AddIndexes(context.Background(), conn, stateSpecs...); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if err := goose.Up(conn, stage2MigrationsDir); err != nil {
 		t.Fatal(err.Error())
 	}
 
@@ -39,7 +58,7 @@ func TestDynamicSearching(t *testing.T) {
 	setupFooListableData(t, ss, sm, tenants, 30)
 
 	t.Run("Simple Search Field", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -83,7 +102,7 @@ func TestDynamicSearching(t *testing.T) {
 	/*
 		t.Run("Complex Search Field", func(t *testing.T) {
 			nextToken := ""
-			ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+			ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 				req := &testpb.ListFoosRequest{
 					Page: &psml_pb.PageRequest{
 						PageSize: proto.Int64(5),
@@ -147,7 +166,7 @@ func TestDynamicSearching(t *testing.T) {
 				nextToken = pageResp.GetNextToken()
 			})
 
-			ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 				req := &testpb.ListFoosRequest{
 					Page: &psml_pb.PageRequest{
 						PageSize: proto.Int64(5),

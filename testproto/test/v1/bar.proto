@@ -50,6 +50,11 @@ message BarKeys {
     (buf.validate.field).string.uuid = true,
     (psm.state.v1.field).primary_key = true
   ];
+
+  string bar_other_id = 3 [
+    (buf.validate.field).string.uuid = true,
+    (psm.state.v1.field).primary_key = true
+  ];
 }
 
 message BarState {

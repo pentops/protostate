@@ -9,9 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/pgstore/pgmigrate"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/protostate/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"github.com/pressly/goose"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -28,7 +30,8 @@ func TestStateEntityExtensions(t *testing.T) {
 }
 
 func TestFooStateField(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t)
+
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -39,13 +42,21 @@ func TestFooStateField(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	if err := pgmigrate.CreateStateMachines(context.Background(), conn, sm.StateTableSpec(), testpb.DefaultBarPSMTableSpec.StateTableSpec()); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if err := goose.Up(conn, stage1MigrationsDir); err != nil {
+		t.Fatal(err.Error())
+	}
+
 	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
 	defer ss.RunSteps(t)
 
 	fooID := uuid.NewString()
 	tenantID := uuid.NewString()
 
-	ss.StepC("Create", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		event := newFooCreatedEvent(fooID, tenantID, nil)
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
@@ -55,7 +66,7 @@ func TestFooStateField(t *testing.T) {
 		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
-	ss.StepC("Update OK, Same Key", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("Update OK, Same Key", func(ctx context.Context, t flowtest.Asserter) {
 		event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
 			u.Weight = ptr.To(int64(11))
 		})
@@ -67,7 +78,7 @@ func TestFooStateField(t *testing.T) {
 		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
-	ss.StepC("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
 		event := &testpb.FooPSMEventSpec{
 			EventID: uuid.NewString(),
@@ -91,7 +102,7 @@ func TestFooStateField(t *testing.T) {
 func TestBarStateMachine(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -118,7 +129,7 @@ func TestBarStateMachine(t *testing.T) {
 func TestStateMachineHook(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -189,7 +200,7 @@ func TestStateMachineHook(t *testing.T) {
 func TestStateMachineIdempotencyInitial(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -261,7 +272,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 func TestStateMachineIdempotencySnapshot(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -322,7 +333,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 func TestFooStateMachine(t *testing.T) {
 	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())

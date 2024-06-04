@@ -80,11 +80,14 @@ func newBarCreatedEvent(barID string, mod func(c *testpb.BarEventType_Created)) 
 	})
 }
 
+var barOtherID = "FCC73FA5-B653-4DCC-AA6F-3548BECB7B2A"
+
 func newBarEvent(barID string, mod func(e *testpb.BarPSMEventSpec)) *testpb.BarPSMEventSpec {
 	e := &testpb.BarPSMEventSpec{
 		EventID: uuid.NewString(),
 		Keys: &testpb.BarKeys{
-			BarId: barID,
+			BarId:      barID,
+			BarOtherId: barOtherID,
 		},
 		Cause: &psm_pb.Cause{
 			Type: &psm_pb.Cause_ExternalEvent{

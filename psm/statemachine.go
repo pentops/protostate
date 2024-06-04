@@ -47,9 +47,9 @@ type PSMTableSpec[
 // specs. The Query spec is a subset of the TableSpec
 func (spec PSMTableSpec[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 	return QueryTableSpec{
-		TableMap:      spec.TableMap,
-		EventTypeName: (*new(E)).ProtoReflect().Descriptor().FullName(),
-		StateTypeName: (*new(S)).ProtoReflect().Descriptor().FullName(),
+		TableMap:  spec.TableMap,
+		EventType: (*new(E)).ProtoReflect().Descriptor(),
+		StateType: (*new(S)).ProtoReflect().Descriptor(),
 	}
 }
 
@@ -256,11 +256,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 		return fmt.Errorf("state field: %w", err)
 	}
 
-	causeDBValue, err := dbconvert.MarshalProto(event.PSMMetadata())
-	if err != nil {
-		return fmt.Errorf("cause field: %w", err)
-	}
-
 	eventDBValue, err := dbconvert.MarshalProto(event)
 	if err != nil {
 		return fmt.Errorf("event field: %w", err)
@@ -299,14 +294,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	insertColumns = append(insertColumns,
 		sm.spec.Event.Timestamp.ColumnName,
 		sm.spec.Event.Sequence.ColumnName,
-		sm.spec.Event.Cause.ColumnName,
 		sm.spec.Event.Root.ColumnName,
 		sm.spec.Event.StateSnapshot.ColumnName,
 	)
 	insertValues = append(insertValues,
 		eventMeta.Timestamp.AsTime(),
 		eventMeta.Sequence,
-		causeDBValue,
 		eventDBValue,
 		stateDBValue,
 	)

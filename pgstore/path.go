@@ -104,6 +104,11 @@ func (pp Path) Child(name protoreflect.Name) (*Path, error) {
 	}, nil
 }
 
+// IDPath uniquely identifies the path within a specific root type context
+func (pp Path) IDPath() string {
+	return pp.pathNodeNames()
+}
+
 func (pp Path) DebugName() string {
 	return fmt.Sprintf("%s:%s", pp.root.FullName(), pp.pathNodeNames())
 }

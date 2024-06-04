@@ -18,7 +18,7 @@ import (
 )
 
 func TestDefaultFiltering(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -41,7 +41,7 @@ func TestDefaultFiltering(t *testing.T) {
 	tenantIDs := setupFooListableData(t, ss, sm, tenants, 10)
 
 	t.Run("Default Filters", func(t *testing.T) {
-		ss.StepC("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
 			for _, id := range tenantIDs[tenants[0]][:2] {
 				event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
 					u.Delete = true
@@ -54,7 +54,7 @@ func TestDefaultFiltering(t *testing.T) {
 			}
 		})
 
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(10),
@@ -100,7 +100,7 @@ func testLogger(t *testing.T) pquery.QueryLogger {
 }
 
 func TestFilteringWithAuthScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -130,7 +130,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		tenantID: tenantID1,
 	}
 
-	ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
@@ -187,7 +187,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 }
 
 func TestDynamicFiltering(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir("../testproto/db"))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -211,7 +211,7 @@ func TestDynamicFiltering(t *testing.T) {
 	ids := setupFooListableData(t, ss, sm, tenants, 60)
 
 	t.Run("Single Range Filter", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -262,7 +262,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Min Range Filter", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -308,7 +308,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Max Range Filter", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -355,7 +355,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Multi Range Filter", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(10),
@@ -438,7 +438,7 @@ func TestDynamicFiltering(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(10),
@@ -511,7 +511,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Non filterable fields", func(t *testing.T) {
-		ss.StepC("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -541,7 +541,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Enum values", func(t *testing.T) {
-		ss.StepC("List Page short enum name", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page short enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -583,7 +583,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 
-		ss.StepC("List Page full enum name", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page full enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -625,7 +625,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 
-		ss.StepC("List Page bad enum name", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page bad enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -656,7 +656,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Single Complex Range Filter", func(t *testing.T) {
 		nextToken := ""
-		ss.StepC("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -720,7 +720,7 @@ func TestDynamicFiltering(t *testing.T) {
 			nextToken = pageResp.GetNextToken()
 		})
 
-		ss.StepC("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
 				Page: &psml_pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -776,7 +776,7 @@ func TestDynamicFiltering(t *testing.T) {
 	})
 
 	t.Run("Oneof filter", func(t *testing.T) {
-		ss.StepC("List Page (created)", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page (created)", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
 				Page: &psml_pb.PageRequest{
@@ -819,7 +819,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 
-		ss.StepC("List Page (delted)", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page (delted)", func(ctx context.Context, t flowtest.Asserter) {
 			id := ids[tenants[0]][0]
 
 			event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
@@ -873,7 +873,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 
-		ss.StepC("List Page bad name", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page bad name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
 				Page: &psml_pb.PageRequest{

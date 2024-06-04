@@ -13,8 +13,8 @@ import (
 // QueryTableSpec is the subset of TableSpec which does not relate to the
 // specific event and state types of the state machine.
 type QueryTableSpec struct {
-	EventTypeName protoreflect.FullName
-	StateTypeName protoreflect.FullName
+	EventType protoreflect.MessageDescriptor
+	StateType protoreflect.MessageDescriptor
 	TableMap
 }
 
@@ -48,9 +48,6 @@ func (tm *TableMap) Validate() error {
 	if tm.Event.Timestamp == nil {
 		return fmt.Errorf("missing Event.Timestamp in TableMap")
 	}
-	if tm.Event.Cause == nil {
-		return fmt.Errorf("missing Event.Cause in TableMap")
-	}
 	if tm.Event.Root == nil {
 		return fmt.Errorf("missing Event.Data in TableMap")
 	}
@@ -78,9 +75,6 @@ type EventTableSpec struct {
 
 	// int, The descrete integer for the event in the state machine
 	Sequence *pgstore.ProtoFieldSpec
-
-	// jsonb, the event cause
-	Cause *pgstore.ProtoFieldSpec
 
 	// jsonb, holds the state after the event
 	StateSnapshot *pgstore.ProtoFieldSpec
@@ -117,45 +111,6 @@ type KeyField struct {
 	Primary    bool
 	Unique     bool
 	Path       *pgstore.Path
-}
-
-func (spec QueryTableSpec) BuildStateMachineMigration() ([]byte, error) {
-
-	stateTable, err := buildStateTable(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	eventTable, err := buildEventTable(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	fileData, err := pgstore.PrintCreateMigration(stateTable, eventTable)
-	if err != nil {
-		return nil, err
-	}
-	return fileData, nil
-}
-
-func buildStateTable(spec QueryTableSpec) (*pgstore.CreateTableBuilder, error) {
-	tt := pgstore.CreateTable(spec.State.TableName).
-		Column("id", "uuid", pgstore.PrimaryKey).
-		Column(spec.State.Root.ColumnName, "jsonb", pgstore.NotNull)
-
-	return tt, nil
-}
-
-func buildEventTable(spec QueryTableSpec) (*pgstore.CreateTableBuilder, error) {
-	tt := pgstore.CreateTable(spec.Event.TableName).
-		Column("id", "uuid", pgstore.PrimaryKey).
-		Column("timestamp", "timestamptz", pgstore.NotNull).
-		Column("sequence", "int", pgstore.NotNull).
-		Column("cause", "jsonb", pgstore.NotNull).
-		Column("data", "jsonb", pgstore.NotNull).
-		Column("state", "jsonb", pgstore.NotNull)
-
-	return tt, nil
 }
 
 // QuerySpec is the configuration for the query service side of the state
@@ -300,9 +255,9 @@ func BuildStateQuerySet[
 			continue
 		}
 
-		if msg.FullName() == smSpec.EventTypeName {
+		if msg.FullName() == smSpec.EventType.FullName() {
 			eventsInGet = field.Name()
-		} else if msg.FullName() == smSpec.StateTypeName {
+		} else if msg.FullName() == smSpec.StateType.FullName() {
 			getSpec.StateResponseField = field.Name()
 		}
 	}

@@ -17,7 +17,6 @@ var (
 	smEventer               = smImportPath.Ident("Eventer")
 	smStateMachine          = smImportPath.Ident("StateMachine")
 	smDBStateMachine        = smImportPath.Ident("DBStateMachine")
-	smTableSpec             = smImportPath.Ident("TableSpec")
 	smPSMTableSpec          = smImportPath.Ident("PSMTableSpec")
 	smStateMachineConfig    = smImportPath.Ident("StateMachineConfig")
 	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
@@ -370,7 +369,6 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	fieldSpec("ID", "id", ss.event.metadataField.Desc.Name(), protoreflect.Name("event_id"))
 	fieldSpec("Timestamp", "timestamp", ss.event.metadataField.Desc.Name())
 	fieldSpec("Sequence", "sequence", ss.event.metadataField.Desc.Name())
-	fieldSpec("Cause", "cause", ss.event.metadataField.Desc.Name())
 	fieldSpec("StateSnapshot", "state", ss.state.keyField.Desc.Name())
 	g.P("},")
 	// END EVENT
@@ -378,7 +376,7 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	keyColumns := make([]psm.KeyColumn, len(ss.keyFields))
 	for idx, field := range ss.keyFields {
 		keyColumns[idx] = psm.KeyColumn{
-			ColumnName: string(field.field.Desc.Name()),
+			ColumnName: string(field.field.Desc.Name()), // Use proto names as column names.
 			ProtoName:  field.field.Desc.Name(),
 			Primary:    field.PrimaryKey,
 			Required:   field.PrimaryKey || !field.field.Desc.HasOptionalKeyword(),
