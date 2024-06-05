@@ -171,9 +171,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 
 	allKeys, err := sm.keyValues(keys)
 	if err != nil {
-		return state, fmt.Errorf("primary key: %w", err)
+		return state, err
 	}
-	for _, key := range allKeys {
+	for _, key := range allKeys.values {
 		if !key.Primary {
 			continue
 		}
@@ -184,6 +184,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 	err = tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		state.SetPSMKeys(proto.Clone(keys).(K))
+
+		if len(allKeys.missingRequired) > 0 {
+			return state, fmt.Errorf("missing required key(s) %v in initial event", allKeys.missingRequired)
+		}
+
 		// OK, leave empty state alone
 		return state, nil
 	}
@@ -205,31 +210,48 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) storeCallback(tx sqrlx.Transaction)
 	}
 }
 
+type keyValues struct {
+	values []keyValue
+
+	// when required, non-primary keys are not set, the caller can't create a
+	// new state entity, but can fill in missing keys from an existing stored
+	// entity.
+	// This allows controllers and workers to specify only the primary key on
+	// non-create events and save a database lookup
+	missingRequired []protoreflect.Name
+}
+
 type keyValue struct {
 	value string
 	KeyColumn
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) ([]keyValue, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) (*keyValues, error) {
 	rawValues, err := sm.spec.KeyValues(keysMessage)
 	if err != nil {
 		return nil, err
 	}
-
-	values := make([]keyValue, 0, len(rawValues))
+	values := make([]keyValue, 0, len(sm.spec.KeyColumns))
+	missingRequired := make([]protoreflect.Name, 0, len(sm.spec.KeyColumns))
 
 	for _, def := range sm.spec.KeyColumns {
 		gotValue, ok := rawValues[def.ColumnName]
-		if !ok {
-			if def.Required || def.Primary {
-				return nil, fmt.Errorf("KeyValues() did not return a value for required key field %s", def.ColumnName)
+		if !ok || gotValue == "" {
+			if def.Primary {
+				return nil, fmt.Errorf("KeyValues() for %s did not return a value for required key field %s", keysMessage.PSMFullName(), def.ProtoName)
+			}
+			if def.Required {
+				missingRequired = append(missingRequired, def.ProtoName)
+			}
+			if ok { // set but empty
+				delete(rawValues, def.ColumnName)
 			}
 			continue
 		}
 		delete(rawValues, def.ColumnName)
 
 		if _, err := uuid.Parse(gotValue); err != nil {
-			return nil, fmt.Errorf("key field %s is not a valid UUID: %w", def.ColumnName, err)
+			return nil, fmt.Errorf("key field %s in %s is not a valid UUID: %w", keysMessage.PSMFullName(), def.ProtoName, err)
 		}
 
 		values = append(values, keyValue{value: gotValue, KeyColumn: def})
@@ -237,10 +259,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) ([]keyValu
 	}
 
 	if len(rawValues) > 0 {
-		return nil, fmt.Errorf("KeyValues() returned unexpected keys: %v", rawValues)
+		return nil, fmt.Errorf("KeyValues() for %s returned unexpected keys: %v", keysMessage.PSMFullName(), rawValues)
 	}
 
-	return values, nil
+	return &keyValues{
+		values:          values,
+		missingRequired: missingRequired,
+	}, nil
 
 }
 
@@ -267,6 +292,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	if err != nil {
 		return fmt.Errorf("key fields: %w", err)
 	}
+	if len(keyValues.missingRequired) > 0 {
+		return fmt.Errorf("missing required key(s) %v in store", keyValues.missingRequired)
+	}
 
 	eventMeta := event.PSMMetadata()
 
@@ -280,7 +308,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	insertColumns = append(insertColumns, sm.spec.Event.ID.ColumnName)
 	insertValues = append(insertValues, eventMeta.EventId)
 
-	for _, key := range keyValues {
+	for _, key := range keyValues.values {
 		if key.Primary {
 			upsertStateQuery.Key(key.ColumnName, key.value)
 		} else {
