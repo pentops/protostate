@@ -250,10 +250,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) (*keyValue
 		}
 		delete(rawValues, def.ColumnName)
 
-		if _, err := uuid.Parse(gotValue); err != nil {
-			return nil, fmt.Errorf("key field %s in %s is not a valid UUID: %w", keysMessage.PSMFullName(), def.ProtoName, err)
-		}
-
 		values = append(values, keyValue{value: gotValue, KeyColumn: def})
 
 	}
