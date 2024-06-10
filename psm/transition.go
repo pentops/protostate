@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/o5-messaging.go/o5msg"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -17,7 +17,7 @@ type HookBaton[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	SideEffect(outbox.OutboxMessage)
+	SideEffect(o5msg.Message)
 	ChainEvent(IE)
 	FullCause() E
 	AsCause() *psm_pb.Cause
@@ -31,7 +31,8 @@ type hookBaton[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	sideEffects []outbox.OutboxMessage
+	sideEffects []o5msg.Message
+
 	chainEvents []IE
 	causedBy    E
 }
@@ -40,7 +41,7 @@ func (td *hookBaton[K, S, ST, SD, E, IE]) ChainEvent(inner IE) {
 	td.chainEvents = append(td.chainEvents, inner)
 }
 
-func (td *hookBaton[K, S, ST, SD, E, IE]) SideEffect(msg outbox.OutboxMessage) {
+func (td *hookBaton[K, S, ST, SD, E, IE]) SideEffect(msg o5msg.Message) {
 	td.sideEffects = append(td.sideEffects, msg)
 }
 
