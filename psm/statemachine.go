@@ -10,7 +10,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/outbox.pg.go/outbox"
+	"github.com/pentops/o5-messaging.go/outbox"
 	"github.com/pentops/protostate/dbconvert"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"

@@ -20,7 +20,7 @@ func main() {
 	cmdGroup := commander.NewCommandSet()
 
 	cmdGroup.Add("migrate", commander.NewCommand(runFmt))
-	cmdGroup.RunMain("psm", Version)
+	cmdGroup.RunMain("psmtool", Version)
 }
 
 func runFmt(ctx context.Context, cfg struct {
