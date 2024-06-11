@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/protostate/pgstore/pgmigrate"
+	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
+	"github.com/pentops/protostate/internal/psmreflect"
 	"github.com/pentops/protostate/psm"
-	"github.com/pentops/protostate/psmreflect"
 	"github.com/pentops/prototools/protosrc"
 	"github.com/pentops/runner/commander"
 	"google.golang.org/protobuf/reflect/protodesc"
