@@ -2,9 +2,7 @@ package state
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -13,7 +11,6 @@ import (
 var (
 	// all imports from PSM are defined here, i.e. this is the committed PSM interface.
 	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
-	pgStoreImportPath       = protogen.GoImportPath("github.com/pentops/protostate/pgstore")
 	smEventer               = smImportPath.Ident("Eventer")
 	smStateMachine          = smImportPath.Ident("StateMachine")
 	smDBStateMachine        = smImportPath.Ident("DBStateMachine")
@@ -32,8 +29,7 @@ var (
 	smEventTableSpec        = smImportPath.Ident("EventTableSpec")
 
 	smKeyColumn      = smImportPath.Ident("KeyColumn")
-	pgProtoPathSpec  = pgStoreImportPath.Ident("ProtoPathSpec")
-	pgProtoFieldSpec = pgStoreImportPath.Ident("ProtoFieldSpec")
+	pgProtoFieldSpec = smImportPath.Ident("FieldSpec")
 
 	protoreflectImportPath = protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect")
 
@@ -332,17 +328,8 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	// 'event_id', 'message_id' or 'id' as a string
 	// If all the above match, we can automate the ExtractMetadata function
 
-	fieldSpec := func(name string, spec *pgstore.ProtoFieldSpec) {
-		pathElem := make([]string, len(spec.Path))
-		for i, p := range spec.Path {
-			pathElem[i] = string(p)
-		}
-
-		pathString := fmt.Sprintf(`"%s"`, strings.Join(pathElem, `","`))
-		if len(spec.Path) == 0 {
-			pathString = ""
-		}
-		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, spec.ColumnName, `", `, `PathFromRoot: `, pgProtoPathSpec, `{`, pathString, `} },`)
+	fieldSpec := func(name string, spec *psm.FieldSpec) {
+		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, spec.ColumnName, `", },`)
 	}
 
 	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")

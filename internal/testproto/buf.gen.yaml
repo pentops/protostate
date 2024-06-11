@@ -2,20 +2,20 @@ version: v1
 plugins:
   - plugin: buf.build/protocolbuffers/go:v1.31.0
     out: .
-    opt: paths=import,module=github.com/pentops/protostate/testproto
+    opt: paths=import,module=github.com/pentops/protostate/internal/testproto
 
   - plugin: buf.build/grpc/go:v1.3.0
     out: .
     opt:
-      - module=github.com/pentops/protostate/testproto
+      - module=github.com/pentops/protostate/internal/testproto
 
   - name: go-sugar
     out: .
     opt:
-      - module=github.com/pentops/protostate/testproto
+      - module=github.com/pentops/protostate/internal/testproto
 
   - name: go-psm
     path: ./protoc-gen-go-psm.sh
     out: .
     opt:
-      - module=github.com/pentops/protostate/testproto
+      - module=github.com/pentops/protostate/internal/testproto
