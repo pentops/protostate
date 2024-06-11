@@ -60,31 +60,35 @@ func (tm *TableMap) Validate() error {
 	return nil
 }
 
+type FieldSpec struct {
+	ColumnName string
+}
+
 type EventTableSpec struct {
 	TableName string
 
 	// The entire event mesage as JSONB
-	Root *pgstore.ProtoFieldSpec
+	Root *FieldSpec
 
 	// a UUID holding the primary key of the event
 	// TODO: Multi-column ID for Events?
-	ID *pgstore.ProtoFieldSpec
+	ID *FieldSpec
 
 	// timestamptz The time of the event
-	Timestamp *pgstore.ProtoFieldSpec
+	Timestamp *FieldSpec
 
 	// int, The descrete integer for the event in the state machine
-	Sequence *pgstore.ProtoFieldSpec
+	Sequence *FieldSpec
 
 	// jsonb, holds the state after the event
-	StateSnapshot *pgstore.ProtoFieldSpec
+	StateSnapshot *FieldSpec
 }
 
 type StateTableSpec struct {
 	TableName string
 
 	// The entire state message, as a JSONB
-	Root *pgstore.ProtoFieldSpec
+	Root *FieldSpec
 }
 
 type KeyColumn struct {
@@ -333,11 +337,13 @@ func BuildStateQuerySet[
 
 	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
 		TableSpec: pquery.TableSpec{
-			TableName:           smSpec.Event.TableName,
-			DataColumn:          smSpec.Event.Root.ColumnName,
-			Auth:                options.Auth,
-			AuthJoin:            eventsAuthJoin,
-			FallbackSortColumns: []pgstore.ProtoFieldSpec{*smSpec.Event.ID},
+			TableName:  smSpec.Event.TableName,
+			DataColumn: smSpec.Event.Root.ColumnName,
+			Auth:       options.Auth,
+			AuthJoin:   eventsAuthJoin,
+			FallbackSortColumns: []pgstore.ProtoFieldSpec{{
+				ColumnName: smSpec.Event.ID.ColumnName,
+			}},
 		},
 		RequestFilter: smSpec.ListEventsRequestFilter,
 	}

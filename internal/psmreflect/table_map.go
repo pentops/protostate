@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -25,27 +24,30 @@ func BuildDefaultTableMap(ss StateMachine) (*psm.TableMap, error) {
 	tm := &psm.TableMap{
 		State: psm.StateTableSpec{
 			TableName: stateObjectAnnotation.Name,
-			Root:      &pgstore.ProtoFieldSpec{ColumnName: "state", PathFromRoot: pgstore.ProtoPathSpec{}},
+			Root: &psm.FieldSpec{
+				ColumnName: "state",
+				//PathFromRoot: psm.PathSpec{},
+			},
 		},
 		Event: psm.EventTableSpec{
 			TableName: stateObjectAnnotation.Name + "_event",
-			Root: &pgstore.ProtoFieldSpec{
-				ColumnName:   "data",
-				PathFromRoot: pgstore.ProtoPathSpec{},
+			Root: &psm.FieldSpec{
+				ColumnName: "data",
+				//PathFromRoot: psm.PathSpec{},
 			},
-			ID: &pgstore.ProtoFieldSpec{
-				ColumnName:   "id",
-				PathFromRoot: pgstore.ProtoPathSpec{string(ss.EventMetadataField.Name()), "event_id"},
+			ID: &psm.FieldSpec{
+				ColumnName: "id",
+				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "event_id"},
 			},
-			Timestamp: &pgstore.ProtoFieldSpec{
-				ColumnName:   "timestamp",
-				PathFromRoot: pgstore.ProtoPathSpec{string(ss.EventMetadataField.Name()), "timestamp"},
+			Timestamp: &psm.FieldSpec{
+				ColumnName: "timestamp",
+				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "timestamp"},
 			},
-			Sequence: &pgstore.ProtoFieldSpec{
-				ColumnName:   "sequence",
-				PathFromRoot: pgstore.ProtoPathSpec{string(ss.EventMetadataField.Name()), "sequence"},
+			Sequence: &psm.FieldSpec{
+				ColumnName: "sequence",
+				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "sequence"},
 			},
-			StateSnapshot: &pgstore.ProtoFieldSpec{
+			StateSnapshot: &psm.FieldSpec{
 				ColumnName: "state",
 			},
 		},
