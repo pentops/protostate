@@ -1416,10 +1416,10 @@ github.com/pentops/flowtest v0.0.0-20240607020132-7dda31076e79 h1:KDFU89YeGtsFew
 github.com/pentops/flowtest v0.0.0-20240607020132-7dda31076e79/go.mod h1:5vX1QXxvMqOZb/KiJd4V2STThM6Q9OnHZIxAbv1Pprw=
 github.com/pentops/log.go v0.0.0-20240523172444-85c9292a83db h1:+d9Omr3fQ/A7f318vAReTDjPfH4t9XbcnCF8w6TD3Hs=
 github.com/pentops/log.go v0.0.0-20240523172444-85c9292a83db/go.mod h1:UXhrs+VZ6cWZ7b/v8AtuvBZc5nwS5WFHP94JoFrZQA8=
-github.com/pentops/o5-go v0.0.0-20240610185652-b7c07a9e678a h1:UR1cU97/a/1b3M9ESKm7JpFGCFTOmFzV5SzrRu/m/8M=
-github.com/pentops/o5-go v0.0.0-20240610185652-b7c07a9e678a/go.mod h1:UOx8niisQUMOwY0kixynzTNjDGCmySjUrKVWGWsQOTM=
-github.com/pentops/o5-messaging.go v0.0.0-20240610190316-b9d88577a005 h1:0TZa4QEw4HKRavNzGhje0o5QQ5u6MSw8ZGKlFhSZ6kE=
-github.com/pentops/o5-messaging.go v0.0.0-20240610190316-b9d88577a005/go.mod h1:V5o/DCUDbBoKKrBctLSNCeaopC4srEMGgli8ua5kRv8=
+github.com/pentops/o5-go v0.0.0-20240611214452-99a6f6789ff8 h1:Fvr3HDIo5rTPghgl/ajQSPgn80J9zSI7vk2DA5X41Dw=
+github.com/pentops/o5-go v0.0.0-20240611214452-99a6f6789ff8/go.mod h1:+MyY/uSO1OQqBEByHYlzMIlbJSrlZSIS7ZR98VPqMIo=
+github.com/pentops/o5-messaging v0.0.0-20240611214218-4ac153f68bc9 h1:aYz0QrA4hJhbXjra1U+acvmTVt7zjYjvdjTfZKSnIBY=
+github.com/pentops/o5-messaging v0.0.0-20240611214218-4ac153f68bc9/go.mod h1:aXyY7kDScVPxRzxkxpC0jmYPWiInLkTQDwzmE9NcFOM=
 github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734 h1:NnTjggH2Y3gCiS5r/k5UvHN3vVHMOMDZ/vFsLsNAn8o=
 github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pentops/prototools v0.0.0-20240531010906-d324770770f0 h1:07hqceNhsLYhqYPfRsLuWMm84m2CKQpqLZJjdIzmzQw=
