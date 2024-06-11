@@ -6,9 +6,9 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/protostate/internal/pquery"
+	"github.com/pentops/protostate/internal/psmreflect"
 	"github.com/pentops/protostate/psm"
-	"github.com/pentops/protostate/psmreflect"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"

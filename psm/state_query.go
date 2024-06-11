@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/protostate/pgstore"
-	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/protostate/internal/pgstore"
+	"github.com/pentops/protostate/internal/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
