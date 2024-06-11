@@ -9,15 +9,20 @@ deps:
   - remote: buf.build
     owner: googleapis
     repository: googleapis
-    commit: cc9c423640a448ec81a25b69927172cf
+    commit: f0e53af8f2fc4556b94f482688b57223
     digest: shake256:de26a277fc28b8b411ecf58729d78d32fcf15090ffd998a4469225b17889bfb51442eaab04bb7a8d88d203ecdf0a9febd4ffd52c18ed1c2229160c7bd353ca95
   - remote: buf.build
     owner: pentops
     repository: listify
-    commit: f953cf3566bd470d9f7be26100843ff6
+    commit: 88fbd382a3e34ecfb80f8e35c19126c3
     digest: shake256:832cd76e75747f5a073a97d50f6562fe2fd7e96f5fbd4950b5291d623da486409aabf2a09e06c1d26df1692f0301b40b880cbf800dd7ba7f794c764bd53aa15d
   - remote: buf.build
     owner: pentops
+    repository: messaging
+    commit: 675bd3c4763842e0bdef1047f7ab7225
+    digest: shake256:3dc7b4b1091d677d68123e32e134cb6506663166a411ca8a86d7e4d8ee8c85f705326ab507ed4b558f6a8cdb67f66fc78d90cf259b95aa8ace79b0e74820ab5c
+  - remote: buf.build
+    owner: pentops
     repository: o5
-    commit: 47bad4837d6d4a4a894ba92b4f5b9fbe
-    digest: shake256:a1f81bfebfacbef7e297a4fb6363e6afadc673d8d0bab84f323cf94a88213656c14e3b643f264060e17a4d696bbc81699e818d245f4c66b34d4f8b74d9a3ba29
+    commit: a1e8f369c70549ada4a4cd9019120323
+    digest: shake256:cc204b9eac200778ca277180469a7f0151585c9d82f313de3ac8f781d627525c1e9060b06b957e48bbe3cca38c6b352108c7af5707caaab878b438609cbcfffc
