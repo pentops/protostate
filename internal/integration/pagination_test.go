@@ -27,7 +27,7 @@ func TestPagination(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -132,7 +132,7 @@ func TestEventPagination(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -270,7 +270,7 @@ func TestPageSize(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

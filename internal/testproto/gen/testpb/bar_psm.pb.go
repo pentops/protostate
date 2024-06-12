@@ -5,6 +5,7 @@ package testpb
 import (
 	context "context"
 	fmt "fmt"
+
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"

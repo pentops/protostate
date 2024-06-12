@@ -37,7 +37,7 @@ func TestFooStateField(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -127,46 +127,11 @@ func TestBarStateMachine(t *testing.T) {
 }
 
 func TestStateMachineHook(t *testing.T) {
-	ctx := context.Background()
 
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm := NewFooTestMachine(t, db)
-
-	controller := NewMiniFooController(db)
-
-	sm.GeneralHook(testpb.FooPSMGeneralHook(func(
-		ctx context.Context,
-		tx sqrlx.Transaction,
-		tb testpb.FooPSMHookBaton,
-		state *testpb.FooState,
-		event *testpb.FooEvent,
-	) error {
-		if state.Data.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
-			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
-			Set("weight", state.Data.Characteristics.Weight).
-			Set("height", state.Data.Characteristics.Height).
-			Set("length", state.Data.Characteristics.Length))
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}))
+	flow, uu := NewUniverse(t)
 
 	tenantID := uuid.NewString()
-	t.Run("Setup", func(t *testing.T) {
+	flow.Step("Setup", func(ctx context.Context, t flowtest.Asserter) {
 		foo1ID := uuid.NewString()
 		event1 := newFooCreatedEvent(foo1ID, tenantID, nil)
 
@@ -174,7 +139,7 @@ func TestStateMachineHook(t *testing.T) {
 		event3 := newFooCreatedEvent(foo2ID, tenantID, nil)
 
 		for _, event := range []*testpb.FooPSMEventSpec{event1, event3} {
-			_, err := sm.Transition(ctx, event)
+			_, err := uu.FooStateMachine.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -182,10 +147,10 @@ func TestStateMachineHook(t *testing.T) {
 
 	})
 
-	t.Run("Summary", func(t *testing.T) {
+	flow.Step("Summary", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.FooSummaryRequest{}
 
-		res, err := controller.FooSummary(ctx, req)
+		res, err := uu.FooQuery.FooSummary(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -198,22 +163,15 @@ func TestStateMachineHook(t *testing.T) {
 }
 
 func TestStateMachineIdempotencyInitial(t *testing.T) {
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm := NewFooTestMachine(t, db)
+	flow, uu := NewUniverse(t)
 
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
 	event1 := newFooCreatedEvent(fooID, tenantID, nil)
 
-	t.Run("Create", func(t *testing.T) {
-		state, err := sm.Transition(ctx, event1)
+	flow.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
+
+		state, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -224,10 +182,10 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 
 	})
 
-	t.Run("Same Exact Event", func(t *testing.T) {
+	flow.Step("Same Exact Event", func(ctx context.Context, t flowtest.Asserter) {
 		// idempotency test
 		// event 1 should be idempotent
-		state, err := sm.Transition(ctx, event1)
+		state, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -239,9 +197,8 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 		req := &testpb.ListFooEventsRequest{
 			FooId: fooID,
 		}
-		res := &testpb.ListFooEventsResponse{}
 
-		err = sm.Queryer.ListEvents(ctx, db, req, res)
+		res, err := uu.FooQuery.ListFooEvents(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -253,11 +210,11 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 
 	})
 
-	t.Run("Different Event Data", func(t *testing.T) {
+	flow.Step("Different Event Data", func(ctx context.Context, t flowtest.Asserter) {
 		// idempotency test
 		// event 1 should be idempotent
 		event1.Event.(*testpb.FooEventType_Created).Name = "foo2"
-		_, err = sm.Transition(ctx, event1)
+		_, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -270,15 +227,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 }
 
 func TestStateMachineIdempotencySnapshot(t *testing.T) {
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm := NewFooTestMachine(t, db)
+	flow, uu := NewUniverse(t)
 
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
@@ -286,8 +235,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 		c.Name = "1"
 	})
 
-	t.Run("Create", func(t *testing.T) {
-		state, err := sm.Transition(ctx, event1)
+	flow.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
+		state, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -302,8 +251,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 
 	})
 
-	t.Run("Update", func(t *testing.T) {
-		state, err := sm.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+	flow.Step("Update", func(ctx context.Context, t flowtest.Asserter) {
+		state, err := uu.FooStateMachine.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
 			u.Name = "2"
 		}))
 		if err != nil {
@@ -315,8 +264,8 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 		}
 	})
 
-	t.Run("Repeat Create Event", func(t *testing.T) {
-		state, err := sm.Transition(ctx, event1)
+	flow.Step("Repeat Create Event", func(ctx context.Context, t flowtest.Asserter) {
+		state, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -331,15 +280,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 }
 
 func TestFooStateMachine(t *testing.T) {
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm := NewFooTestMachine(t, db)
+	flow, uu := NewUniverse(t)
 
 	tenantID := uuid.NewString()
 
@@ -352,28 +293,29 @@ func TestFooStateMachine(t *testing.T) {
 	event4 := newFooUpdatedEvent(foo2ID, tenantID, func(u *testpb.FooEventType_Updated) {
 		u.Delete = true
 	})
-
 	statesOut := map[string]*testpb.FooState{}
-	for _, event := range []*testpb.FooPSMEventSpec{event1, event2, event3, event4} {
-		stateOut, err := sm.Transition(ctx, event)
-		if err != nil {
-			t.Fatal(err.Error())
+
+	flow.Setup(func(ctx context.Context, t flowtest.Asserter) error {
+		for _, event := range []*testpb.FooPSMEventSpec{event1, event2, event3, event4} {
+			stateOut, err := uu.FooStateMachine.Transition(ctx, event)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			statesOut[event.Keys.FooId] = stateOut
 		}
-		statesOut[event.Keys.FooId] = stateOut
-	}
 
-	if statesOut[fooID].GetStatus() != testpb.FooStatus_ACTIVE {
-		t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
-	}
+		if statesOut[fooID].GetStatus() != testpb.FooStatus_ACTIVE {
+			t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
+		}
+		return nil
+	})
 
-	t.Run("Get1", func(t *testing.T) {
+	flow.Step("Get1", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.GetFooRequest{
 			FooId: fooID,
 		}
 
-		res := &testpb.GetFooResponse{}
-
-		err = sm.Queryer.Get(ctx, db, req, res)
+		res, err := uu.FooQuery.GetFoo(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -388,13 +330,12 @@ func TestFooStateMachine(t *testing.T) {
 		t.Log(res.Events)
 	})
 
-	t.Run("ListEvents1", func(t *testing.T) {
+	flow.Step("ListEvents1", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFooEventsRequest{
 			FooId: fooID,
 		}
-		res := &testpb.ListFooEventsResponse{}
 
-		err = sm.Queryer.ListEvents(ctx, db, req, res)
+		res, err := uu.FooQuery.ListFooEvents(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -413,14 +354,12 @@ func TestFooStateMachine(t *testing.T) {
 		}
 	})
 
-	t.Run("Get2", func(t *testing.T) {
+	flow.Step("Get2", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.GetFooRequest{
 			FooId: foo2ID,
 		}
 
-		res := &testpb.GetFooResponse{}
-
-		err = sm.Queryer.Get(ctx, db, req, res)
+		res, err := uu.FooQuery.GetFoo(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -443,19 +382,20 @@ func TestFooStateMachine(t *testing.T) {
 		}
 		t.Log(protojson.Format(derivedEvent.Metadata.Cause))
 		causeEvent := derivedEvent.Metadata.Cause.GetPsmEvent()
+
 		if causeEvent == nil {
 			t.Fatalf("expected derived event to be caused by a PSM event")
+			return
 		}
 		if causeEvent.EventId != event4.EventID {
 			t.Fatalf("expected derived event to be caused by event 4")
 		}
 	})
 
-	t.Run("List", func(t *testing.T) {
+	flow.Step("List", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{}
-		res := &testpb.ListFoosResponse{}
 
-		err = sm.Queryer.List(ctx, db, req, res)
+		res, err := uu.FooQuery.ListFoos(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -465,30 +405,5 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected 1 states for default filter (ACTIVE), got %d", len(res.Foos))
 		}
 	})
-
-}
-
-type MiniFooController struct {
-	db *sqrlx.Wrapper
-}
-
-func NewMiniFooController(db *sqrlx.Wrapper) *MiniFooController {
-	return &MiniFooController{
-		db: db,
-	}
-}
-
-func (c *MiniFooController) FooSummary(ctx context.Context, req *testpb.FooSummaryRequest) (*testpb.FooSummaryResponse, error) {
-
-	res := &testpb.FooSummaryResponse{}
-
-	query := sq.Select("count(id)", "sum(weight)", "sum(height)", "sum(length)").From("foo_cache")
-	err := c.db.Transact(ctx, nil, func(ctx context.Context, tx sqrlx.Transaction) error {
-		return tx.QueryRow(ctx, query).Scan(&res.CountFoos, &res.TotalWeight, &res.TotalHeight, &res.TotalLength)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
 
 }

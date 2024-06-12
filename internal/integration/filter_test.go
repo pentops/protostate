@@ -10,8 +10,8 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
-	"github.com/pentops/protostate/internal/pquery"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
@@ -24,7 +24,7 @@ func TestDefaultFiltering(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -106,7 +106,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -193,7 +193,7 @@ func TestDynamicFiltering(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sm, err := NewFooStateMachine(db, uuid.NewString())
+	sm, err := NewFooStateMachine(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

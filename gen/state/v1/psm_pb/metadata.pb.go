@@ -7,6 +7,9 @@
 package psm_pb
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	auth_pb "github.com/pentops/o5-go/auth/v1/auth_pb"
 	_ "github.com/pentops/protostate/gen/list/v1/psml_pb"
@@ -14,8 +17,6 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
