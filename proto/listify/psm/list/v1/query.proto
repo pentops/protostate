@@ -3,6 +3,7 @@ syntax = "proto3";
 package psm.list.v1;
 
 import "buf/validate/validate.proto";
+import "j5/ext/v1/annotations.proto";
 
 option go_package = "github.com/pentops/protostate/gen/list/v1/psml_pb";
 
@@ -43,6 +44,7 @@ message Field {
 
   oneof type {
     option (buf.validate.oneof).required = true;
+    option (j5.ext.v1.oneof).expose = true;
 
     string value = 2;
     Range range = 3;

@@ -4,12 +4,14 @@ import (
 	"context"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/google/uuid"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
-func NewFooStateMachine(db *sqrlx.Wrapper, actorID string) (*testpb.FooPSMDB, error) {
+func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
+	actorID := uuid.NewString()
 	systemActor, err := psm.NewSystemActor(actorID)
 	if err != nil {
 		return nil, err

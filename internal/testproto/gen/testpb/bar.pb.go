@@ -7,6 +7,9 @@
 package testpb
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	psml_pb "github.com/pentops/protostate/gen/list/v1/psml_pb"
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
@@ -14,8 +17,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (

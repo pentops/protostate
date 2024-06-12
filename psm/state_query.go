@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pentops/protostate/internal/pgstore"
-	"github.com/pentops/protostate/internal/pquery"
+	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )

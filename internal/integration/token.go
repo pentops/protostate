@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/protostate/internal/pquery"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 )
 
