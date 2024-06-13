@@ -1,7 +1,10 @@
 package psm
 
 import (
+	"context"
+
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -96,4 +99,105 @@ type IEvent[
 type IInnerEvent interface {
 	IPSMMessage
 	PSMEventKey() string
+}
+
+// TransitionMutation runs at the start of a transition to merge the event
+// information into the state data object. The state object is mutable in this
+// context.
+type TransitionMutation[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	TransitionMutation(SD, IE) error
+	EventType() string
+}
+
+// TransitionLogicHook Executes after the mutation is complete. This hook
+// can trigger side effects, including chained events, which are additional
+// events processed by the state machine. Use this for Business Logic which
+// determines the 'next step' in processing.
+type TransitionLogicHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	TransitionLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, IE) error
+	EventType() string
+}
+
+// TransitionDataHook runs after the mutations, and can be used to update data
+// in tables which are not controlled as the state machine, e.g. for
+// pre-calculating fields for performance reasons. Use of this hook prevents
+// (future) transaction optimizations, as the transaction state
+// when the function is called must needs to match the processing state, but
+// only for this single transition, unlike the GeneralEventDataHook.
+type TransitionDataHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	TransitionDataHook(context.Context, sqrlx.Transaction, S, IE) error
+	EventType() string
+}
+
+// GeneralLogicHook runs once per transition at the state-machine level
+// regardless of which transition / event is being processed. It runs exactly
+// once per transition, with the state object in the final state after the
+// transition but prior to processing any further events. Chained events are
+// added to the *end* of the event queue for the transaction, and side effects
+// are published (as always) when the transaction is committed. The function
+// MUST be pure, i.e. It MUST NOT produce any side-effects outside of the
+// HookBaton, and MUST NOT modify the
+// state.
+type GeneralLogicHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	GeneralLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
+}
+
+// GeneralStateDataHook runs at the state-machine level regardless of which
+// transition / event is being processed. It runs at-least once before
+// committing a database transaction after multiple transitions are complete.
+// This hook has access only to the final state after the transitions and is
+// used to update other tables based on the resulting state. It MUST be
+// idempotent, it may be called after injecting externally-held state data.
+type GeneralStateDataHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	GeneralStateDataHook(context.Context, sqrlx.Transaction, S) error
+}
+
+// GeneralEventDataHook runs after each transition at the state-machine level regardless of which
+// transition / event is being processed. It runs exactly once per transition,
+// before any other events are processed. The presence of this hook type
+// prevents (future) transaction optimizations, so should be used sparingly.
+type GeneralEventDataHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	GeneralEventDataHook(context.Context, sqrlx.Transaction, S, E) error
 }

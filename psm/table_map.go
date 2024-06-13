@@ -6,9 +6,98 @@ import (
 	"unicode"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+type TableMap struct {
+
+	// KeyColumns are stored in both state and event tables.
+	// Keys marked primary combine to form the primary key of the State table,
+	// and therefore a foreign key from the event table.
+	// Non primary keys are included but not referenced.
+	// All columns must be UUID.
+	KeyColumns []KeyColumn
+
+	State StateTableSpec
+	Event EventTableSpec
+}
+
+func (tm *TableMap) Validate() error {
+
+	if tm.State.TableName == "" {
+		return fmt.Errorf("missing State.TableName in TableMap")
+	}
+	if tm.State.Root == nil {
+		return fmt.Errorf("missing State.Data in TableMap")
+	}
+	if tm.Event.TableName == "" {
+		return fmt.Errorf("missing Event.TableName in TableMap")
+	}
+	if tm.Event.ID == nil {
+		return fmt.Errorf("missing Event.Data in TableMap")
+	}
+	if tm.Event.Timestamp == nil {
+		return fmt.Errorf("missing Event.Timestamp in TableMap")
+	}
+	if tm.Event.Root == nil {
+		return fmt.Errorf("missing Event.Data in TableMap")
+	}
+	if tm.Event.Sequence == nil {
+		return fmt.Errorf("missing Event.Sequence in TableMap")
+	}
+	if tm.Event.StateSnapshot == nil {
+		return fmt.Errorf("missing Event.StateSnapshot in TableMap")
+	}
+	return nil
+}
+
+type FieldSpec struct {
+	ColumnName string
+}
+
+type EventTableSpec struct {
+	TableName string
+
+	// The entire event mesage as JSONB
+	Root *FieldSpec
+
+	// a UUID holding the primary key of the event
+	// TODO: Multi-column ID for Events?
+	ID *FieldSpec
+
+	// timestamptz The time of the event
+	Timestamp *FieldSpec
+
+	// int, The descrete integer for the event in the state machine
+	Sequence *FieldSpec
+
+	// jsonb, holds the state after the event
+	StateSnapshot *FieldSpec
+}
+
+type StateTableSpec struct {
+	TableName string
+
+	// The entire state message, as a JSONB
+	Root *FieldSpec
+}
+
+type KeyColumn struct {
+	ColumnName string
+	ProtoName  protoreflect.Name
+	Primary    bool
+	Required   bool
+	Unique     bool
+}
+
+type KeyField struct {
+	ColumnName *string // Optional, stores in the table as a column.
+	Primary    bool
+	Unique     bool
+	Path       *pgstore.Path
+}
 
 func safeTableName(name string) string {
 	return strings.Map(func(r rune) rune {

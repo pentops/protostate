@@ -1,6 +1,6 @@
 module github.com/pentops/protostate
 
-go 1.22.3
+go 1.22.4
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.1-20240508200655-46a4cf4ba109.1

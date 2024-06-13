@@ -71,7 +71,7 @@ type StateMachine[
 
 	SystemActor SystemActor
 
-	hooks []IStateHook[K, S, ST, SD, E, IE]
+	hookSet[K, S, ST, SD, E, IE]
 
 	keyValueFunc func(K) (map[string]string, error)
 
@@ -112,23 +112,6 @@ func NewStateMachine[
 		Eventer:      ee,
 		SystemActor:  cb.systemActor,
 	}, nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) addHook(hook IStateHook[K, S, ST, SD, E, IE]) {
-	sm.hooks = append(sm.hooks, hook)
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) FindHooks(status ST, event E) []IStateHook[K, S, ST, SD, E, IE] {
-
-	hooks := []IStateHook[K, S, ST, SD, E, IE]{}
-
-	for _, hook := range sm.hooks {
-		if hook.Matches(status, event) {
-			hooks = append(hooks, hook)
-		}
-	}
-
-	return hooks
 }
 
 func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
@@ -505,7 +488,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runHooks(ctx context.Context, tx sq
 			causedBy: event,
 		}
 
-		if err := hook.RunStateHook(ctx, tx, baton, state, event); err != nil {
+		if err := hook.RunTransitionHooks(ctx, tx, baton, state, event); err != nil {
 			return fmt.Errorf("run state hook: %w", err)
 		}
 
