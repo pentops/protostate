@@ -117,3 +117,12 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S
 	tb.hookSet.noop = true
 	return tb
 }
+
+// LinkTo registers a transition into another local state machine to run in the
+// same database transaction
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LinkTo(
+	link transitionLink[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.hookSet.links = append(tb.hookSet.links, link)
+	return tb
+}

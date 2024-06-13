@@ -597,6 +597,23 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSp
 	return
 }
 
+func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Context, tx sqrlx.Transaction, cause *psm_pb.Cause, keys K, innerEvent IE) error { // nolint: unused // Used when the state machine is implementing LinkDestination
+	event := &EventSpec[K, S, ST, SD, E, IE]{
+		Keys:      keys,
+		Timestamp: time.Now(),
+		Event:     innerEvent,
+		EventID:   uuid.NewString(),
+		Cause:     cause,
+	}
+
+	_, err := sm.runTx(ctx, tx, event)
+	if err != nil {
+		return fmt.Errorf("run transition: %w", err)
+	}
+
+	return nil
+}
+
 // TransitionInTx uses an existing transaction to transition the state machine.
 func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 	var state S
