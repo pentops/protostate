@@ -71,7 +71,7 @@ type StateMachine[
 ] struct {
 	SystemActor SystemActor
 
-	hookSet[K, S, ST, SD, E, IE]
+	transitionSet[K, S, ST, SD, E, IE]
 
 	keyValueFunc func(K) (map[string]string, error)
 
@@ -488,7 +488,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		},
 	})
 
-	transition, err := sm.findTransitions(ctx, statusBefore, typeKey)
+	transition, err := sm.findTransitions(statusBefore, typeKey)
 	if err != nil {
 		return nil, nil
 	}
@@ -532,7 +532,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		return nil, fmt.Errorf("run transition hooks: %w", err)
 	}
 
-	if err := sm.hookSet.runGlobalTransitionHooks(ctx, tx, baton, state, event); err != nil {
+	if err := sm.transitionSet.runGlobalTransitionHooks(ctx, tx, baton, state, event); err != nil {
 		return nil, fmt.Errorf("run transition hooks: %w", err)
 	}
 
