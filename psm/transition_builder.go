@@ -3,15 +3,11 @@ package psm
 // From creates a new transition builder for the state machine, which will run
 // when the machine is transitioning from one of the given states. If the given
 // list is empty (From()), matches ALL starting states.
-func (ee *StateMachine[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, S, ST, SD, E, IE] {
+func (hs *hookSet[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, S, ST, SD, E, IE] {
 	return BuilderFrom[K, S, ST, SD, E, IE]{
-		sm:         ee,
+		hs:         hs,
 		fromStatus: states,
 	}
-}
-
-func (ee *StateMachine[K, S, ST, SD, E, IE]) GeneralHook(hook GeneralStateHook[K, S, ST, SD, E, IE]) {
-	ee.hooks = append(ee.hooks, hook)
 }
 
 type BuilderFrom[
@@ -22,37 +18,48 @@ type BuilderFrom[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	sm         *StateMachine[K, S, ST, SD, E, IE]
+	hs         *hookSet[K, S, ST, SD, E, IE]
 	fromStatus []ST
 }
 
 // OnEvent identifies a specific transition from state(s) for an event.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	ths := &transitionHookSet[K, S, ST, SD, E, IE]{
+		fromStatus: tb.fromStatus,
+		eventType:  event,
+	}
+
+	tb.hs.transitions = append(tb.hs.transitions, ths)
+
 	return &TransitionBuilder[K, S, ST, SD, E, IE]{
-		sm: tb.sm,
-		eventFilter: eventFilter[K, S, ST, SD, E, IE]{
-			fromStatus: tb.fromStatus,
-			onEvents:   []string{event},
-		},
+		fromStatus: tb.fromStatus,
+		onEvent:    event,
+		hookSet:    ths,
 	}
 }
 
-// Mutate is a shortcut for OnEvent().Mutate() with the event type matching callback
-// function.
+// Mutate is a shortcut for OnEvent().Mutate() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
-	transition ITransitionHandler[K, S, ST, SD, E, IE],
+	hook TransitionMutation[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := transition.eventType()
-	return tb.OnEvent(eventType).Mutate(transition)
+	eventType := hook.EventType()
+	return tb.OnEvent(eventType).Mutate(hook)
 }
 
-// Hook is a shortcut for OnEvent().Hook() with the event type matching callback
-// function.
-func (tb BuilderFrom[K, S, ST, SD, E, IE]) Hook(
-	hook IStateHookHandler[K, S, ST, SD, E, IE],
+// LogicHook is a shortcut for OnEvent().LogicHook() with the event type matching callback function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
+	hook TransitionLogicHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := hook.eventType()
-	return tb.OnEvent(eventType).Hook(hook)
+	eventType := hook.EventType()
+	return tb.OnEvent(eventType).LogicHook(hook)
+}
+
+// DataHook is a shortcut for OnEvent().DataHook() with the event type matching callback function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
+	hook TransitionDataHook[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	eventType := hook.EventType()
+	return tb.OnEvent(eventType).DataHook(hook)
 }
 
 type TransitionBuilder[
@@ -63,31 +70,18 @@ type TransitionBuilder[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	sm                *StateMachine[K, S, ST, SD, E, IE]
-	eventFilter       eventFilter[K, S, ST, SD, E, IE]
-	transitionWrapper *TransitionWrapper[K, S, ST, SD, E, IE]
+	hookSet    *transitionHookSet[K, S, ST, SD, E, IE]
+	fromStatus []ST
+	onEvent    string
 }
 
-func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) transition() *TransitionWrapper[K, S, ST, SD, E, IE] {
-	if tb.transitionWrapper == nil {
-		tb.transitionWrapper = &TransitionWrapper[K, S, ST, SD, E, IE]{
-			handler:     nil, // set by Mutate
-			toStatus:    0,   // set by SetStatus
-			eventFilter: tb.eventFilter,
-		}
-
-		tb.sm.Eventer.Register(tb.transitionWrapper)
-	}
-	return tb.transitionWrapper
-}
-
-// Mutate sets the function which will merge data from the event into the state
-// data. A transition can have zero or one mutate function, calling this
-// function replaces any previous function.
+// Mutate adds a function which will merge data from the event into the state
+// data. A transition can have zero or one mutate function. Multiple mutation
+// callbacks may be registered.
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Mutate(
-	transition ITransitionHandler[K, S, ST, SD, E, IE],
+	transition TransitionMutation[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.transition().handler = transition
+	tb.hookSet.mutations = append(tb.hookSet.mutations, transition)
 	return tb
 }
 
@@ -97,28 +91,29 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Mutate(
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) SetStatus(
 	status ST,
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.transition().toStatus = status
+	tb.hookSet.toStatus = status
 	return tb
 }
 
-// Hook creates and registers a new hook to run after the transition. Multiple
-// hooks can be attached to the same transition.
-func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Hook(
-	hook IStateHookHandler[K, S, ST, SD, E, IE],
+// LogicHook adds a new TransitionLogicHook which will run after all mutations
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
+	hook TransitionLogicHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.hookSet.logic = append(tb.hookSet.logic, hook)
+	return tb
+}
 
-	typedHook := &HookWrapper[K, S, ST, SD, E, IE]{
-		handler:     hook,
-		eventFilter: tb.eventFilter,
-	}
-
-	tb.sm.addHook(typedHook)
+// DataHook adds a new TransitionDataHook which will run after all mutations
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) DataHook(
+	hook TransitionDataHook[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.hookSet.data = append(tb.hookSet.data, hook)
 	return tb
 }
 
 // Noop registers a transition which does nothing, but prevents the machine from
 // erroring when the conditions are met.
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.transition()
+	tb.hookSet.noop = true
 	return tb
 }

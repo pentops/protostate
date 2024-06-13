@@ -15,7 +15,6 @@ var (
 	smStateMachine       = smImportPath.Ident("StateMachine")
 	smDBStateMachine     = smImportPath.Ident("DBStateMachine")
 	smStateMachineConfig = smImportPath.Ident("StateMachineConfig")
-	smNewStateMachine    = smImportPath.Ident("NewStateMachine")
 	smStateHookBaton     = smImportPath.Ident("HookBaton")
 	smMutationFunc       = smImportPath.Ident("PSMMutationFunc")
 	smHookFunc           = smImportPath.Ident("PSMHookFunc")
