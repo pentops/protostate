@@ -1,71 +1,77 @@
-package psmreflect
+package psm
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type StateMachine struct {
-	EventMetadataField protoreflect.FieldDescriptor
-	KeyMessage         protoreflect.MessageDescriptor
+func safeTableName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return r
+		}
+		return '_'
+	}, name)
 }
 
-func BuildDefaultTableMap(ss StateMachine) (*psm.TableMap, error) {
-
-	stateObjectAnnotation, ok := proto.GetExtension(ss.KeyMessage.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
-	if !ok || stateObjectAnnotation == nil {
-		return nil, fmt.Errorf("message %s has no PSM Key field", ss.KeyMessage.Name())
+func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescriptor) (QueryTableSpec, error) {
+	tableMap, err := tableMapFromStateAndEvent(stateMessage, eventMessage)
+	if err != nil {
+		return QueryTableSpec{}, err
 	}
 
-	tm := &psm.TableMap{
-		State: psm.StateTableSpec{
-			TableName: stateObjectAnnotation.Name,
-			Root: &psm.FieldSpec{
+	return QueryTableSpec{
+		TableMap:  *tableMap,
+		StateType: stateMessage,
+		EventType: eventMessage,
+	}, nil
+}
+
+func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap, error) {
+	stateObjectAnnotation, ok := proto.GetExtension(keyMessage.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+	if !ok || stateObjectAnnotation == nil {
+		return nil, fmt.Errorf("message %s has no PSM Key field", keyMessage.Name())
+	}
+
+	tm := &TableMap{
+		State: StateTableSpec{
+			TableName: safeTableName(stateObjectAnnotation.Name),
+			Root: &FieldSpec{
 				ColumnName: "state",
 				//PathFromRoot: psm.PathSpec{},
 			},
 		},
-		Event: psm.EventTableSpec{
-			TableName: stateObjectAnnotation.Name + "_event",
-			Root: &psm.FieldSpec{
+		Event: EventTableSpec{
+			TableName: safeTableName(stateObjectAnnotation.Name + "_event"),
+			Root: &FieldSpec{
 				ColumnName: "data",
 				//PathFromRoot: psm.PathSpec{},
 			},
-			ID: &psm.FieldSpec{
+			ID: &FieldSpec{
 				ColumnName: "id",
 				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "event_id"},
 			},
-			Timestamp: &psm.FieldSpec{
+			Timestamp: &FieldSpec{
 				ColumnName: "timestamp",
 				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "timestamp"},
 			},
-			Sequence: &psm.FieldSpec{
+			Sequence: &FieldSpec{
 				ColumnName: "sequence",
 				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "sequence"},
 			},
-			StateSnapshot: &psm.FieldSpec{
+			StateSnapshot: &FieldSpec{
 				ColumnName: "state",
 			},
 		},
-		KeyColumns: []psm.KeyColumn{{
-			ColumnName: "foo_id",
-			ProtoName:  protoreflect.Name("foo_id"),
-			Primary:    true,
-			Required:   true,
-		}, {
-			ColumnName: "tenant_id",
-			ProtoName:  protoreflect.Name("tenant_id"),
-			Primary:    false,
-			Required:   false,
-		}},
 	}
 
-	fields := ss.KeyMessage.Fields()
-	tm.KeyColumns = make([]psm.KeyColumn, fields.Len())
+	fields := keyMessage.Fields()
+	tm.KeyColumns = make([]KeyColumn, fields.Len())
 	for idx := 0; idx < fields.Len(); idx++ {
 		field := fields.Get(idx)
 
@@ -74,7 +80,7 @@ func BuildDefaultTableMap(ss StateMachine) (*psm.TableMap, error) {
 			annotation = &psm_pb.FieldOptions{}
 		}
 
-		tm.KeyColumns[idx] = psm.KeyColumn{
+		tm.KeyColumns[idx] = KeyColumn{
 			ColumnName: string(field.Name()), // Use proto names as column names.
 			ProtoName:  field.Name(),
 			Primary:    annotation.PrimaryKey,
@@ -85,14 +91,8 @@ func BuildDefaultTableMap(ss StateMachine) (*psm.TableMap, error) {
 	return tm, nil
 }
 
-const (
-	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
-	eventMetadataProtoName = protoreflect.FullName("psm.state.v1.EventMetadata")
-)
+func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*TableMap, error) {
 
-func TableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*psm.TableMap, error) {
-
-	var stateMetadataField protoreflect.FieldDescriptor
 	var stateKeyField protoreflect.FieldDescriptor
 	var keyMessage protoreflect.MessageDescriptor
 
@@ -103,26 +103,18 @@ func TableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 			continue
 		}
 		msg := field.Message()
-		if msg.FullName() == stateMetadataProtoName {
-			stateMetadataField = field
-			continue
-		}
 		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
 			keyMessage = msg
 			stateKeyField = field
-			continue
+			break
 		}
 	}
 
-	if stateMetadataField == nil {
-		return nil, fmt.Errorf("state message %s has no %s field", stateMessage.FullName(), stateMetadataProtoName)
-	}
 	if stateKeyField == nil {
 		return nil, fmt.Errorf("state message %s has no PSM Keys", stateMessage.FullName())
 	}
 
-	var eventMetadataField protoreflect.FieldDescriptor
 	var eventKeysField protoreflect.FieldDescriptor
 
 	fields = eventMessage.Fields()
@@ -132,10 +124,6 @@ func TableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 			continue
 		}
 		msg := field.Message()
-		if msg.FullName() == eventMetadataProtoName {
-			eventMetadataField = field
-			continue
-		}
 
 		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
@@ -154,17 +142,8 @@ func TableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 		}
 	}
 
-	if eventMetadataField == nil {
-		return nil, fmt.Errorf("event message %s has no %s field", eventMessage.FullName(), eventMetadataProtoName)
-	}
 	if eventKeysField == nil {
 		return nil, fmt.Errorf("event message %s has no PSM Keys", eventMessage.FullName())
 	}
-
-	ss := StateMachine{
-		EventMetadataField: eventMetadataField,
-		KeyMessage:         keyMessage,
-	}
-
-	return BuildDefaultTableMap(ss)
+	return buildDefaultTableMap(keyMessage)
 }

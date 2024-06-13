@@ -6,7 +6,6 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/internal/psmreflect"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -249,16 +248,16 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*psm
 		}
 	}
 
-	tableMap, err := psmreflect.TableMapFromStateAndEvent(stateMessage, eventMessage)
+	spec, err := psm.BuildQueryTableSpec(stateMessage, eventMessage)
 	if err != nil {
-		return nil, fmt.Errorf("TableMapFromStateAndEvent for %s: %w", src.name, err)
+		return nil, err
 	}
 
-	if tableMap.State.TableName != src.name {
+	if spec.TableMap.State.TableName != src.name {
 		return nil, fmt.Errorf("keys message on %s has a different name than the query service %s", stateMessage.FullName(), src.name)
 	}
 
-	return tableMap, nil
+	return &spec.TableMap, nil
 }
 
 func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *protogen.Field {

@@ -10,28 +10,18 @@ import (
 
 var (
 	// all imports from PSM are defined here, i.e. this is the committed PSM interface.
-	smImportPath            = protogen.GoImportPath("github.com/pentops/protostate/psm")
-	smEventer               = smImportPath.Ident("Eventer")
-	smStateMachine          = smImportPath.Ident("StateMachine")
-	smDBStateMachine        = smImportPath.Ident("DBStateMachine")
-	smPSMTableSpec          = smImportPath.Ident("PSMTableSpec")
-	smStateMachineConfig    = smImportPath.Ident("StateMachineConfig")
-	smNewStateMachineConfig = smImportPath.Ident("NewStateMachineConfig")
-	smNewStateMachine       = smImportPath.Ident("NewStateMachine")
-	smStateHookBaton        = smImportPath.Ident("HookBaton")
-	smMutationFunc          = smImportPath.Ident("PSMMutationFunc")
-	smHookFunc              = smImportPath.Ident("PSMHookFunc")
-	smGeneralHookFunc       = smImportPath.Ident("GeneralStateHook")
-	smEventSpec             = smImportPath.Ident("EventSpec")
-	smIInnerEvent           = smImportPath.Ident("IInnerEvent")
-	smTableMap              = smImportPath.Ident("TableMap")
-	smStateTableSpec        = smImportPath.Ident("StateTableSpec")
-	smEventTableSpec        = smImportPath.Ident("EventTableSpec")
-
-	smKeyColumn      = smImportPath.Ident("KeyColumn")
-	pgProtoFieldSpec = smImportPath.Ident("FieldSpec")
-
-	protoreflectImportPath = protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect")
+	smImportPath         = protogen.GoImportPath("github.com/pentops/protostate/psm")
+	smEventer            = smImportPath.Ident("Eventer")
+	smStateMachine       = smImportPath.Ident("StateMachine")
+	smDBStateMachine     = smImportPath.Ident("DBStateMachine")
+	smStateMachineConfig = smImportPath.Ident("StateMachineConfig")
+	smNewStateMachine    = smImportPath.Ident("NewStateMachine")
+	smStateHookBaton     = smImportPath.Ident("HookBaton")
+	smMutationFunc       = smImportPath.Ident("PSMMutationFunc")
+	smHookFunc           = smImportPath.Ident("PSMHookFunc")
+	smGeneralHookFunc    = smImportPath.Ident("GeneralStateHook")
+	smEventSpec          = smImportPath.Ident("EventSpec")
+	smIInnerEvent        = smImportPath.Ident("IInnerEvent")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -131,6 +121,31 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMFullName() string {")
 	g.P("  return \"", ss.keyMessage.Desc.ParentFile().Package(), ".", ss.specifiedName, "\"")
 	g.P("}")
+
+	keyColumns := ss.tableMap.KeyColumns
+
+	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMKeyValues() (map[string]string, error) {")
+	g.P("  keyset := map[string]string{")
+	for _, columnSpec := range keyColumns {
+		if !columnSpec.Required {
+			continue
+		}
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
+		g.P("      \"", columnSpec.ColumnName, "\": msg.", field.GoName, ",")
+	}
+	g.P("  }")
+	for _, columnSpec := range keyColumns {
+		if columnSpec.Required {
+			continue
+		}
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
+		g.P("if msg.", field.GoName, " != nil {")
+		g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *msg.", field.GoName)
+		g.P("}")
+	}
+	g.P("  return keyset, nil")
+	g.P("}")
+
 }
 
 // implements psm.IState for the state message
@@ -308,113 +323,15 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
-func boolString(value bool) string {
-	if value {
-		return "true"
-	}
-	return "false"
-}
-
 func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
-
-	FooPSMTableSpec := ss.typeAlias(g, "TableSpec", smPSMTableSpec)
-	DefaultFooPSMTableSpec := "Default" + ss.machineName + "TableSpec"
-
-	/* Let's make some assumptions! */
-
-	// Look for a 'well formed' metadata message which has:
-	// 'actor' as a message
-	// 'timestamp' as google.protobuf.Timestamp
-	// 'event_id', 'message_id' or 'id' as a string
-	// If all the above match, we can automate the ExtractMetadata function
-
-	fieldSpec := func(name string, spec *psm.FieldSpec) {
-		g.P(name, ": &", pgProtoFieldSpec, "{ ", `ColumnName: `, `"`, spec.ColumnName, `", },`)
-	}
-
-	g.P("var ", DefaultFooPSMTableSpec, " = ", FooPSMTableSpec, " {")
-	g.P("  TableMap: ", smTableMap, "{")
-
-	// STATE
-	g.P("State: ", smStateTableSpec, "{")
-	g.P("  TableName: \"", ss.tableMap.State.TableName, "\",")
-	fieldSpec("Root", ss.tableMap.State.Root)
-	g.P("},")
-	// END STATE
-
-	// EVENT
-	g.P("Event: ", smEventTableSpec, "{")
-	g.P("  TableName: \"", ss.tableMap.Event.TableName, "\",")
-	fieldSpec("Root", ss.tableMap.Event.Root)
-	fieldSpec("ID", ss.tableMap.Event.ID)
-	fieldSpec("Timestamp", ss.tableMap.Event.Timestamp)
-	fieldSpec("Sequence", ss.tableMap.Event.Sequence)
-	fieldSpec("StateSnapshot", ss.tableMap.Event.StateSnapshot)
-	g.P("},")
-	// END EVENT
-
-	keyColumns := ss.tableMap.KeyColumns
-
-	// KEY COLUMNS
-	g.P("KeyColumns: []", smKeyColumn, "{{")
-	for idx, field := range keyColumns {
-		if idx > 0 {
-			g.P("}, {")
-		}
-		g.P("  ColumnName: \"", field.ColumnName, "\",")
-		g.P("  ProtoName: ", protoreflectImportPath.Ident("Name"), "(\"", field.ProtoName, "\"),")
-		g.P("  Primary: ", boolString(field.Primary), ",")
-		g.P("  Required: ", boolString(field.Required), ",")
-	}
-	g.P("}},")
-	// END KEY COLUMNS
-
-	// END TABLE MAP
-	g.P("},")
-
-	g.P("KeyValues: func(keys *", ss.keyMessage.GoIdent, ") (map[string]string, error) {")
-	g.P("  keyset := map[string]string{")
-	for _, columnSpec := range keyColumns {
-		if !columnSpec.Required {
-			continue
-		}
-		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
-		g.P("      \"", columnSpec.ColumnName, "\": keys.", field.GoName, ",")
-	}
-	g.P("  }")
-	for _, columnSpec := range keyColumns {
-		if columnSpec.Required {
-			continue
-		}
-		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
-		g.P("if keys.", field.GoName, " != nil {")
-		g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *keys.", field.GoName)
-		g.P("}")
-	}
-	g.P("  return keyset, nil")
-	g.P("},")
-
-	g.P("}")
-	// END DEFAULT TABLE SPEC
-
-	g.P("func Default", ss.machineName, "Config() *", smStateMachineConfig, "[")
+	g.P("func ", ss.machineName, "Builder() *", smStateMachineConfig, "[")
 	ss.writeBaseTypes(g)
 	g.P("] {")
-	g.P("return ", smNewStateMachineConfig, "[")
+	g.P("return &", smStateMachineConfig, "[")
 	ss.writeBaseTypes(g)
-	g.P("](", DefaultFooPSMTableSpec, ")")
+	g.P("]{}")
 	g.P("}")
 	g.P()
-
-	g.P("func New", ss.machineName, "(config *", smStateMachineConfig, "[")
-	ss.writeBaseTypes(g)
-	g.P("]) (*", ss.machineName, ", error) {")
-	g.P("return ", smNewStateMachine, "[")
-	ss.writeBaseTypes(g)
-	g.P("](config)")
-	g.P("}")
-	g.P()
-
 }
 
 func fieldByDesc(fields []*protogen.Field, desc protoreflect.Name) *protogen.Field {

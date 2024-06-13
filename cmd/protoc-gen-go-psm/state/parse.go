@@ -5,7 +5,7 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/internal/psmreflect"
+	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -266,17 +266,12 @@ func BuildStateSet(src StateEntityGenerateSet) (*PSMEntity, error) {
 		keyMessage:    src.keyMessage,
 	}
 
-	reflSpec := psmreflect.StateMachine{
-		EventMetadataField: src.event.metadataField.Desc,
-		KeyMessage:         src.keyMessage.Desc,
-	}
-
-	tableMap, err := psmreflect.BuildDefaultTableMap(reflSpec)
+	spec, err := psm.BuildQueryTableSpec(src.state.message.Desc, src.event.message.Desc)
 	if err != nil {
 		return nil, err
 	}
 
-	ss.tableMap = tableMap
+	ss.tableMap = &spec.TableMap
 
 	return ss, nil
 }

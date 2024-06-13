@@ -5,11 +5,9 @@ package testpb
 import (
 	context "context"
 	fmt "fmt"
-
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // PSM FooPSM
@@ -69,6 +67,15 @@ func (msg *FooKeys) PSMIsSet() bool {
 // PSMFullName returns the full name of state machine with package prefix
 func (msg *FooKeys) PSMFullName() string {
 	return "test.v1.foo"
+}
+func (msg *FooKeys) PSMKeyValues() (map[string]string, error) {
+	keyset := map[string]string{
+		"foo_id": msg.FooId,
+	}
+	if msg.TenantId != nil {
+		keyset["tenant_id"] = *msg.TenantId
+	}
+	return keyset, nil
 }
 
 // EXTEND FooState with the psm.IState interface
@@ -218,53 +225,7 @@ func (*FooEventType_Deleted) PSMEventKey() FooPSMEventKey {
 	return FooPSMEventDeleted
 }
 
-type FooPSMTableSpec = psm.PSMTableSpec[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-]
-
-var DefaultFooPSMTableSpec = FooPSMTableSpec{
-	TableMap: psm.TableMap{
-		State: psm.StateTableSpec{
-			TableName: "foo",
-			Root:      &psm.FieldSpec{ColumnName: "state"},
-		},
-		Event: psm.EventTableSpec{
-			TableName:     "foo_event",
-			Root:          &psm.FieldSpec{ColumnName: "data"},
-			ID:            &psm.FieldSpec{ColumnName: "id"},
-			Timestamp:     &psm.FieldSpec{ColumnName: "timestamp"},
-			Sequence:      &psm.FieldSpec{ColumnName: "sequence"},
-			StateSnapshot: &psm.FieldSpec{ColumnName: "state"},
-		},
-		KeyColumns: []psm.KeyColumn{{
-			ColumnName: "foo_id",
-			ProtoName:  protoreflect.Name("foo_id"),
-			Primary:    true,
-			Required:   true,
-		}, {
-			ColumnName: "tenant_id",
-			ProtoName:  protoreflect.Name("tenant_id"),
-			Primary:    false,
-			Required:   false,
-		}},
-	},
-	KeyValues: func(keys *FooKeys) (map[string]string, error) {
-		keyset := map[string]string{
-			"foo_id": keys.FooId,
-		}
-		if keys.TenantId != nil {
-			keyset["tenant_id"] = *keys.TenantId
-		}
-		return keyset, nil
-	},
-}
-
-func DefaultFooPSMConfig() *psm.StateMachineConfig[
+func FooPSMBuilder() *psm.StateMachineConfig[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
@@ -272,32 +233,14 @@ func DefaultFooPSMConfig() *psm.StateMachineConfig[
 	*FooEvent,     // implements psm.IEvent
 	FooPSMEvent,   // implements psm.IInnerEvent
 ] {
-	return psm.NewStateMachineConfig[
+	return &psm.StateMachineConfig[
 		*FooKeys,      // implements psm.IKeyset
 		*FooState,     // implements psm.IState
 		FooStatus,     // implements psm.IStatusEnum
 		*FooStateData, // implements psm.IStateData
 		*FooEvent,     // implements psm.IEvent
 		FooPSMEvent,   // implements psm.IInnerEvent
-	](DefaultFooPSMTableSpec)
-}
-
-func NewFooPSM(config *psm.StateMachineConfig[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-]) (*FooPSM, error) {
-	return psm.NewStateMachine[
-		*FooKeys,      // implements psm.IKeyset
-		*FooState,     // implements psm.IState
-		FooStatus,     // implements psm.IStatusEnum
-		*FooStateData, // implements psm.IStateData
-		*FooEvent,     // implements psm.IEvent
-		FooPSMEvent,   // implements psm.IInnerEvent
-	](config)
+	]{}
 }
 
 func FooPSMMutation[SE FooPSMEvent](cb func(*FooStateData, SE) error) psm.PSMMutationFunc[

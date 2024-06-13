@@ -29,9 +29,17 @@ func TestDynamicSearching(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	barSpec, err := psm.BuildQueryTableSpec(
+		(&testpb.BarState{}).ProtoReflect().Descriptor(),
+		(&testpb.BarEvent{}).ProtoReflect().Descriptor(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	stateSpecs := []psm.QueryTableSpec{
 		sm.StateTableSpec(),
-		testpb.DefaultBarPSMTableSpec.StateTableSpec(),
+		barSpec,
 	}
 
 	if err := pgmigrate.CreateStateMachines(context.Background(), conn, stateSpecs...); err != nil {

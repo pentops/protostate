@@ -53,6 +53,7 @@ type IStatusEnum interface {
 type IKeyset interface {
 	IPSMMessage
 	PSMFullName() string
+	PSMKeyValues() (map[string]string, error)
 }
 
 // IState[K, ST, SD]is the main State Entity e.g. *testpb.FooState
