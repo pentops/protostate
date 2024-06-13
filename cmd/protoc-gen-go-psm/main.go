@@ -7,8 +7,8 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 
-	"github.com/pentops/protostate/cmd/protoc-gen-go-psm/query"
-	"github.com/pentops/protostate/cmd/protoc-gen-go-psm/state"
+	"github.com/pentops/protostate/internal/protogen/query"
+	"github.com/pentops/protostate/internal/protogen/state"
 )
 
 var Version = "1.0"

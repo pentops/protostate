@@ -18,11 +18,11 @@ var Version = "dev"
 func main() {
 	cmdGroup := commander.NewCommandSet()
 
-	cmdGroup.Add("migrate", commander.NewCommand(runFmt))
+	cmdGroup.Add("migration", commander.NewCommand(runMigration))
 	cmdGroup.RunMain("psmtool", Version)
 }
 
-func runFmt(ctx context.Context, cfg struct {
+func runMigration(ctx context.Context, cfg struct {
 	SourceDir string   `flag:"src"`
 	Package   string   `flag:"package"`
 	Machines  []string `flag:"machines"`

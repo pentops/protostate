@@ -3,7 +3,7 @@ package psm
 // From creates a new transition builder for the state machine, which will run
 // when the machine is transitioning from one of the given states. If the given
 // list is empty (From()), matches ALL starting states.
-func (hs *hookSet[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, S, ST, SD, E, IE] {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, S, ST, SD, E, IE] {
 	return BuilderFrom[K, S, ST, SD, E, IE]{
 		hs:         hs,
 		fromStatus: states,
@@ -18,13 +18,13 @@ type BuilderFrom[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	hs         *hookSet[K, S, ST, SD, E, IE]
+	hs         *transitionSet[K, S, ST, SD, E, IE]
 	fromStatus []ST
 }
 
 // OnEvent identifies a specific transition from state(s) for an event.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	ths := &transitionHookSet[K, S, ST, SD, E, IE]{
+	ths := &transitionSpec[K, S, ST, SD, E, IE]{
 		fromStatus: tb.fromStatus,
 		eventType:  event,
 	}
@@ -70,7 +70,7 @@ type TransitionBuilder[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	hookSet    *transitionHookSet[K, S, ST, SD, E, IE]
+	hookSet    *transitionSpec[K, S, ST, SD, E, IE]
 	fromStatus []ST
 	onEvent    string
 }

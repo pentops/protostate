@@ -59,7 +59,7 @@ func (*testIE1) PSMEventKey() string {
 
 func TestTransitionBuilder(t *testing.T) {
 
-	hs := &hookSet[*testK, *testS, testST, *testSD, *testE, testIE]{}
+	hs := &transitionSet[*testK, *testS, testST, *testSD, *testE, testIE]{}
 
 	gotTransitions := []string{}
 
@@ -111,7 +111,7 @@ func TestTransitionBuilder(t *testing.T) {
 		},
 	}
 
-	hookSet, err := hs.findTransitions(ctx, state.status, "event1")
+	hookSet, err := hs.findTransitions(state.status, "event1")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package psm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/o5msg"
@@ -47,7 +48,7 @@ func (td *hookBaton[K, S, ST, SD, E, IE]) AsCause() *psm_pb.Cause {
 	}
 }
 
-type transitionHookSet[
+type transitionSpec[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -64,7 +65,7 @@ type transitionHookSet[
 	data       []transitionDataHookWrapper[K, S, ST, SD, E, IE]
 }
 
-func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionMutations(
+func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionMutations(
 	ctx context.Context,
 	state S,
 	event E,
@@ -94,7 +95,7 @@ func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionMutations(
 	return nil
 }
 
-func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionHooks(
+func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	baton HookBaton[K, S, ST, SD, E, IE],
@@ -128,7 +129,7 @@ func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionHooks(
 	return nil
 }
 
-type hookSet[
+type transitionSet[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -140,22 +141,22 @@ type hookSet[
 	stateData []generalStateDataWrapper[K, S, ST, SD, E, IE]
 	eventData []generalEventDataHookWrapper[K, S, ST, SD, E, IE]
 
-	transitions []*transitionHookSet[K, S, ST, SD, E, IE]
+	transitions []*transitionSpec[K, S, ST, SD, E, IE]
 }
 
-func (hs *hookSet[K, S, ST, SD, E, IE]) LogicHook(hook GeneralLogicHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) LogicHook(hook GeneralLogicHook[K, S, ST, SD, E, IE]) {
 	hs.logic = append(hs.logic, hook)
 }
 
-func (hs *hookSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDataHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDataHook[K, S, ST, SD, E, IE]) {
 	hs.stateData = append(hs.stateData, hook)
 }
 
-func (hs *hookSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
 	hs.eventData = append(hs.eventData, hook)
 }
 
-func (hs *hookSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
+func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	baton HookBaton[K, S, ST, SD, E, IE],
@@ -186,9 +187,8 @@ func (hs *hookSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
 	return nil
 }
 
-func (hs hookSet[K, S, ST, SD, E, IE]) findTransitions(ctx context.Context, status ST, wantType string) (*transitionHookSet[K, S, ST, SD, E, IE], error) {
-
-	hooks := make([]*transitionHookSet[K, S, ST, SD, E, IE], 0, 1)
+func (hs transitionSet[K, S, ST, SD, E, IE]) findTransitions(status ST, wantType string) (*transitionSpec[K, S, ST, SD, E, IE], error) {
+	hooks := make([]*transitionSpec[K, S, ST, SD, E, IE], 0, 1)
 
 	for _, search := range hs.transitions {
 		if search.eventType != wantType {
@@ -211,20 +211,22 @@ func (hs hookSet[K, S, ST, SD, E, IE]) findTransitions(ctx context.Context, stat
 	}
 
 	if len(hooks) == 1 {
-		log.WithFields(ctx, map[string]interface{}{
-			"status":         status,
-			"event":          wantType,
-			"countMutations": len(hooks[0].mutations),
-			"countLogic":     len(hooks[0].logic),
-			"countData":      len(hooks[0].data),
-			"toStatus":       hooks[0].toStatus,
-		}).Debug("found transition")
 		return hooks[0], nil
 	}
 
-	merged := &transitionHookSet[K, S, ST, SD, E, IE]{
+	merged, err := hs.mergeHooks(status, wantType, hooks)
+	if err != nil {
+		return nil, err
+	}
+
+	return merged, nil
+
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) mergeHooks(status ST, eventType string, hooks []*transitionSpec[K, S, ST, SD, E, IE]) (*transitionSpec[K, S, ST, SD, E, IE], error) {
+	merged := &transitionSpec[K, S, ST, SD, E, IE]{
 		fromStatus: []ST{status},
-		eventType:  wantType,
+		eventType:  eventType,
 	}
 
 	for _, hook := range hooks {
@@ -236,10 +238,63 @@ func (hs hookSet[K, S, ST, SD, E, IE]) findTransitions(ctx context.Context, stat
 			if merged.toStatus == 0 {
 				merged.toStatus = hook.toStatus
 			} else if merged.toStatus != hook.toStatus {
-				return nil, fmt.Errorf("conflicting toStatus transitions for fromStatus %q event %q", status.ShortString(), wantType)
+				return nil, fmt.Errorf("conflicting toStatus transitions for fromStatus %q event %q", status.ShortString(), eventType)
 			}
 		}
 	}
 
 	return merged, nil
+}
+
+func (hs transitionSet[K, S, ST, SD, E, IE]) PrintMermaid() (string, error) {
+
+	lines := []string{
+		"stateDiagram-v2",
+	}
+
+	type specSet struct {
+		status      ST
+		event       string
+		transitions []*transitionSpec[K, S, ST, SD, E, IE]
+	}
+	byKey := map[string]specSet{}
+
+	for _, transition := range hs.transitions {
+		var key string
+		if len(transition.fromStatus) == 0 {
+			continue // TODO: Handle GLobal transitions
+		}
+		for _, from := range transition.fromStatus {
+			key = fmt.Sprintf("%s-%s", from.ShortString(), transition.eventType)
+			entry, ok := byKey[key]
+			if !ok {
+				entry = specSet{
+					status: from,
+					event:  transition.eventType,
+				}
+			}
+			entry.transitions = append(entry.transitions, transition)
+			byKey[key] = entry
+		}
+	}
+
+	for _, spec := range byKey {
+		merged, err := hs.mergeHooks(spec.status, spec.event, spec.transitions)
+		if err != nil {
+			return "", err
+		}
+		if merged.toStatus == 0 {
+			merged.toStatus = merged.fromStatus[0]
+		}
+
+		var fromString string
+		if merged.fromStatus[0] == 0 {
+			fromString = "[*]"
+		} else {
+			fromString = merged.fromStatus[0].ShortString()
+		}
+		lines = append(lines, fmt.Sprintf("%s --> %s : %s", fromString, merged.toStatus.ShortString(), merged.eventType))
+	}
+
+	return strings.Join(lines, "\n"), nil
 }
