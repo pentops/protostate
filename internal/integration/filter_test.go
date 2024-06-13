@@ -40,51 +40,49 @@ func TestDefaultFiltering(t *testing.T) {
 	tenants := []string{uuid.NewString()}
 	tenantIDs := setupFooListableData(t, ss, sm, tenants, 10)
 
-	t.Run("Default Filters", func(t *testing.T) {
-		ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
-			for _, id := range tenantIDs[tenants[0]][:2] {
-				event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
-					u.Delete = true
-				})
+	ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
+		for _, id := range tenantIDs[tenants[0]][:2] {
+			event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
+				u.Delete = true
+			})
 
-				_, err := sm.Transition(ctx, event)
-				if err != nil {
-					t.Fatal(err.Error())
-				}
-			}
-		})
-
-		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
-					PageSize: proto.Int64(10),
-				},
-			}
-			res := &testpb.ListFoosResponse{}
-
-			err = queryer.List(ctx, db, req, res)
+			_, err := sm.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
+		}
+	})
 
-			if len(res.Foos) != 8 {
-				t.Fatalf("expected %d states, got %d", 8, len(res.Foos))
-			}
+	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
+		req := &testpb.ListFoosRequest{
+			Page: &psml_pb.PageRequest{
+				PageSize: proto.Int64(10),
+			},
+		}
+		res := &testpb.ListFoosResponse{}
 
-			for ii, state := range res.Foos {
-				t.Logf("%d: %s", ii, state.Data.Field)
-			}
+		err = queryer.List(ctx, db, req, res)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
 
-			for _, state := range res.Foos {
-				if state.Status != testpb.FooStatus_ACTIVE {
-					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
-				}
-			}
+		if len(res.Foos) != 8 {
+			t.Fatalf("expected %d states, got %d", 8, len(res.Foos))
+		}
 
-			if res.Page != nil {
-				t.Fatalf("page response should be empty")
+		for ii, state := range res.Foos {
+			t.Logf("%d: %s", ii, state.Data.Field)
+		}
+
+		for _, state := range res.Foos {
+			if state.Status != testpb.FooStatus_ACTIVE {
+				t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
 			}
-		})
+		}
+
+		if res.Page != nil {
+			t.Fatalf("page response should be empty")
+		}
 	})
 }
 

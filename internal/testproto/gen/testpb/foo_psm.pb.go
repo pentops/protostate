@@ -30,15 +30,6 @@ type FooPSMDB = psm.DBStateMachine[
 	FooPSMEvent,   // implements psm.IInnerEvent
 ]
 
-type FooPSMEventer = psm.Eventer[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-]
-
 type FooPSMEventSpec = psm.EventSpec[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
@@ -243,7 +234,7 @@ func FooPSMBuilder() *psm.StateMachineConfig[
 	]{}
 }
 
-func FooPSMMutation[SE FooPSMEvent](cb func(*FooStateData, SE) error) psm.PSMMutationFunc[
+func FooPSMMutation[SE FooPSMEvent](cb func(*FooStateData, SE) error) psm.TransitionMutation[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
@@ -252,7 +243,7 @@ func FooPSMMutation[SE FooPSMEvent](cb func(*FooStateData, SE) error) psm.PSMMut
 	FooPSMEvent,   // implements psm.IInnerEvent
 	SE,            // Specific event type for the transition
 ] {
-	return psm.PSMMutationFunc[
+	return psm.TransitionMutation[
 		*FooKeys,      // implements psm.IKeyset
 		*FooState,     // implements psm.IState
 		FooStatus,     // implements psm.IStatusEnum
@@ -272,7 +263,7 @@ type FooPSMHookBaton = psm.HookBaton[
 	FooPSMEvent,   // implements psm.IInnerEvent
 ]
 
-func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, SE) error) psm.PSMHookFunc[
+func FooPSMLogicHook[SE FooPSMEvent](cb func(context.Context, FooPSMHookBaton, *FooState, SE) error) psm.TransitionLogicHook[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
@@ -281,7 +272,7 @@ func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooP
 	FooPSMEvent,   // implements psm.IInnerEvent
 	SE,            // Specific event type for the transition
 ] {
-	return psm.PSMHookFunc[
+	return psm.TransitionLogicHook[
 		*FooKeys,      // implements psm.IKeyset
 		*FooState,     // implements psm.IState
 		FooStatus,     // implements psm.IStatusEnum
@@ -291,7 +282,26 @@ func FooPSMHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, FooP
 		SE,            // Specific event type for the transition
 	](cb)
 }
-func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, FooPSMHookBaton, *FooState, *FooEvent) error) psm.GeneralStateHook[
+func FooPSMDataHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, *FooState, SE) error) psm.TransitionDataHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
+] {
+	return psm.TransitionDataHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
+	](cb)
+}
+func FooPSMGeneralLogicHook(cb func(context.Context, FooPSMHookBaton, *FooState, *FooEvent) error) psm.GeneralLogicHook[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
 	FooStatus,     // implements psm.IStatusEnum
@@ -299,7 +309,41 @@ func FooPSMGeneralHook(cb func(context.Context, sqrlx.Transaction, FooPSMHookBat
 	*FooEvent,     // implements psm.IEvent
 	FooPSMEvent,   // implements psm.IInnerEvent
 ] {
-	return psm.GeneralStateHook[
+	return psm.GeneralLogicHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+	](cb)
+}
+func FooPSMGeneralStateDataHook(cb func(context.Context, sqrlx.Transaction, *FooState) error) psm.GeneralStateDataHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+] {
+	return psm.GeneralStateDataHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+	](cb)
+}
+func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralEventDataHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+] {
+	return psm.GeneralEventDataHook[
 		*FooKeys,      // implements psm.IKeyset
 		*FooState,     // implements psm.IState
 		FooStatus,     // implements psm.IStatusEnum

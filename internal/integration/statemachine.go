@@ -5,6 +5,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
+	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -21,12 +22,10 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 		return nil, err
 	}
 
-	sm.GeneralHook(testpb.FooPSMGeneralHook(func(
+	sm.StateDataHook(testpb.FooPSMGeneralStateDataHook(func(
 		ctx context.Context,
 		tx sqrlx.Transaction,
-		tb testpb.FooPSMHookBaton,
 		state *testpb.FooState,
-		event *testpb.FooEvent,
 	) error {
 
 		if state.Data.Characteristics == nil || state.Status != testpb.FooStatus_ACTIVE {
@@ -64,15 +63,6 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 				Length: event.GetLength(),
 			}
 			data.Profiles = event.Profiles
-			return nil
-		})).
-		Hook(testpb.FooPSMHook(func(
-			ctx context.Context,
-			tx sqrlx.Transaction,
-			baton testpb.FooPSMHookBaton,
-			state *testpb.FooState,
-			event *testpb.FooEventType_Created,
-		) error {
 			return nil
 		}))
 
@@ -114,14 +104,17 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 		}))
 
 	sm.From().
-		OnEvent(testpb.FooPSMEventUpdated).
-		Hook(testpb.FooPSMHook(func(
+		//OnEvent(testpb.FooPSMEventUpdated).
+		LogicHook(testpb.FooPSMLogicHook(func(
 			ctx context.Context,
-			tx sqrlx.Transaction,
 			baton testpb.FooPSMHookBaton,
 			state *testpb.FooState,
 			event *testpb.FooEventType_Updated,
 		) error {
+			log.WithFields(ctx, map[string]interface{}{
+				"foo_id": state.Keys.FooId,
+				"event":  event,
+			}).Info("Foo Update Hook")
 			if event.Delete {
 				baton.ChainEvent(&testpb.FooEventType_Deleted{})
 			}
