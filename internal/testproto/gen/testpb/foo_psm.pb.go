@@ -301,6 +301,35 @@ func FooPSMDataHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, 
 		SE,            // Specific event type for the transition
 	](cb)
 }
+func FooPSMLinkHook[SE FooPSMEvent, DK psm.IKeyset, DIE psm.IInnerEvent](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(context.Context, *FooState, SE) (DK, DIE, error),
+) psm.LinkHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
+	DK,            // Destination Keys
+	DIE,           // Destination Inner Event
+] {
+	return psm.LinkHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
+		DK,            // Destination Keys
+		DIE,           // Destination Inner Event
+	]{
+		Derive:      cb,
+		Destination: linkDestination,
+	}
+}
 func FooPSMGeneralLogicHook(cb func(context.Context, FooPSMHookBaton, *FooState, *FooEvent) error) psm.GeneralLogicHook[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState
@@ -351,31 +380,4 @@ func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Foo
 		*FooEvent,     // implements psm.IEvent
 		FooPSMEvent,   // implements psm.IInnerEvent
 	](cb)
-}
-func FooPSMLinkHook[DK psm.IKeyset, DIE psm.IInnerEvent](
-	linkDestination psm.LinkDestination[DK, DIE],
-	cb func(context.Context, *FooState, FooPSMEvent) (DK, DIE, error),
-) psm.LinkHook[
-	*FooKeys,      // implements psm.IKeyset
-	*FooState,     // implements psm.IState
-	FooStatus,     // implements psm.IStatusEnum
-	*FooStateData, // implements psm.IStateData
-	*FooEvent,     // implements psm.IEvent
-	FooPSMEvent,   // implements psm.IInnerEvent
-	DK,            // Destination Keys
-	DIE,           // Destination Inner Event
-] {
-	return psm.LinkHook[
-		*FooKeys,      // implements psm.IKeyset
-		*FooState,     // implements psm.IState
-		FooStatus,     // implements psm.IStatusEnum
-		*FooStateData, // implements psm.IStateData
-		*FooEvent,     // implements psm.IEvent
-		FooPSMEvent,   // implements psm.IInnerEvent
-		DK,            // Destination Keys
-		DIE,           // Destination Inner Event
-	]{
-		Derive:      cb,
-		Destination: linkDestination,
-	}
 }

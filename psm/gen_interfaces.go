@@ -338,16 +338,23 @@ type LinkHook[
 	SD IStateData, // Source Machine State Data
 	E IEvent[K, S, ST, SD, IE], // Source Machine Event
 	IE IInnerEvent, // Source Machine Inner Event
+	SE IInnerEvent, // Source Machine Specific Event
 
 	DK IKeyset, // Destination Keyset
 	DIE IInnerEvent, // Destination Inner Event
 ] struct {
 	Destination LinkDestination[DK, DIE]
-	Derive      func(context.Context, S, IE) (DK, DIE, error)
+	Derive      func(context.Context, S, SE) (DK, DIE, error)
 }
 
-func (lh LinkHook[K, S, ST, SD, E, IE, DK, DIE]) RunLinkTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
-	destKeys, destEvent, err := lh.Derive(ctx, state, event.UnwrapPSMEvent())
+func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
+	asType, ok := any(event).(SE)
+	if !ok {
+		name := event.ProtoReflect().Descriptor().FullName()
+		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
+	}
+
+	destKeys, destEvent, err := lh.Derive(ctx, state, asType)
 	if err != nil {
 		return err
 	}
@@ -367,6 +374,10 @@ func (lh LinkHook[K, S, ST, SD, E, IE, DK, DIE]) RunLinkTransition(ctx context.C
 	}
 
 	return lh.Destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent)
+}
+
+func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) EventType() string {
+	return (*new(SE)).PSMEventKey()
 }
 
 type LinkDestination[
@@ -391,4 +402,5 @@ type transitionLink[
 	IE IInnerEvent,
 ] interface {
 	RunLinkTransition(context.Context, sqrlx.Transaction, S, E) error
+	EventType() string
 }

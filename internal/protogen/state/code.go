@@ -326,6 +326,29 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("](cb)")
 	g.P("}")
 
+	// FooPSMLinkHook
+	g.P("func ", ss.machineName, "LinkHook[SE ", ss.eventName, ", DK ", smIKeyset, ", DIE ", smIInnerEvent, "](")
+	g.P("linkDestination ", smLinkDestination, "[DK, DIE],")
+	g.P("cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		"*", ss.state.message.GoIdent, ", ",
+		"SE",
+		") (DK, DIE, error),")
+	g.P(") ", smLinkHook, "[")
+	ss.writeBaseTypesWithSE(g)
+	g.P("DK, // Destination Keys")
+	g.P("DIE, // Destination Inner Event")
+	g.P("] {")
+	g.P("return ", smLinkHook, "[")
+	ss.writeBaseTypesWithSE(g)
+	g.P("DK, // Destination Keys")
+	g.P("DIE, // Destination Inner Event")
+	g.P("]{")
+	g.P("  Derive: cb,")
+	g.P("  Destination: linkDestination,")
+	g.P("}")
+	g.P("}")
+
 	// FooPSMGenericLogicHook
 	g.P("func ", ss.machineName, "GeneralLogicHook",
 		"(cb func(",
@@ -369,29 +392,6 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("return ", smGeneralEventDataHookFunc, "[")
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
-	g.P("}")
-
-	// FooPSMLinkHook
-	g.P("func ", ss.machineName, "LinkHook[DK ", smIKeyset, ", DIE ", smIInnerEvent, "](")
-	g.P("linkDestination ", smLinkDestination, "[DK, DIE],")
-	g.P("cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		"*", ss.state.message.GoIdent, ", ",
-		ss.eventName,
-		") (DK, DIE, error),")
-	g.P(") ", smLinkHook, "[")
-	ss.writeBaseTypes(g)
-	g.P("DK, // Destination Keys")
-	g.P("DIE, // Destination Inner Event")
-	g.P("] {")
-	g.P("return ", smLinkHook, "[")
-	ss.writeBaseTypes(g)
-	g.P("DK, // Destination Keys")
-	g.P("DIE, // Destination Inner Event")
-	g.P("]{")
-	g.P("  Derive: cb,")
-	g.P("  Destination: linkDestination,")
-	g.P("}")
 	g.P("}")
 
 }
