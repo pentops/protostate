@@ -2,25 +2,13 @@ package psm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
-
-type HookBaton[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] interface {
-	SideEffect(o5msg.Message)
-	ChainEvent(IE)
-	FullCause() E
-	AsCause() *psm_pb.Cause
-}
 
 type hookBaton[
 	K IKeyset,
@@ -71,16 +59,18 @@ type transitionHookSet[
 	toStatus   ST
 	noop       bool
 	eventType  string
-	mutations  []TransitionMutation[K, S, ST, SD, E, IE]
-	logic      []TransitionLogicHook[K, S, ST, SD, E, IE]
-	data       []TransitionDataHook[K, S, ST, SD, E, IE]
+	mutations  []transitionMutationWrapper[K, S, ST, SD, E, IE]
+	logic      []transitionLogicHookWrapper[K, S, ST, SD, E, IE]
+	data       []transitionDataHookWrapper[K, S, ST, SD, E, IE]
 }
 
-func (hs *transitionHookSet[K, S, ST, SD, E, IE]) RunTransitionMutations(
+func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionMutations(
 	ctx context.Context,
 	state S,
 	event E,
 ) error {
+
+	log.Debug(ctx, "running transition mutations")
 	sd := state.PSMData()
 	innerEvent := event.UnwrapPSMEvent()
 
@@ -89,19 +79,22 @@ func (hs *transitionHookSet[K, S, ST, SD, E, IE]) RunTransitionMutations(
 	}
 
 	if hs.toStatus != 0 {
+		log.WithField(ctx, "toStatus", hs.toStatus).Debug("setting status")
 		state.SetStatus(hs.toStatus)
 	}
 
 	for _, mutation := range hs.mutations {
+		log.WithField(ctx, "mutation", mutation).Debug("running mutation")
 		err := mutation.TransitionMutation(sd, innerEvent)
 		if err != nil {
 			return err
 		}
 	}
+	log.WithField(ctx, "mutationCount", hs.mutations).Debug("mutations complete")
 	return nil
 }
 
-func (hs *transitionHookSet[K, S, ST, SD, E, IE]) RunTransitionHooks(
+func (hs *transitionHookSet[K, S, ST, SD, E, IE]) runTransitionHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	baton HookBaton[K, S, ST, SD, E, IE],
@@ -109,15 +102,10 @@ func (hs *transitionHookSet[K, S, ST, SD, E, IE]) RunTransitionHooks(
 	event E,
 ) error {
 	innerEvent := event.UnwrapPSMEvent()
-	/*
-		asType, ok := any(innerType).(SE)
-		if !ok {
-			name := innerType.ProtoReflect().Descriptor().FullName()
-			return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 
-		}*/
-
+	log.Debug(ctx, "running transition mutations")
 	for _, logic := range hs.logic {
+		log.WithField(ctx, "logic", logic).Debug("running logic hook")
 		err := logic.TransitionLogicHook(ctx, baton, state, innerEvent)
 		if err != nil {
 			return err
@@ -125,11 +113,17 @@ func (hs *transitionHookSet[K, S, ST, SD, E, IE]) RunTransitionHooks(
 	}
 
 	for _, data := range hs.data {
+		log.WithField(ctx, "data", data).Debug("running data hook")
 		err := data.TransitionDataHook(ctx, tx, state, innerEvent)
 		if err != nil {
 			return err
 		}
 	}
+
+	log.WithFields(ctx, map[string]interface{}{
+		"logicCount": len(hs.logic),
+		"dataCount":  len(hs.data),
+	}).Debug("transition hooks complete")
 
 	return nil
 }
@@ -142,9 +136,9 @@ type hookSet[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	logic     []GeneralLogicHook[K, S, ST, SD, E, IE]
-	stateData []GeneralStateDataHook[K, S, ST, SD, E, IE]
-	eventData []GeneralEventDataHook[K, S, ST, SD, E, IE]
+	logic     []generalLogicHookWrapper[K, S, ST, SD, E, IE]
+	stateData []generalStateDataWrapper[K, S, ST, SD, E, IE]
+	eventData []generalEventDataHookWrapper[K, S, ST, SD, E, IE]
 
 	transitions []*transitionHookSet[K, S, ST, SD, E, IE]
 }
@@ -161,34 +155,91 @@ func (hs *hookSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[
 	hs.eventData = append(hs.eventData, hook)
 }
 
-type TransitionHookSet[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] interface {
-	RunTransitionMutations(context.Context, S, E) error
-	RunTransitionHooks(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
+func (hs *hookSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
+	ctx context.Context,
+	tx sqrlx.Transaction,
+	baton HookBaton[K, S, ST, SD, E, IE],
+	state S,
+	event E,
+) error {
+	for _, hook := range hs.logic {
+		err := hook.GeneralLogicHook(ctx, baton, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, hook := range hs.stateData {
+		err := hook.GeneralStateDataHook(ctx, tx, state)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, hook := range hs.eventData {
+		err := hook.GeneralEventDataHook(ctx, tx, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (hs hookSet[K, S, ST, SD, E, IE]) FindHooks(status ST, event E) []TransitionHookSet[K, S, ST, SD, E, IE] {
+func (hs hookSet[K, S, ST, SD, E, IE]) findTransitions(ctx context.Context, status ST, wantType string) (*transitionHookSet[K, S, ST, SD, E, IE], error) {
 
-	hooks := []TransitionHookSet[K, S, ST, SD, E, IE]{}
+	hooks := make([]*transitionHookSet[K, S, ST, SD, E, IE], 0, 1)
 
-	wantEventType := event.UnwrapPSMEvent().PSMEventKey()
-	for _, ths := range hs.transitions {
-		if ths.eventType != wantEventType {
+	for _, search := range hs.transitions {
+		if search.eventType != wantType {
 			continue
 		}
-		for _, fromStatus := range ths.fromStatus {
+		if len(search.fromStatus) == 0 {
+			hooks = append(hooks, search)
+			continue
+		}
+		for _, fromStatus := range search.fromStatus {
 			if fromStatus == status {
-				hooks = append(hooks, ths)
+				hooks = append(hooks, search)
 				break
 			}
 		}
 	}
 
-	return hooks
+	if len(hooks) == 0 {
+		return nil, fmt.Errorf("no transition found for %s on %s", status, wantType)
+	}
+
+	if len(hooks) == 1 {
+		log.WithFields(ctx, map[string]interface{}{
+			"status":         status,
+			"event":          wantType,
+			"countMutations": len(hooks[0].mutations),
+			"countLogic":     len(hooks[0].logic),
+			"countData":      len(hooks[0].data),
+			"toStatus":       hooks[0].toStatus,
+		}).Debug("found transition")
+		return hooks[0], nil
+	}
+
+	merged := &transitionHookSet[K, S, ST, SD, E, IE]{
+		fromStatus: []ST{status},
+		eventType:  wantType,
+	}
+
+	for _, hook := range hooks {
+		merged.mutations = append(merged.mutations, hook.mutations...)
+		merged.logic = append(merged.logic, hook.logic...)
+		merged.data = append(merged.data, hook.data...)
+
+		if hook.toStatus != 0 {
+			if merged.toStatus == 0 {
+				merged.toStatus = hook.toStatus
+			} else if merged.toStatus != hook.toStatus {
+				return nil, fmt.Errorf("conflicting toStatus transitions for fromStatus %q event %q", status.ShortString(), wantType)
+			}
+		}
+	}
+
+	return merged, nil
 }

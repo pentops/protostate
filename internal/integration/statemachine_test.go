@@ -137,10 +137,12 @@ func TestBarStateMachine(t *testing.T) {
 func TestStateMachineHook(t *testing.T) {
 
 	flow, uu := NewUniverse(t)
+	defer flow.RunSteps(t)
 
 	tenantID := uuid.NewString()
+	foo1ID := uuid.NewString()
+
 	flow.Step("Setup", func(ctx context.Context, t flowtest.Asserter) {
-		foo1ID := uuid.NewString()
 		event1 := newFooCreatedEvent(foo1ID, tenantID, nil)
 
 		foo2ID := uuid.NewString()
@@ -152,7 +154,6 @@ func TestStateMachineHook(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 		}
-
 	})
 
 	flow.Step("Summary", func(ctx context.Context, t flowtest.Asserter) {
@@ -168,10 +169,38 @@ func TestStateMachineHook(t *testing.T) {
 			t.Fatalf("expected 2 FOOs, got %d", res.CountFoos)
 		}
 	})
+
+	flow.Step("Mutate", func(ctx context.Context, t flowtest.Asserter) {
+		updatedEvent := newFooUpdatedEvent(foo1ID, tenantID, func(u *testpb.FooEventType_Updated) {
+			u.Name = "updated"
+			u.Delete = true
+		})
+
+		ss, err := uu.FooStateMachine.Transition(ctx, updatedEvent)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		// Returns the state after the initial transition
+		t.Equal(testpb.FooStatus_ACTIVE, ss.Status)
+		t.Equal("updated", ss.Data.Name)
+
+		// The delete=true flag causes a chain event, which sets the status to
+		// DELETED
+
+		res2, err := uu.FooQuery.GetFoo(ctx, &testpb.GetFooRequest{
+			FooId: foo1ID,
+		})
+		t.NoError(err)
+		t.Equal(testpb.FooStatus_DELETED, res2.State.Status)
+
+	})
+
 }
 
 func TestStateMachineIdempotencyInitial(t *testing.T) {
 	flow, uu := NewUniverse(t)
+	defer flow.RunSteps(t)
 
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
@@ -236,6 +265,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 
 func TestStateMachineIdempotencySnapshot(t *testing.T) {
 	flow, uu := NewUniverse(t)
+	defer flow.RunSteps(t)
 
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
@@ -289,6 +319,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 
 func TestFooStateMachine(t *testing.T) {
 	flow, uu := NewUniverse(t)
+	defer flow.RunSteps(t)
 
 	tenantID := uuid.NewString()
 

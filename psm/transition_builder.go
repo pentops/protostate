@@ -40,7 +40,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuil
 
 // Mutate is a shortcut for OnEvent().Mutate() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
-	hook TransitionMutation[K, S, ST, SD, E, IE],
+	hook transitionMutationWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).Mutate(hook)
@@ -48,7 +48,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
 
 // LogicHook is a shortcut for OnEvent().LogicHook() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
-	hook TransitionLogicHook[K, S, ST, SD, E, IE],
+	hook transitionLogicHookWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).LogicHook(hook)
@@ -56,7 +56,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
 
 // DataHook is a shortcut for OnEvent().DataHook() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
-	hook TransitionDataHook[K, S, ST, SD, E, IE],
+	hook transitionDataHookWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).DataHook(hook)
@@ -79,9 +79,9 @@ type TransitionBuilder[
 // data. A transition can have zero or one mutate function. Multiple mutation
 // callbacks may be registered.
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Mutate(
-	transition TransitionMutation[K, S, ST, SD, E, IE],
+	mutation transitionMutationWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.hookSet.mutations = append(tb.hookSet.mutations, transition)
+	tb.hookSet.mutations = append(tb.hookSet.mutations, mutation)
 	return tb
 }
 
@@ -97,7 +97,7 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) SetStatus(
 
 // LogicHook adds a new TransitionLogicHook which will run after all mutations
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
-	hook TransitionLogicHook[K, S, ST, SD, E, IE],
+	hook transitionLogicHookWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	tb.hookSet.logic = append(tb.hookSet.logic, hook)
 	return tb
@@ -105,7 +105,7 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
 
 // DataHook adds a new TransitionDataHook which will run after all mutations
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) DataHook(
-	hook TransitionDataHook[K, S, ST, SD, E, IE],
+	hook transitionDataHookWrapper[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	tb.hookSet.data = append(tb.hookSet.data, hook)
 	return tb

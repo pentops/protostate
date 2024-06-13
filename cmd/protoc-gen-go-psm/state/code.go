@@ -11,16 +11,20 @@ import (
 var (
 	// all imports from PSM are defined here, i.e. this is the committed PSM interface.
 	smImportPath         = protogen.GoImportPath("github.com/pentops/protostate/psm")
-	smEventer            = smImportPath.Ident("Eventer")
 	smStateMachine       = smImportPath.Ident("StateMachine")
 	smDBStateMachine     = smImportPath.Ident("DBStateMachine")
 	smStateMachineConfig = smImportPath.Ident("StateMachineConfig")
 	smStateHookBaton     = smImportPath.Ident("HookBaton")
-	smMutationFunc       = smImportPath.Ident("PSMMutationFunc")
-	smHookFunc           = smImportPath.Ident("PSMHookFunc")
-	smGeneralHookFunc    = smImportPath.Ident("GeneralStateHook")
-	smEventSpec          = smImportPath.Ident("EventSpec")
-	smIInnerEvent        = smImportPath.Ident("IInnerEvent")
+
+	smTransitionMutationFunc   = smImportPath.Ident("TransitionMutation")
+	smTransitionLogicFunc      = smImportPath.Ident("TransitionLogicHook")
+	smTransitionDataFunc       = smImportPath.Ident("TransitionDataHook")
+	smGeneralLogicHookFunc     = smImportPath.Ident("GeneralLogicHook")
+	smGeneralStateDataHookFunc = smImportPath.Ident("GeneralStateDataHook")
+	smGeneralEventDataHookFunc = smImportPath.Ident("GeneralEventDataHook")
+
+	smEventSpec   = smImportPath.Ident("EventSpec")
+	smIInnerEvent = smImportPath.Ident("IInnerEvent")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -47,7 +51,6 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 
 	ss.typeAlias(g, "", smStateMachine)
 	ss.typeAlias(g, "DB", smDBStateMachine)
-	ss.typeAlias(g, "Eventer", smEventer)
 	ss.typeAlias(g, "EventSpec", smEventSpec)
 	g.P()
 	ss.psmEventKey(g)
@@ -277,49 +280,94 @@ func (ss PSMEntity) implementIInnerEvent(g *protogen.GeneratedFile) {
 
 func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 
-	// FooPSMMutation
+	// FooMutation
 	g.P("func ", ss.machineName,
 		"Mutation[SE ", ss.eventName, "]",
-		"(cb func(*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smMutationFunc, "[")
+		"(cb func(*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smTransitionMutationFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
-	g.P("return ", smMutationFunc, "[")
+	g.P("return ", smTransitionMutationFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("](cb)")
 	g.P("}")
 
-	// FooPSMHook
 	hookBatonType := ss.typeAlias(g, "HookBaton", smStateHookBaton)
+
+	// FooLogicHook
 	g.P("func ", ss.machineName,
-		"Hook[SE ", ss.eventName, "]",
+		"LogicHook[SE ", ss.eventName, "]",
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
-		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
 		hookBatonType, ", ",
 		"*", ss.state.message.GoIdent, ", ",
-		"SE) error) ", smHookFunc, "[")
+		"SE) error) ", smTransitionLogicFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
-	g.P("return ", smHookFunc, "[")
+	g.P("return ", smTransitionLogicFunc, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("](cb)")
 	g.P("}")
 
-	// FooPSMGenericHook
+	// FooDataHook
 	g.P("func ", ss.machineName,
-		"GeneralHook",
+		"DataHook[SE ", ss.eventName, "]",
 		"(cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		"*", ss.state.message.GoIdent, ", ",
+		"SE) error) ", smTransitionDataFunc, "[")
+	ss.writeBaseTypesWithSE(g)
+	g.P("] {")
+	g.P("return ", smTransitionDataFunc, "[")
+	ss.writeBaseTypesWithSE(g)
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMGenericLogicHook
+	g.P("func ", ss.machineName, "GeneralLogicHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
 		hookBatonType, ", ",
 		"*", ss.state.message.GoIdent, ", ",
-		"*", ss.event.message.GoIdent, ") error) ", smGeneralHookFunc, "[")
+		"*", ss.event.message.GoIdent, ") error) ", smGeneralLogicHookFunc, "[")
 	ss.writeBaseTypes(g)
 	g.P("] {")
-	g.P("return ", smGeneralHookFunc, "[")
+	g.P("return ", smGeneralLogicHookFunc, "[")
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
 	g.P("}")
+
+	// FooPSMGeneralStateDataHook
+	g.P("func ", ss.machineName, "GeneralStateDataHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		"*", ss.state.message.GoIdent,
+		") error) ", smGeneralStateDataHookFunc, "[")
+
+	ss.writeBaseTypes(g)
+	g.P("] {")
+	g.P("return ", smGeneralStateDataHookFunc, "[")
+	ss.writeBaseTypes(g)
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMGeneralStateDataHook
+	g.P("func ", ss.machineName, "GeneralEventDataHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
+		"*", ss.state.message.GoIdent, ",",
+		"*", ss.event.message.GoIdent,
+		") error) ", smGeneralEventDataHookFunc, "[")
+
+	ss.writeBaseTypes(g)
+	g.P("] {")
+	g.P("return ", smGeneralEventDataHookFunc, "[")
+	ss.writeBaseTypes(g)
+	g.P("](cb)")
+	g.P("}")
+
 }
 
 func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {

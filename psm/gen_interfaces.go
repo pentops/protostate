@@ -2,7 +2,9 @@ package psm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
@@ -101,6 +103,34 @@ type IInnerEvent interface {
 	PSMEventKey() string
 }
 
+// HookBaton is sent with each logic transition hook to collect chain events and
+// side effects
+type HookBaton[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	SideEffect(o5msg.Message)
+	ChainEvent(IE)
+	FullCause() E
+	AsCause() *psm_pb.Cause
+}
+
+type transitionMutationWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	TransitionMutation(SD, IE) error
+	EventType() string
+}
+
 // TransitionMutation runs at the start of a transition to merge the event
 // information into the state data object. The state object is mutable in this
 // context.
@@ -111,8 +141,32 @@ type TransitionMutation[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
+	SE IInnerEvent,
+] func(SD, SE) error
+
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) TransitionMutation(stateData SD, event IE) error {
+	asType, ok := any(event).(SE)
+	if !ok {
+		name := event.ProtoReflect().Descriptor().FullName()
+		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
+	}
+
+	return f(stateData, asType)
+}
+
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) EventType() string {
+	return (*new(SE)).PSMEventKey()
+}
+
+type transitionLogicHookWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] interface {
-	TransitionMutation(SD, IE) error
+	TransitionLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, IE) error
 	EventType() string
 }
 
@@ -127,8 +181,32 @@ type TransitionLogicHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
+	SE IInnerEvent,
+] func(context.Context, HookBaton[K, S, ST, SD, E, IE], S, SE) error
+
+func (f TransitionLogicHook[K, S, ST, SD, E, IE, SE]) TransitionLogicHook(ctx context.Context, baton HookBaton[K, S, ST, SD, E, IE], state S, event IE) error {
+	asType, ok := any(event).(SE)
+	if !ok {
+		name := event.ProtoReflect().Descriptor().FullName()
+		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
+	}
+
+	return f(ctx, baton, state, asType)
+}
+
+func (f TransitionLogicHook[K, S, ST, SD, E, IE, SE]) EventType() string {
+	return (*new(SE)).PSMEventKey()
+}
+
+type transitionDataHookWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] interface {
-	TransitionLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, IE) error
+	TransitionDataHook(context.Context, sqrlx.Transaction, S, IE) error
 	EventType() string
 }
 
@@ -145,9 +223,32 @@ type TransitionDataHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
+	SE IInnerEvent,
+] func(context.Context, sqrlx.Transaction, S, SE) error
+
+func (f TransitionDataHook[K, S, ST, SD, E, IE, SE]) TransitionDataHook(ctx context.Context, tx sqrlx.Transaction, state S, event IE) error {
+	asType, ok := any(event).(SE)
+	if !ok {
+		name := event.ProtoReflect().Descriptor().FullName()
+		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
+	}
+
+	return f(ctx, tx, state, asType)
+}
+
+func (f TransitionDataHook[K, S, ST, SD, E, IE, SE]) EventType() string {
+	return (*new(SE)).PSMEventKey()
+}
+
+type generalLogicHookWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] interface {
-	TransitionDataHook(context.Context, sqrlx.Transaction, S, IE) error
-	EventType() string
+	GeneralLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
 }
 
 // GeneralLogicHook runs once per transition at the state-machine level
@@ -166,8 +267,21 @@ type GeneralLogicHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
+] func(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
+
+func (f GeneralLogicHook[K, S, ST, SD, E, IE]) GeneralLogicHook(ctx context.Context, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+	return f(ctx, baton, state, event)
+}
+
+type generalStateDataWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] interface {
-	GeneralLogicHook(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
+	GeneralStateDataHook(context.Context, sqrlx.Transaction, S) error
 }
 
 // GeneralStateDataHook runs at the state-machine level regardless of which
@@ -183,8 +297,21 @@ type GeneralStateDataHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
+] func(context.Context, sqrlx.Transaction, S) error
+
+func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) GeneralStateDataHook(ctx context.Context, tx sqrlx.Transaction, state S) error {
+	return f(ctx, tx, state)
+}
+
+type generalEventDataHookWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] interface {
-	GeneralStateDataHook(context.Context, sqrlx.Transaction, S) error
+	GeneralEventDataHook(context.Context, sqrlx.Transaction, S, E) error
 }
 
 // GeneralEventDataHook runs after each transition at the state-machine level regardless of which
@@ -198,6 +325,8 @@ type GeneralEventDataHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
-] interface {
-	GeneralEventDataHook(context.Context, sqrlx.Transaction, S, E) error
+] func(context.Context, sqrlx.Transaction, S, E) error
+
+func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) GeneralEventDataHook(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
+	return f(ctx, tx, state, event)
 }
