@@ -42,7 +42,15 @@ func TestFooStateField(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	if err := pgmigrate.CreateStateMachines(context.Background(), conn, sm.StateTableSpec(), testpb.DefaultBarPSMTableSpec.StateTableSpec()); err != nil {
+	barSpec, err := testpb.BarPSMBuilder().BuildQueryTableSpec()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if err := pgmigrate.CreateStateMachines(context.Background(), conn,
+		sm.StateTableSpec(),
+		*barSpec,
+	); err != nil {
 		t.Fatal(err.Error())
 	}
 

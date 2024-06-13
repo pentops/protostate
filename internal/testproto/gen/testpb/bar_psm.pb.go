@@ -5,11 +5,9 @@ package testpb
 import (
 	context "context"
 	fmt "fmt"
-
 	psm_pb "github.com/pentops/protostate/gen/state/v1/psm_pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // PSM BarPSM
@@ -69,6 +67,13 @@ func (msg *BarKeys) PSMIsSet() bool {
 // PSMFullName returns the full name of state machine with package prefix
 func (msg *BarKeys) PSMFullName() string {
 	return "test.v1.bar"
+}
+func (msg *BarKeys) PSMKeyValues() (map[string]string, error) {
+	keyset := map[string]string{
+		"bar_id":       msg.BarId,
+		"bar_other_id": msg.BarOtherId,
+	}
+	return keyset, nil
 }
 
 // EXTEND BarState with the psm.IState interface
@@ -218,51 +223,7 @@ func (*BarEventType_Deleted) PSMEventKey() BarPSMEventKey {
 	return BarPSMEventDeleted
 }
 
-type BarPSMTableSpec = psm.PSMTableSpec[
-	*BarKeys,      // implements psm.IKeyset
-	*BarState,     // implements psm.IState
-	BarStatus,     // implements psm.IStatusEnum
-	*BarStateData, // implements psm.IStateData
-	*BarEvent,     // implements psm.IEvent
-	BarPSMEvent,   // implements psm.IInnerEvent
-]
-
-var DefaultBarPSMTableSpec = BarPSMTableSpec{
-	TableMap: psm.TableMap{
-		State: psm.StateTableSpec{
-			TableName: "bar",
-			Root:      &psm.FieldSpec{ColumnName: "state"},
-		},
-		Event: psm.EventTableSpec{
-			TableName:     "bar_event",
-			Root:          &psm.FieldSpec{ColumnName: "data"},
-			ID:            &psm.FieldSpec{ColumnName: "id"},
-			Timestamp:     &psm.FieldSpec{ColumnName: "timestamp"},
-			Sequence:      &psm.FieldSpec{ColumnName: "sequence"},
-			StateSnapshot: &psm.FieldSpec{ColumnName: "state"},
-		},
-		KeyColumns: []psm.KeyColumn{{
-			ColumnName: "bar_id",
-			ProtoName:  protoreflect.Name("bar_id"),
-			Primary:    true,
-			Required:   true,
-		}, {
-			ColumnName: "bar_other_id",
-			ProtoName:  protoreflect.Name("bar_other_id"),
-			Primary:    true,
-			Required:   true,
-		}},
-	},
-	KeyValues: func(keys *BarKeys) (map[string]string, error) {
-		keyset := map[string]string{
-			"bar_id":       keys.BarId,
-			"bar_other_id": keys.BarOtherId,
-		}
-		return keyset, nil
-	},
-}
-
-func DefaultBarPSMConfig() *psm.StateMachineConfig[
+func BarPSMBuilder() *psm.StateMachineConfig[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState
 	BarStatus,     // implements psm.IStatusEnum
@@ -270,32 +231,14 @@ func DefaultBarPSMConfig() *psm.StateMachineConfig[
 	*BarEvent,     // implements psm.IEvent
 	BarPSMEvent,   // implements psm.IInnerEvent
 ] {
-	return psm.NewStateMachineConfig[
+	return &psm.StateMachineConfig[
 		*BarKeys,      // implements psm.IKeyset
 		*BarState,     // implements psm.IState
 		BarStatus,     // implements psm.IStatusEnum
 		*BarStateData, // implements psm.IStateData
 		*BarEvent,     // implements psm.IEvent
 		BarPSMEvent,   // implements psm.IInnerEvent
-	](DefaultBarPSMTableSpec)
-}
-
-func NewBarPSM(config *psm.StateMachineConfig[
-	*BarKeys,      // implements psm.IKeyset
-	*BarState,     // implements psm.IState
-	BarStatus,     // implements psm.IStatusEnum
-	*BarStateData, // implements psm.IStateData
-	*BarEvent,     // implements psm.IEvent
-	BarPSMEvent,   // implements psm.IInnerEvent
-]) (*BarPSM, error) {
-	return psm.NewStateMachine[
-		*BarKeys,      // implements psm.IKeyset
-		*BarState,     // implements psm.IState
-		BarStatus,     // implements psm.IStatusEnum
-		*BarStateData, // implements psm.IStateData
-		*BarEvent,     // implements psm.IEvent
-		BarPSMEvent,   // implements psm.IInnerEvent
-	](config)
+	]{}
 }
 
 func BarPSMMutation[SE BarPSMEvent](cb func(*BarStateData, SE) error) psm.PSMMutationFunc[

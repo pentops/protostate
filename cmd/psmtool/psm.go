@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
-	"github.com/pentops/protostate/internal/psmreflect"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/prototools/protosrc"
 	"github.com/pentops/runner/commander"
@@ -64,15 +63,9 @@ func runFmt(ctx context.Context, cfg struct {
 			return fmt.Errorf("message %s is not a message", eventName)
 		}
 
-		tableSpec, err := psmreflect.TableMapFromStateAndEvent(stateMsg, eventMsg)
+		spec, err := psm.BuildQueryTableSpec(stateMsg, eventMsg)
 		if err != nil {
 			return fmt.Errorf("table map for %s: %w", machine, err)
-		}
-
-		spec := psm.QueryTableSpec{
-			EventType: eventMsg,
-			StateType: stateMsg,
-			TableMap:  *tableSpec,
 		}
 
 		specs = append(specs, spec)

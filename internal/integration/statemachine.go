@@ -16,9 +16,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	sm, err := testpb.NewFooPSM(testpb.
-		DefaultFooPSMConfig().
-		SystemActor(systemActor))
+	sm, err := testpb.FooPSMBuilder().SystemActor(systemActor).BuildStateMachine()
 	if err != nil {
 		return nil, err
 	}
@@ -138,15 +136,12 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 }
 
 func NewBarStateMachine(db *sqrlx.Wrapper) (*testpb.BarPSMDB, error) {
-	sm, err := testpb.DefaultBarPSMConfig().
-		StateTableName("bar").
-		EventTableName("bar_event").
-		NewStateMachine()
+	sm, err := testpb.BarPSMBuilder().BuildStateMachine()
 	if err != nil {
 		return nil, err
 	}
 
-	sm.From(testpb.BarStatus_UNSPECIFIED).
+	sm.From(0).
 		OnEvent(testpb.BarPSMEventCreated).
 		SetStatus(testpb.BarStatus_ACTIVE).
 		Mutate(testpb.BarPSMMutation(func(
