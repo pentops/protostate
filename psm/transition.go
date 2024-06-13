@@ -63,6 +63,7 @@ type transitionSpec[
 	mutations  []transitionMutationWrapper[K, S, ST, SD, E, IE]
 	logic      []transitionLogicHookWrapper[K, S, ST, SD, E, IE]
 	data       []transitionDataHookWrapper[K, S, ST, SD, E, IE]
+	links      []transitionLink[K, S, ST, SD, E, IE]
 }
 
 func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionMutations(
@@ -121,9 +122,18 @@ func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionHooks(
 		}
 	}
 
+	for _, link := range hs.links {
+		log.WithField(ctx, "link", link).Debug("running link hook")
+		err := link.RunLinkTransition(ctx, tx, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
 	log.WithFields(ctx, map[string]interface{}{
 		"logicCount": len(hs.logic),
 		"dataCount":  len(hs.data),
+		"linkCount":  len(hs.links),
 	}).Debug("transition hooks complete")
 
 	return nil
@@ -233,6 +243,7 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) mergeHooks(status ST, eventType st
 		merged.mutations = append(merged.mutations, hook.mutations...)
 		merged.logic = append(merged.logic, hook.logic...)
 		merged.data = append(merged.data, hook.data...)
+		merged.links = append(merged.links, hook.links...)
 
 		if hook.toStatus != 0 {
 			if merged.toStatus == 0 {

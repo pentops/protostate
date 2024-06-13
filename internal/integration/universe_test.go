@@ -18,6 +18,7 @@ type Universe struct {
 	BarStateMachine *testpb.BarPSMDB
 
 	FooQuery *MiniFooController
+	BarQuery *MiniBarController
 }
 
 func NewUniverse(t *testing.T) (*flowtest.Stepper[*testing.T], *Universe) {
@@ -42,25 +43,26 @@ func setupUniverse(ctx context.Context, t flowtest.Asserter, uu *Universe) {
 		t.Fatal(err.Error())
 	}
 
-	fooState, err := NewFooStateMachine(db)
+	sm, err := BuildStateMachines(db)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	barState, err := NewBarStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(fooState.StateTableSpec()), psm.StateQueryOptions{})
+	fooQuery, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.Foo.StateTableSpec()), psm.StateQueryOptions{})
 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	uu.FooStateMachine = fooState
-	uu.BarStateMachine = barState
-	uu.FooQuery = NewMiniFooController(db, queryer)
+	barQuery, err := testpb.NewBarPSMQuerySet(testpb.DefaultBarPSMQuerySpec(sm.Bar.StateTableSpec()), psm.StateQueryOptions{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	uu.FooStateMachine = sm.Foo
+	uu.BarStateMachine = sm.Bar
+	uu.FooQuery = NewMiniFooController(db, fooQuery)
+	uu.BarQuery = NewMiniBarController(db, barQuery)
 }
 
 type MiniFooController struct {
@@ -110,6 +112,45 @@ func (c *MiniFooController) ListFoos(ctx context.Context, req *testpb.ListFoosRe
 func (c *MiniFooController) ListFooEvents(ctx context.Context, req *testpb.ListFooEventsRequest) (*testpb.ListFooEventsResponse, error) {
 	res := &testpb.ListFooEventsResponse{}
 	err := c.query.ListEvents(ctx, c.db, req, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+type MiniBarController struct {
+	db    *sqrlx.Wrapper
+	query *testpb.BarPSMQuerySet
+}
+
+func NewMiniBarController(db *sqrlx.Wrapper, query *testpb.BarPSMQuerySet) *MiniBarController {
+	return &MiniBarController{
+		db:    db,
+		query: query,
+	}
+}
+
+func (b *MiniBarController) GetBar(ctx context.Context, req *testpb.GetBarRequest) (*testpb.GetBarResponse, error) {
+	res := &testpb.GetBarResponse{}
+	err := b.query.Get(ctx, b.db, req, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (b *MiniBarController) ListBars(ctx context.Context, req *testpb.ListBarsRequest) (*testpb.ListBarsResponse, error) {
+	res := &testpb.ListBarsResponse{}
+	err := b.query.List(ctx, b.db, req, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (b *MiniBarController) ListBarEvents(ctx context.Context, req *testpb.ListBarEventsRequest) (*testpb.ListBarEventsResponse, error) {
+	res := &testpb.ListBarEventsResponse{}
+	err := b.query.ListEvents(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err
 	}

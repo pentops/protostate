@@ -22,9 +22,12 @@ var (
 	smGeneralLogicHookFunc     = smImportPath.Ident("GeneralLogicHook")
 	smGeneralStateDataHookFunc = smImportPath.Ident("GeneralStateDataHook")
 	smGeneralEventDataHookFunc = smImportPath.Ident("GeneralEventDataHook")
+	smLinkHook                 = smImportPath.Ident("LinkHook")
+	smLinkDestination          = smImportPath.Ident("LinkDestination")
 
 	smEventSpec   = smImportPath.Ident("EventSpec")
 	smIInnerEvent = smImportPath.Ident("IInnerEvent")
+	smIKeyset     = smImportPath.Ident("IKeyset")
 
 	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
@@ -366,6 +369,29 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("return ", smGeneralEventDataHookFunc, "[")
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMLinkHook
+	g.P("func ", ss.machineName, "LinkHook[DK ", smIKeyset, ", DIE ", smIInnerEvent, "](")
+	g.P("linkDestination ", smLinkDestination, "[DK, DIE],")
+	g.P("cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		"*", ss.state.message.GoIdent, ", ",
+		ss.eventName,
+		") (DK, DIE, error),")
+	g.P(") ", smLinkHook, "[")
+	ss.writeBaseTypes(g)
+	g.P("DK, // Destination Keys")
+	g.P("DIE, // Destination Inner Event")
+	g.P("] {")
+	g.P("return ", smLinkHook, "[")
+	ss.writeBaseTypes(g)
+	g.P("DK, // Destination Keys")
+	g.P("DIE, // Destination Inner Event")
+	g.P("]{")
+	g.P("  Derive: cb,")
+	g.P("  Destination: linkDestination,")
+	g.P("}")
 	g.P("}")
 
 }

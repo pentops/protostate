@@ -350,3 +350,30 @@ func BarPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Bar
 		BarPSMEvent,   // implements psm.IInnerEvent
 	](cb)
 }
+func BarPSMLinkHook[DK psm.IKeyset, DIE psm.IInnerEvent](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(context.Context, *BarState, BarPSMEvent) (DK, DIE, error),
+) psm.LinkHook[
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+	DK,            // Destination Keys
+	DIE,           // Destination Inner Event
+] {
+	return psm.LinkHook[
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+		DK,            // Destination Keys
+		DIE,           // Destination Inner Event
+	]{
+		Derive:      cb,
+		Destination: linkDestination,
+	}
+}

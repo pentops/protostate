@@ -352,3 +352,30 @@ func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Foo
 		FooPSMEvent,   // implements psm.IInnerEvent
 	](cb)
 }
+func FooPSMLinkHook[DK psm.IKeyset, DIE psm.IInnerEvent](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(context.Context, *FooState, FooPSMEvent) (DK, DIE, error),
+) psm.LinkHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+	DK,            // Destination Keys
+	DIE,           // Destination Inner Event
+] {
+	return psm.LinkHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+		DK,            // Destination Keys
+		DIE,           // Destination Inner Event
+	]{
+		Derive:      cb,
+		Destination: linkDestination,
+	}
+}

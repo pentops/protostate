@@ -11,6 +11,46 @@ import (
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
+type StateMachines struct {
+	Foo *testpb.FooPSMDB
+	Bar *testpb.BarPSMDB
+}
+
+func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
+
+	foo, err := NewFooStateMachine(db)
+	if err != nil {
+		return nil, err
+	}
+
+	bar, err := NewBarStateMachine(db)
+	if err != nil {
+		return nil, err
+	}
+
+	foo.From(testpb.FooStatus_ACTIVE).
+		OnEvent(testpb.FooPSMEventDeleted).
+		LinkTo(testpb.FooPSMLinkHook(bar, func(
+			ctx context.Context,
+			state *testpb.FooState,
+			event testpb.FooPSMEvent,
+		) (*testpb.BarKeys, testpb.BarPSMEvent, error) {
+			return &testpb.BarKeys{
+					BarId:      uuid.NewString(),
+					BarOtherId: state.Keys.FooId,
+				}, &testpb.BarEventType_Created{
+					Name:  state.Data.Name + " Phoenix",
+					Field: state.Data.Field,
+				}, nil
+		}))
+
+	return &StateMachines{
+		Foo: foo,
+		Bar: bar,
+	}, nil
+
+}
+
 func NewFooStateMachine(db *sqrlx.Wrapper) (*testpb.FooPSMDB, error) {
 	actorID := uuid.NewString()
 	systemActor, err := psm.NewSystemActor(actorID)

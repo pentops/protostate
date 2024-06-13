@@ -330,3 +330,65 @@ type GeneralEventDataHook[
 func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) GeneralEventDataHook(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
 	return f(ctx, tx, state, event)
 }
+
+type LinkHook[
+	K IKeyset, // Source Machine Keyset
+	S IState[K, ST, SD], // Source Machine State
+	ST IStatusEnum, // Source Machine Status Enum
+	SD IStateData, // Source Machine State Data
+	E IEvent[K, S, ST, SD, IE], // Source Machine Event
+	IE IInnerEvent, // Source Machine Inner Event
+
+	DK IKeyset, // Destination Keyset
+	DIE IInnerEvent, // Destination Inner Event
+] struct {
+	Destination LinkDestination[DK, DIE]
+	Derive      func(context.Context, S, IE) (DK, DIE, error)
+}
+
+func (lh LinkHook[K, S, ST, SD, E, IE, DK, DIE]) RunLinkTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
+	destKeys, destEvent, err := lh.Derive(ctx, state, event.UnwrapPSMEvent())
+	if err != nil {
+		return err
+	}
+
+	// Nil check.
+	if !destEvent.PSMIsSet() {
+		return nil
+	}
+
+	cause := &psm_pb.Cause{
+		Type: &psm_pb.Cause_PsmEvent{
+			PsmEvent: &psm_pb.PSMEventCause{
+				EventId:      event.PSMMetadata().EventId,
+				StateMachine: (*new(K)).PSMFullName(),
+			},
+		},
+	}
+
+	return lh.Destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent)
+}
+
+type LinkDestination[
+	DK IKeyset,
+	DIE IInnerEvent,
+] interface {
+	transitionFromLink(
+		ctx context.Context,
+		tx sqrlx.Transaction,
+		cause *psm_pb.Cause,
+		destKeys DK,
+		destEvent DIE,
+	) error
+}
+
+type transitionLink[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	RunLinkTransition(context.Context, sqrlx.Transaction, S, E) error
+}

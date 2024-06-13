@@ -210,6 +210,27 @@ func TestStateMachineHook(t *testing.T) {
 
 	})
 
+	flow.Step("Hook should have pushed to Bar", func(ctx context.Context, t flowtest.Asserter) {
+
+		res, err := uu.BarQuery.ListBars(ctx, &testpb.ListBarsRequest{})
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+
+		if len(res.Bars) != 1 {
+			t.Fatalf("expected 1 BAR, got %d", len(res.Bars))
+		}
+
+		bar := res.Bars[0]
+
+		if bar.Data.Name != "updated Phoenix" {
+			t.Fatalf("expected name updated, got %s", bar.Data.Name)
+		}
+
+	})
+
 }
 
 func TestStateMachineIdempotencyInitial(t *testing.T) {
