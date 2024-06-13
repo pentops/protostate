@@ -62,6 +62,14 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
 	return tb.OnEvent(eventType).DataHook(hook)
 }
 
+// LinkTo is a shortcut for OnEvent().LinkTo() with the event type matching callback function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) LinkTo(
+	link transitionLink[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	eventType := link.EventType()
+	return tb.OnEvent(eventType).LinkTo(link)
+}
+
 type TransitionBuilder[
 	K IKeyset,
 	S IState[K, ST, SD],

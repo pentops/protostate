@@ -299,6 +299,35 @@ func BarPSMDataHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, 
 		SE,            // Specific event type for the transition
 	](cb)
 }
+func BarPSMLinkHook[SE BarPSMEvent, DK psm.IKeyset, DIE psm.IInnerEvent](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(context.Context, *BarState, SE) (DK, DIE, error),
+) psm.LinkHook[
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+	SE,            // Specific event type for the transition
+	DK,            // Destination Keys
+	DIE,           // Destination Inner Event
+] {
+	return psm.LinkHook[
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+		SE,            // Specific event type for the transition
+		DK,            // Destination Keys
+		DIE,           // Destination Inner Event
+	]{
+		Derive:      cb,
+		Destination: linkDestination,
+	}
+}
 func BarPSMGeneralLogicHook(cb func(context.Context, BarPSMHookBaton, *BarState, *BarEvent) error) psm.GeneralLogicHook[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState
@@ -349,31 +378,4 @@ func BarPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Bar
 		*BarEvent,     // implements psm.IEvent
 		BarPSMEvent,   // implements psm.IInnerEvent
 	](cb)
-}
-func BarPSMLinkHook[DK psm.IKeyset, DIE psm.IInnerEvent](
-	linkDestination psm.LinkDestination[DK, DIE],
-	cb func(context.Context, *BarState, BarPSMEvent) (DK, DIE, error),
-) psm.LinkHook[
-	*BarKeys,      // implements psm.IKeyset
-	*BarState,     // implements psm.IState
-	BarStatus,     // implements psm.IStatusEnum
-	*BarStateData, // implements psm.IStateData
-	*BarEvent,     // implements psm.IEvent
-	BarPSMEvent,   // implements psm.IInnerEvent
-	DK,            // Destination Keys
-	DIE,           // Destination Inner Event
-] {
-	return psm.LinkHook[
-		*BarKeys,      // implements psm.IKeyset
-		*BarState,     // implements psm.IState
-		BarStatus,     // implements psm.IStatusEnum
-		*BarStateData, // implements psm.IStateData
-		*BarEvent,     // implements psm.IEvent
-		BarPSMEvent,   // implements psm.IInnerEvent
-		DK,            // Destination Keys
-		DIE,           // Destination Inner Event
-	]{
-		Derive:      cb,
-		Destination: linkDestination,
-	}
 }
