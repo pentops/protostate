@@ -1,0 +1,21 @@
+version: v2
+
+modules:
+  - path: ./proto/listify
+    name: buf.build/pentops/listify
+
+  - path: ./proto/protostate
+    name: buf.build/pentops/protostate
+
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+  - buf.build/pentops/auth
+  - buf.build/pentops/j5
+
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
