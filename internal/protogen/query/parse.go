@@ -253,10 +253,6 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*psm
 		return nil, err
 	}
 
-	if spec.TableMap.State.TableName != src.name {
-		return nil, fmt.Errorf("keys message on %s has a different name than the query service %s", stateMessage.FullName(), src.name)
-	}
-
 	return &spec.TableMap, nil
 }
 
