@@ -264,24 +264,24 @@ func (hs transitionSet[K, S, ST, SD, E, IE]) PrintMermaid() (string, error) {
 	}
 
 	type specSet struct {
-		status      ST
+		fromStatus  ST
 		event       string
 		transitions []*transitionSpec[K, S, ST, SD, E, IE]
 	}
 	byKey := map[string]specSet{}
 
 	for _, transition := range hs.transitions {
-		var key string
-		if len(transition.fromStatus) == 0 {
-			continue // TODO: Handle GLobal transitions
+		fromStatus := transition.fromStatus
+		if len(fromStatus) == 0 {
+			fromStatus = []ST{-1}
 		}
-		for _, from := range transition.fromStatus {
-			key = fmt.Sprintf("%s-%s", from.ShortString(), transition.eventType)
+		for _, from := range fromStatus {
+			key := fmt.Sprintf("%s-%s", from.ShortString(), transition.eventType)
 			entry, ok := byKey[key]
 			if !ok {
 				entry = specSet{
-					status: from,
-					event:  transition.eventType,
+					fromStatus: from,
+					event:      transition.eventType,
 				}
 			}
 			entry.transitions = append(entry.transitions, transition)
@@ -289,22 +289,34 @@ func (hs transitionSet[K, S, ST, SD, E, IE]) PrintMermaid() (string, error) {
 		}
 	}
 
+	statusName := func(status ST) string {
+		if status == 0 {
+			return "[*]"
+		}
+		return status.ShortString()
+	}
+
 	for _, spec := range byKey {
-		merged, err := hs.mergeHooks(spec.status, spec.event, spec.transitions)
+		merged, err := hs.mergeHooks(spec.fromStatus, spec.event, spec.transitions)
 		if err != nil {
 			return "", err
 		}
+
 		if merged.toStatus == 0 {
-			merged.toStatus = merged.fromStatus[0]
+			if spec.fromStatus < 1 {
+				continue
+			}
+			merged.toStatus = spec.fromStatus
 		}
 
-		var fromString string
-		if merged.fromStatus[0] == 0 {
-			fromString = "[*]"
-		} else {
-			fromString = merged.fromStatus[0].ShortString()
+		if spec.fromStatus == -1 {
+			placeholder := fmt.Sprintf("_any_%d", merged.toStatus)
+			lines = append(lines, fmt.Sprintf("%s: (*)", placeholder))
+			lines = append(lines, fmt.Sprintf("%s --> %s : %s", placeholder, merged.toStatus.ShortString(), merged.eventType))
+			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s --> %s : %s", fromString, merged.toStatus.ShortString(), merged.eventType))
+
+		lines = append(lines, fmt.Sprintf("%s --> %s : %s", statusName(spec.fromStatus), merged.toStatus.ShortString(), merged.eventType))
 	}
 
 	return strings.Join(lines, "\n"), nil

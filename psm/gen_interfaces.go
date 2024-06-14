@@ -348,10 +348,9 @@ type LinkHook[
 }
 
 func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
-	asType, ok := any(event).(SE)
+	asType, ok := any(event.UnwrapPSMEvent()).(SE)
 	if !ok {
-		name := event.ProtoReflect().Descriptor().FullName()
-		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
+		return fmt.Errorf("unexpected event type in transition: %T [IE] does not match [SE] (%T)", any(event), new(SE))
 	}
 
 	destKeys, destEvent, err := lh.Derive(ctx, state, asType)
