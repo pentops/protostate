@@ -138,7 +138,11 @@ func BuildStateQuerySet[
 	}
 
 	if len(unmappedRequestFields) > 0 {
-		return nil, fmt.Errorf("unmapped fields in Get request: %v", unmappedRequestFields)
+		fieldNames := make([]string, 0, len(unmappedRequestFields))
+		for k := range unmappedRequestFields {
+			fieldNames = append(fieldNames, string(k))
+		}
+		return nil, fmt.Errorf("unmapped fields in Get request: %v", fieldNames)
 	}
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
