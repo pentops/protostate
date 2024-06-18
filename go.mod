@@ -10,12 +10,12 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20240607020132-7dda31076e79
-	github.com/pentops/j5 v0.0.0-20240614161723-64c6aebaabe0
+	github.com/pentops/j5 v0.0.0-20240618151125-1cb16ab95f62
 	github.com/pentops/log.go v0.0.0-20240612184720-79634792a21e
-	github.com/pentops/o5-auth v0.0.0-20240614170101-5d54f4c422a8
+	github.com/pentops/o5-auth v0.0.0-20240614180342-3765ffa80762
 	github.com/pentops/o5-messaging v0.0.0-20240614163039-d8f7b29ba565
 	github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734
-	github.com/pentops/prototools v0.0.0-20240612193820-e58a0d1d3980
+	github.com/pentops/prototools v0.0.0-20240614222903-e9c266e2e96b
 	github.com/pentops/runner v0.0.0-20240525192419-d655233635e9
 	github.com/pentops/sqrlx.go v0.0.0-20240523172712-b615a994d8c0
 	github.com/pressly/goose v2.7.0+incompatible

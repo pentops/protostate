@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/psm"
@@ -23,13 +24,17 @@ func main() {
 }
 
 func runMigration(ctx context.Context, cfg struct {
-	SourceDir string   `flag:"src"`
-	Package   string   `flag:"package"`
-	Machines  []string `flag:"machines"`
+	Source string `flag:"src" default:"." description:"Source directory containing j5.yaml and buf.lock.yaml"`
+	Bundle string `flag:"bundle" default:"." description:"When the bundle j5.yaml is in a subdirectory"`
+
+	Package  string   `flag:"package"`
+	Machines []string `flag:"machines"`
 }) error {
-	img, err := protosrc.ReadImageFromSourceDir(ctx, cfg.SourceDir)
+	srcFS := os.DirFS(cfg.Source)
+
+	img, err := protosrc.ReadImageFromSourceDir(ctx, srcFS, cfg.Bundle)
 	if err != nil {
-		return fmt.Errorf("reading source %s: %w", cfg.SourceDir, err)
+		return fmt.Errorf("reading source %s bundle %s : %w", cfg.Source, cfg.Bundle, err)
 	}
 
 	descriptors, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{

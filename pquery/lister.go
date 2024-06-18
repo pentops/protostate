@@ -352,7 +352,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
 
-	selectQuery := sq.Select(ll.dataColumn).
+	selectQuery := sq.Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
 		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
 
 	sortFields := ll.defaultSortFields

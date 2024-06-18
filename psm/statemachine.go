@@ -793,7 +793,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSp
 		eventMeta.Sequence = stateMeta.LastSequence + 1
 		stateMeta.LastSequence = eventMeta.Sequence
 		stateMeta.UpdatedAt = eventMeta.Timestamp
-		stateMeta.CreatedAt = eventMeta.Timestamp
 	}
 	return
 }
