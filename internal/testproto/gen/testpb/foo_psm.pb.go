@@ -303,7 +303,7 @@ func FooPSMDataHook[SE FooPSMEvent](cb func(context.Context, sqrlx.Transaction, 
 }
 func FooPSMLinkHook[SE FooPSMEvent, DK psm.IKeyset, DIE psm.IInnerEvent](
 	linkDestination psm.LinkDestination[DK, DIE],
-	cb func(context.Context, *FooState, SE) (DK, DIE, error),
+	cb func(context.Context, *FooState, SE, func(DK, DIE)) error,
 ) psm.LinkHook[
 	*FooKeys,      // implements psm.IKeyset
 	*FooState,     // implements psm.IState

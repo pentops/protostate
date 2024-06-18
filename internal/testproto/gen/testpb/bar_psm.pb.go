@@ -301,7 +301,7 @@ func BarPSMDataHook[SE BarPSMEvent](cb func(context.Context, sqrlx.Transaction, 
 }
 func BarPSMLinkHook[SE BarPSMEvent, DK psm.IKeyset, DIE psm.IInnerEvent](
 	linkDestination psm.LinkDestination[DK, DIE],
-	cb func(context.Context, *BarState, SE) (DK, DIE, error),
+	cb func(context.Context, *BarState, SE, func(DK, DIE)) error,
 ) psm.LinkHook[
 	*BarKeys,      // implements psm.IKeyset
 	*BarState,     // implements psm.IState

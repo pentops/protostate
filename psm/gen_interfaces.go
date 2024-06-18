@@ -344,7 +344,7 @@ type LinkHook[
 	DIE IInnerEvent, // Destination Inner Event
 ] struct {
 	Destination LinkDestination[DK, DIE]
-	Derive      func(context.Context, S, SE) (DK, DIE, error)
+	Derive      func(context.Context, S, SE, func(DK, DIE)) error
 }
 
 func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
@@ -353,14 +353,17 @@ func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx conte
 		return fmt.Errorf("unexpected event type in transition: %T [IE] does not match [SE] (%T)", any(event), new(SE))
 	}
 
-	destKeys, destEvent, err := lh.Derive(ctx, state, asType)
-	if err != nil {
-		return err
+	type matchedEvent struct {
+		Key   DK
+		Inner DIE
 	}
 
-	// Nil check.
-	if !destEvent.PSMIsSet() {
-		return nil
+	events := make([]matchedEvent, 0, 1)
+	err := lh.Derive(ctx, state, asType, func(key DK, event DIE) {
+		events = append(events, matchedEvent{Key: key, Inner: event})
+	})
+	if err != nil {
+		return err
 	}
 
 	cause := &psm_pb.Cause{
@@ -372,7 +375,14 @@ func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx conte
 		},
 	}
 
-	return lh.Destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent)
+	for _, chained := range events {
+		destKeys := chained.Key
+		destEvent := chained.Inner
+		if err := lh.Destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) EventType() string {

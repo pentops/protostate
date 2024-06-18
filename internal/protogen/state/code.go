@@ -332,8 +332,9 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("cb func(",
 		protogen.GoImportPath("context").Ident("Context"), ", ",
 		"*", ss.state.message.GoIdent, ", ",
-		"SE",
-		") (DK, DIE, error),")
+		"SE, ",
+		"func(DK, DIE)",
+		") (error),")
 	g.P(") ", smLinkHook, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("DK, // Destination Keys")

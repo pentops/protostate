@@ -96,6 +96,23 @@ func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionMutations(
 	return nil
 }
 
+func (hs *transitionSpec[K, S, ST, SD, E, IE]) runFollowerHooks(
+	ctx context.Context,
+	tx sqrlx.Transaction,
+	state S,
+	event E,
+) error {
+	innerEvent := event.UnwrapPSMEvent()
+	for _, data := range hs.data {
+		log.WithField(ctx, "data", data).Debug("running data hook")
+		err := data.TransitionDataHook(ctx, tx, state, innerEvent)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
@@ -105,7 +122,7 @@ func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionHooks(
 ) error {
 	innerEvent := event.UnwrapPSMEvent()
 
-	log.Debug(ctx, "running transition mutations")
+	log.Debug(ctx, "running transition hooks")
 	for _, logic := range hs.logic {
 		log.WithField(ctx, "logic", logic).Debug("running logic hook")
 		err := logic.TransitionLogicHook(ctx, baton, state, innerEvent)
@@ -164,6 +181,30 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDat
 
 func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
 	hs.eventData = append(hs.eventData, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalFollowerHooks(
+	ctx context.Context,
+	tx sqrlx.Transaction,
+	state S,
+	event E,
+) error {
+
+	for _, hook := range hs.stateData {
+		err := hook.GeneralStateDataHook(ctx, tx, state)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, hook := range hs.eventData {
+		err := hook.GeneralEventDataHook(ctx, tx, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(

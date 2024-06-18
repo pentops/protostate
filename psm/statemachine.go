@@ -121,6 +121,103 @@ func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 	}
 }
 
+// TransitionInTx uses an existing transaction to transition the state machine.
+func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	var state S
+	var err error
+	state, err = sm.runTx(ctx, tx, event)
+	if err != nil {
+		return state, err
+	}
+	return state, nil
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, db Transactor, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	return sm.WithDB(db).Transition(ctx, event)
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) WithDB(db Transactor) *DBStateMachine[K, S, ST, SD, E, IE] {
+	return &DBStateMachine[K, S, ST, SD, E, IE]{
+		StateMachine: sm,
+		db:           db,
+	}
+}
+
+// DBStateMachine adds the 'Transaction' method to the state machine, which
+// runs the transition in a new transaction from the state machine's database
+type DBStateMachine[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] struct {
+	*StateMachine[K, S, ST, SD, E, IE]
+	db Transactor
+}
+
+var TxOptions = &sqrlx.TxOptions{
+	Isolation: sql.LevelReadCommitted,
+	Retryable: true,
+	ReadOnly:  false,
+}
+
+// Transition transitions the state machine in a new transaction from the state
+// machine's database pool
+func (sm *DBStateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	var state S
+	err := sm.db.Transact(ctx, TxOptions, func(ctx context.Context, tx sqrlx.Transaction) error {
+		var err error
+		state, err = sm.runTx(ctx, tx, event)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return state, err
+	}
+
+	return state, nil
+}
+
+// FollowEvent stores the event in the database and runs all database updates
+// and hooks, but does not run any Logic hooks and so does not produce
+// side-effects or chain events. This is used when the state machine is not the
+// Leader, or when it is restoring or loading from stored event history.
+func (sm *DBStateMachine[K, S, ST, SD, E, IE]) FollowEvent(ctx context.Context, event E) error {
+	err := sm.db.Transact(ctx, TxOptions, func(ctx context.Context, tx sqrlx.Transaction) error {
+		err := sm.followEvents(ctx, tx, []E{event})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sm *DBStateMachine[K, S, ST, SD, E, IE]) FollowEvents(ctx context.Context, events []E) error {
+	// TODO: Prepare the events prior to opening the transaction
+	err := sm.db.Transact(ctx, TxOptions, func(ctx context.Context, tx sqrlx.Transaction) error {
+		err := sm.followEvents(ctx, tx, events)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
 	state := (*new(S)).ProtoReflect().New().Interface().(S)
 
@@ -133,9 +230,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 		return state, err
 	}
 	for _, key := range allKeys.values {
-		if !key.Primary {
-			continue
-		}
 		selectQuery = selectQuery.Where(sq.Eq{key.ColumnName: key.value})
 	}
 
@@ -324,6 +418,122 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) eventQuery(eventID string) *sq.Sele
 	return selectQuery
 }
 
+// followEventDeduplicate is similar to the firstEventUniqueCheck, but it
+// compares the entire event including metadata, as this is not designed to
+// handle consumer idempotency.
+func (sm *StateMachine[K, S, ST, SD, E, IE]) followEventDeduplicate(ctx context.Context, tx sqrlx.Transaction, event E) (bool, error) {
+	selectQuery := sm.eventQuery(event.PSMMetadata().EventId)
+
+	var eventData, stateData []byte
+	err := tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
+
+	if errors.Is(sql.ErrNoRows, err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("selecting event for deduplication: %w", err)
+	}
+
+	existing := (*new(E)).ProtoReflect().New().Interface().(E)
+	if err := protojson.Unmarshal(eventData, existing); err != nil {
+		return true, fmt.Errorf("unmarshalling event: %w", err)
+	}
+
+	if !proto.Equal(existing, event) {
+		return true, fmt.Errorf("event %s already exists with different data", existing.PSMMetadata().EventId)
+	}
+
+	return true, nil
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, tx sqrlx.Transaction, events []E) error {
+
+	for _, event := range events {
+
+		if err := sm.validateEvent(event); err != nil {
+			return fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
+		}
+
+		exists, err := sm.followEventDeduplicate(ctx, tx, event)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+
+		state, err := sm.getCurrentState(ctx, tx, event.PSMKeys())
+		if err != nil {
+			return err
+		}
+
+		err = sm.followEvent(ctx, tx, state, event)
+		if err != nil {
+			return fmt.Errorf("run event %s (%s): %w", event.PSMMetadata().EventId, event.UnwrapPSMEvent().PSMEventKey(), err)
+		}
+
+	}
+
+	return nil
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
+
+	unwrapped := event.UnwrapPSMEvent()
+
+	typeKey := unwrapped.PSMEventKey()
+	statusBefore := state.GetStatus()
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"eventType":    typeKey,
+		"stateMachine": state.PSMKeys().PSMFullName(),
+		"transition": map[string]interface{}{
+			"from":  statusBefore.ShortString(),
+			"event": typeKey,
+		},
+	})
+
+	transition, err := sm.findTransitions(statusBefore, typeKey)
+	if err != nil {
+		return nil
+	}
+
+	log.Debug(ctx, "Begin Event")
+
+	if err := transition.runTransitionMutations(ctx, state, event); err != nil {
+		log.WithError(ctx, err).Error("Running Transition")
+		return fmt.Errorf("run transition: %w", err)
+	}
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"transition": map[string]string{
+			"from":  statusBefore.ShortString(),
+			"to":    state.GetStatus().ShortString(),
+			"event": typeKey,
+		},
+	})
+
+	if state.GetStatus() == 0 {
+		return fmt.Errorf("state machine transitioned to zero status")
+	}
+
+	log.Info(ctx, "Event Handled")
+
+	if err := sm.store(ctx, tx, state, event); err != nil {
+		return err
+	}
+
+	if err := transition.runFollowerHooks(ctx, tx, state, event); err != nil {
+		return fmt.Errorf("run transition hooks: %w", err)
+	}
+
+	if err := sm.transitionSet.runGlobalFollowerHooks(ctx, tx, state, event); err != nil {
+		return fmt.Errorf("run transition hooks: %w", err)
+	}
+
+	return nil
+}
+
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	if err := outerEvent.validateIncomming(); err != nil {
@@ -342,7 +552,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		}
 	}
 
-	if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent); err != nil {
+	if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent.EventID, outerEvent.Event); err != nil {
 		return existingState, err
 	} else if didExist {
 		return existingState, nil
@@ -357,22 +567,35 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		// If this is not the first event, the event keys can be derived from the
 		// state keys, so the non-primary keys of the event need not be set for every
 		// event.
+
 		// TODO: Consider checking that any key which *is* set matches.
 		// The event will be validated later using buf validate so any required non-primary keys are
 		// evaluated at that point.
 		outerEvent.Keys = state.PSMKeys()
 	}
 
-	return sm.runInputEvent(ctx, tx, state, outerEvent)
+	prepared, err := sm.prepareEvent(state, outerEvent)
+	if err != nil {
+		return state, fmt.Errorf("prepare event: %w", err)
+	}
+
+	// RunEvent modifies state in place
+	returnState, err := sm.runEvent(ctx, tx, state, prepared, true) // return the state after the first transition
+
+	if err != nil {
+		return state, fmt.Errorf("input event %s: %w", outerEvent.Event.PSMEventKey(), err)
+	}
+
+	return *returnState, nil
 }
 
 // firstEventUniqueCheck checks if the event ID for the outer triggering event
 // is unique in the event table. If not, it checks if the event is a repeat
 // processing of the same event, and returns the state after the initial
 // transition.
-func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, bool, error) {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, eventID string, data IE) (S, bool, error) {
 	var s S
-	selectQuery := sm.eventQuery(event.EventID)
+	selectQuery := sm.eventQuery(eventID)
 
 	selectQuery.Column(sm.tableMap.Event.StateSnapshot.ColumnName)
 
@@ -391,7 +614,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.C
 		return s, false, fmt.Errorf("unmarshalling event: %w", err)
 	}
 
-	if !proto.Equal(existing.UnwrapPSMEvent(), event.Event) {
+	if !proto.Equal(existing.UnwrapPSMEvent(), data) {
 		return s, false, ErrDuplicateEventID
 	}
 
@@ -424,27 +647,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) eventsMustBeUnique(ctx context.Cont
 
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) runInputEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
-
-	// RunEvent modifies state in place
-	returnState, err := sm.runEvent(ctx, tx, state, spec, true) // return the state after the first transition
-
-	if err != nil {
-		return state, fmt.Errorf("input event %s: %w", spec.Event.PSMEventKey(), err)
-	}
-
-	return *returnState, nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) runChainedEvent(ctx context.Context, tx sqrlx.Transaction, state S, spec *EventSpec[K, S, ST, SD, E, IE]) error {
-	_, err := sm.runEvent(ctx, tx, state, spec, false)
-	if err != nil {
-		return fmt.Errorf("chained event: %s: %w", spec.Event.PSMEventKey(), err)
-	}
-
-	return nil
-}
-
 func (sm *StateMachine[K, S, ST, SD, E, IE]) validateEvent(event E) error {
 	if sm.validator == nil {
 		v, err := protovalidate.New()
@@ -461,14 +663,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	state S,
-	spec *EventSpec[K, S, ST, SD, E, IE],
+	event E,
 	captureState bool,
 ) (*S, error) {
-
-	event, err := sm.prepareEvent(state, spec)
-	if err != nil {
-		return nil, fmt.Errorf("prepare event: %w", err)
-	}
 
 	if err := sm.validateEvent(event); err != nil {
 		return nil, fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
@@ -490,7 +687,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 
 	transition, err := sm.findTransitions(statusBefore, typeKey)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	log.Debug(ctx, "Begin Event")
@@ -559,9 +756,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	}
 
 	for _, chainedEvent := range chain {
-		err := sm.runChainedEvent(ctx, tx, state, chainedEvent)
+		prepaired, err := sm.prepareEvent(state, chainedEvent)
 		if err != nil {
-			return nil, fmt.Errorf("chained event: %w", err)
+			return nil, fmt.Errorf("prepare event: %w", err)
+		}
+		_, err = sm.runEvent(ctx, tx, state, prepaired, false)
+		if err != nil {
+			return nil, fmt.Errorf("chained event: %s: %w", chainedEvent.Event.PSMEventKey(), err)
 		}
 	}
 
@@ -614,21 +815,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Cont
 	return nil
 }
 
-// TransitionInTx uses an existing transaction to transition the state machine.
-func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
-	var state S
-	var err error
-	state, err = sm.runTx(ctx, tx, event)
-	if err != nil {
-		return state, err
-	}
-	return state, nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, db Transactor, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
-	return sm.WithDB(db).Transition(ctx, event)
-}
-
 func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (evt *EventSpec[K, S, ST, SD, E, IE], err error) {
 	if sm.SystemActor == nil {
 		err = fmt.Errorf("no system actor defined, cannot derive events")
@@ -656,57 +842,4 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (e
 	}
 
 	return eventOut, nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) WithDB(db Transactor) *DBStateMachine[K, S, ST, SD, E, IE] {
-	return &DBStateMachine[K, S, ST, SD, E, IE]{
-		StateMachine: sm,
-		db:           db,
-	}
-}
-
-// DBStateMachine adds the 'Transaction' method to the state machine, which
-// runs the transition in a new transaction from the state machine's database
-type DBStateMachine[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] struct {
-	*StateMachine[K, S, ST, SD, E, IE]
-	db Transactor
-}
-
-var TxOptions = &sqrlx.TxOptions{
-	Isolation: sql.LevelReadCommitted,
-	Retryable: true,
-	ReadOnly:  false,
-}
-
-// Transition transitions the state machine in a new transaction from the state
-// machine's database pool
-func (sm *DBStateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
-	var state S
-	opts := &sqrlx.TxOptions{
-		Isolation: sql.LevelReadCommitted,
-		ReadOnly:  false,
-		Retryable: true,
-	}
-
-	err := sm.db.Transact(ctx, opts, func(ctx context.Context, tx sqrlx.Transaction) error {
-		var err error
-		state, err = sm.runTx(ctx, tx, event)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return state, err
-	}
-
-	return state, nil
 }

@@ -34,14 +34,16 @@ func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 			ctx context.Context,
 			state *testpb.FooState,
 			event testpb.FooPSMEvent,
-		) (*testpb.BarKeys, testpb.BarPSMEvent, error) {
-			return &testpb.BarKeys{
-					BarId:      uuid.NewString(),
-					BarOtherId: state.Keys.FooId,
-				}, &testpb.BarEventType_Created{
-					Name:  state.Data.Name + " Phoenix",
-					Field: state.Data.Field,
-				}, nil
+			cb func(*testpb.BarKeys, testpb.BarPSMEvent),
+		) error {
+			cb(&testpb.BarKeys{
+				BarId:      uuid.NewString(),
+				BarOtherId: state.Keys.FooId,
+			}, &testpb.BarEventType_Created{
+				Name:  state.Data.Name + " Phoenix",
+				Field: state.Data.Field,
+			})
+			return nil
 		}))
 
 	return &StateMachines{
