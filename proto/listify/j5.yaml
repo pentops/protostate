@@ -1,0 +1,8 @@
+registry:
+  organization: pentops
+  name: listify
+
+packages:
+  - name: psm.list.v1
+
+

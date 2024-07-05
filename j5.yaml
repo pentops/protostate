@@ -1,0 +1,28 @@
+---
+
+bundles:
+  - name: protostate
+    dir: proto/protostate
+    deps: [listify]
+
+  - name: listify
+    dir: proto/listify
+
+generate:
+  - name: go
+    inputs:
+      - local: listify
+      - local: protostate
+    output: .
+    opts:
+      paths: import
+      module: github.com/pentops/protostate
+    plugins:
+      - base: go
+
+plugins:
+  - name: go
+    type: PLUGIN_PROTO
+    docker:
+      image: ghcr.io/pentops/protoc-gen-go:v1.32.0
+

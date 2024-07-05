@@ -1,0 +1,8 @@
+registry:
+  organization: pentops
+  name: protostate
+
+packages:
+  - name: psm.state.v1
+
+
