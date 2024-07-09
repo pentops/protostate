@@ -33,7 +33,7 @@ func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 		LinkTo(testpb.FooPSMLinkHook(bar, func(
 			ctx context.Context,
 			state *testpb.FooState,
-			event testpb.FooPSMEvent,
+			event *testpb.FooEventType_Deleted,
 			cb func(*testpb.BarKeys, testpb.BarPSMEvent),
 		) error {
 			cb(&testpb.BarKeys{
