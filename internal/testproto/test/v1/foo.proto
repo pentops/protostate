@@ -71,6 +71,12 @@ message FooKeys {
     (psm.state.v1.field).primary_key = false,
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
+
+  string meta_tenant_id = 3 [
+    (buf.validate.field).string.uuid = true,
+    (psm.state.v1.field).primary_key = false,
+    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+  ];
 }
 
 message FooState {
@@ -79,7 +85,7 @@ message FooState {
   FooKeys keys = 2 [(buf.validate.field).required = true];
 
   FooStatus status = 3 [(psm.list.v1.field).enum.filtering = {
-    filterable: true,
+    filterable: true
     default_filters: ["FOO_STATUS_ACTIVE"]
   }];
 
@@ -88,17 +94,17 @@ message FooState {
 
 message FooStateData {
   string name = 5 [(psm.list.v1.field).string.open_text.searching = {
-    searchable: true,
+    searchable: true
     field_identifier: "tsv_name"
   }];
 
   string field = 6 [(psm.list.v1.field).string.open_text.searching = {
-    searchable: true,
+    searchable: true
     field_identifier: "tsv_field"
   }];
 
   optional string description = 7 [(psm.list.v1.field).string.open_text.searching = {
-    searchable: true,
+    searchable: true
     field_identifier: "tsv_description"
   }];
 
@@ -108,28 +114,28 @@ message FooStateData {
 
 message FooCharacteristics {
   int64 weight = 1 [(psm.list.v1.field).int64 = {
-    filtering: {filterable: true},
+    filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 
   int64 height = 2 [(psm.list.v1.field).int64 = {
-    filtering: {filterable: true},
+    filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 
   int64 length = 3 [(psm.list.v1.field).int64 = {
-    filtering: {filterable: true},
+    filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 }
 
 message FooProfile {
   int64 place = 1 [(psm.list.v1.field).int64 = {
-    filtering: {filterable: true},
+    filtering: {filterable: true}
   }];
 
   string name = 2 [(psm.list.v1.field).string.open_text.searching = {
-    searchable: true,
+    searchable: true
     field_identifier: "tsv_profile_name"
   }];
 }

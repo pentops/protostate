@@ -109,7 +109,9 @@ func BuildStateQuerySet[
 		TableName:  smSpec.State.TableName,
 		DataColumn: smSpec.State.Root.ColumnName,
 		Auth:       options.Auth,
-		AuthJoin:   options.AuthJoin,
+	}
+	if options.AuthJoin != nil {
+		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
 	eventJoinMap := pquery.JoinFields{}

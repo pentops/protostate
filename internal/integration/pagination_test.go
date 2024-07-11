@@ -294,8 +294,9 @@ func TestPageSize(t *testing.T) {
 			fooID := uuid.NewString()
 
 			event1 := newFooEvent(&testpb.FooKeys{
-				TenantId: &tenantID,
-				FooId:    fooID,
+				TenantId:     &tenantID,
+				FooId:        fooID,
+				MetaTenantId: metaTenant,
 			}, &testpb.FooEventType_Created{
 				Name:   "foo",
 				Field:  fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano)),

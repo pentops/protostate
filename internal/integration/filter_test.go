@@ -8,6 +8,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
+	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
@@ -125,7 +126,11 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	setupFooListableData(t, ss, sm, tenants, 10)
 
 	tkn := &token{
-		tenantID: tenantID1,
+		claim: &auth_pb.Claim{
+			Tenant: map[string]string{
+				"tenant": tenantID1,
+			},
+		},
 	}
 
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {

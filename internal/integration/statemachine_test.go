@@ -105,8 +105,9 @@ func TestFooStateField(t *testing.T) {
 		event := &testpb.FooPSMEventSpec{
 			EventID: uuid.NewString(),
 			Keys: &testpb.FooKeys{
-				FooId:    fooID,
-				TenantId: &differentTenantId,
+				FooId:        fooID,
+				TenantId:     &differentTenantId,
+				MetaTenantId: metaTenant,
 			},
 			Event: &testpb.FooEventType_Updated{
 				Name:   "foo",

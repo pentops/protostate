@@ -17,7 +17,6 @@ import (
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/gen/list/v1/psml_pb"
-	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
@@ -439,12 +438,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	}
 
 	if ll.auth != nil {
-		authFilter, err := ll.auth.AuthFilter(ctx)
-		if err != nil {
-			return nil, err
-		}
 		authAlias := tableAlias
-
 		for _, join := range ll.authJoin {
 			priorAlias := authAlias
 			authAlias = as.Next(join.TableName)
@@ -456,14 +450,20 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			))
 		}
 
-		authFilterMapped, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
+		tenant, err := ll.auth.AuthFilter(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(authFilterMapped) > 0 {
-			selectQuery = selectQuery.Where(authFilterMapped)
+		if len(tenant) == 0 {
+			return nil, fmt.Errorf("claim must have a tenant")
 		}
+
+		claimFilter := map[string]interface{}{}
+		for k, v := range tenant {
+			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
+		}
+		selectQuery.Where(claimFilter)
 	}
 
 	pageSize, err := ll.getPageSize(req)

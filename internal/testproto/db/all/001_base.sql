@@ -3,7 +3,8 @@
 CREATE TABLE foo (
 	foo_id uuid primary key,
 	state jsonb NOT NULL,
-	tenant_id uuid
+	tenant_id uuid,
+  meta_tenant_id uuid not null
 );
 
 CREATE TABLE foo_event (
@@ -12,6 +13,7 @@ CREATE TABLE foo_event (
   sequence int NOT NULL,
 	foo_id uuid references foo(foo_id) NOT NULL,
 	tenant_id uuid,
+  meta_tenant_id uuid not null,
 	data jsonb NOT NULL,
   state jsonb NOT NULL
 );
