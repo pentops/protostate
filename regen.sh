@@ -9,7 +9,7 @@ buf push
 cd $dir
 buf generate ./proto/listify
 buf generate ./proto/protostate
-cd $dir/testproto
+cd $dir/internal/testproto
 buf mod update
 buf generate
 cd $dir

@@ -25,12 +25,12 @@ type Transactor interface {
 }
 
 type AuthProvider interface {
-	AuthFilter(ctx context.Context) (map[string]interface{}, error)
+	AuthFilter(ctx context.Context) (map[string]string, error)
 }
 
-type AuthProviderFunc func(ctx context.Context) (map[string]interface{}, error)
+type AuthProviderFunc func(ctx context.Context) (map[string]string, error)
 
-func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]interface{}, error) {
+func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]string, error) {
 	return f(ctx)
 }
 

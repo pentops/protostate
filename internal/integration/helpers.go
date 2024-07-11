@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/log.go/log"
+	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
@@ -84,7 +85,11 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 		ti := 0
 		for tenant, fooIDs := range ids {
 			tkn := &token{
-				tenantID: tenant,
+				claim: &auth_pb.Claim{
+					Tenant: map[string]string{
+						"tenant": tenant,
+					},
+				},
 			}
 			ctx = tkn.WithToken(ctx)
 
@@ -113,7 +118,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 
 				stateOut, err := sm.Transition(ctx, event)
 				if err != nil {
-					t.Fatal(err.Error())
+					t.Fatalf("setup foo: %s (%#v)", err.Error(), event.Keys)
 				}
 				t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
 				t.Equal(tenants[ti], *stateOut.Keys.TenantId)

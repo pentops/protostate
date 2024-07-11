@@ -34,7 +34,7 @@ type GetSpec[
 	TableName  string
 	DataColumn string
 	Auth       AuthProvider
-	AuthJoin   *LeftJoin
+	AuthJoin   []*LeftJoin
 
 	PrimaryKey func(REQ) (map[string]interface{}, error)
 
@@ -108,7 +108,7 @@ type Getter[
 	tableName  string
 	primaryKey func(REQ) (map[string]interface{}, error)
 	auth       AuthProvider
-	authJoin   *LeftJoin
+	authJoin   []*LeftJoin
 
 	queryLogger QueryLogger
 
@@ -225,30 +225,33 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 
 	if gc.auth != nil {
-		authFilter, err := gc.auth.AuthFilter(ctx)
-		if err != nil {
-			return err
-		}
-
 		authAlias := rootAlias
-		if gc.authJoin != nil {
-			authAlias = as.Next(gc.authJoin.TableName)
-			// LEFT JOIN
-			//   <t> AS authAlias
-			//   ON authAlias.<authJoin.foreignKeyColumn> = rootAlias.<authJoin.primaryKeyColumn>
+		for _, join := range gc.authJoin {
+			priorAlias := authAlias
+			authAlias = as.Next(join.TableName)
 			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
-				gc.authJoin.TableName,
+				join.TableName,
 				authAlias,
-				gc.authJoin.On.SQL(rootAlias, authAlias),
+				join.On.SQL(priorAlias, authAlias),
 			))
 		}
 
-		authFilterEq, err := dbconvert.FieldsToEqMap(authAlias, authFilter)
+		tenant, err := gc.auth.AuthFilter(ctx)
 		if err != nil {
 			return err
 		}
-		selectQuery = selectQuery.Where(authFilterEq)
+
+		if len(tenant) == 0 {
+			return fmt.Errorf("claim must have a tenant")
+		}
+
+		claimFilter := map[string]interface{}{}
+		for k, v := range tenant {
+			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
+		}
+		selectQuery.Where(claimFilter)
+
 	}
 
 	if gc.join != nil {

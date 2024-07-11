@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 )
@@ -11,7 +12,7 @@ import (
 type tokenCtxKey struct{}
 
 type token struct {
-	tenantID string
+	claim *auth_pb.Claim
 }
 
 func (t *token) WithToken(ctx context.Context) context.Context {
@@ -29,19 +30,19 @@ func TokenFromCtx(ctx context.Context) (*token, error) {
 
 func newTokenQueryStateOption() psm.StateQueryOptions {
 	return psm.StateQueryOptions{
-		Auth: pquery.AuthProviderFunc(func(ctx context.Context) (map[string]interface{}, error) {
-			authMap := map[string]interface{}{}
-
+		Auth: pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
 			token, err := TokenFromCtx(ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			if token.tenantID != "" {
-				authMap["tenant_id"] = token.tenantID
+			out := map[string]string{}
+			for k, v := range token.claim.Tenant {
+				out[fmt.Sprintf("%s_id", k)] = v
 			}
 
-			return authMap, nil
+			return out, nil
+
 		}),
 	}
 }

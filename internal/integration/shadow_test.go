@@ -27,8 +27,9 @@ func TestStateMachineShadow(t *testing.T) {
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &testpb.FooKeys{
-			FooId:    foo1ID,
-			TenantId: &tenantID,
+			FooId:        foo1ID,
+			TenantId:     &tenantID,
+			MetaTenantId: metaTenant,
 		},
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Created_{
@@ -45,8 +46,9 @@ func TestStateMachineShadow(t *testing.T) {
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &testpb.FooKeys{
-			FooId:    foo2ID,
-			TenantId: &tenantID,
+			FooId:        foo2ID,
+			TenantId:     &tenantID,
+			MetaTenantId: metaTenant,
 		},
 		Event: &testpb.FooEventType{
 			Type: &testpb.FooEventType_Created_{

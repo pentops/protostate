@@ -9,6 +9,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+var metaTenant = uuid.NewString()
+
 func newFooCreatedEvent(fooID, tenantID string, mod func(c *testpb.FooEventType_Created)) *testpb.FooPSMEventSpec {
 	weight := int64(10)
 	created := &testpb.FooEventType_Created{
@@ -23,8 +25,9 @@ func newFooCreatedEvent(fooID, tenantID string, mod func(c *testpb.FooEventType_
 	}
 
 	return newFooEvent(&testpb.FooKeys{
-		FooId:    fooID,
-		TenantId: &tenantID,
+		FooId:        fooID,
+		TenantId:     &tenantID,
+		MetaTenantId: metaTenant,
 	}, created)
 }
 
@@ -42,12 +45,17 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_
 	}
 
 	return newFooEvent(&testpb.FooKeys{
-		FooId:    fooID,
-		TenantId: &tenantID,
+		FooId:        fooID,
+		TenantId:     &tenantID,
+		MetaTenantId: metaTenant,
 	}, updated)
 }
 
 func newFooEvent(keys *testpb.FooKeys, et testpb.FooPSMEvent) *testpb.FooPSMEventSpec {
+
+	if keys.MetaTenantId == "" {
+		panic("metaTenantId is required")
+	}
 	e := &testpb.FooPSMEventSpec{
 		EventID: uuid.NewString(),
 		Keys:    keys,
