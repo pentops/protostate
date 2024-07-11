@@ -9,15 +9,15 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20240607020132-7dda31076e79
-	github.com/pentops/j5 v0.0.0-20240618151125-1cb16ab95f62
-	github.com/pentops/log.go v0.0.0-20240612184720-79634792a21e
-	github.com/pentops/o5-auth v0.0.0-20240614180342-3765ffa80762
-	github.com/pentops/o5-messaging v0.0.0-20240614163039-d8f7b29ba565
+	github.com/pentops/flowtest v0.0.0-20240623020118-02bf89f30b87
+	github.com/pentops/j5 v0.0.0-20240711003053-d3c9c2687e30
+	github.com/pentops/log.go v0.0.0-20240618224413-ed85018bafd9
+	github.com/pentops/o5-auth v0.0.0-20240710232951-07b338137443
+	github.com/pentops/o5-messaging v0.0.0-20240703174511-caef57f4978b
 	github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734
 	github.com/pentops/prototools v0.0.0-20240614222903-e9c266e2e96b
-	github.com/pentops/runner v0.0.0-20240525192419-d655233635e9
-	github.com/pentops/sqrlx.go v0.0.0-20240523172712-b615a994d8c0
+	github.com/pentops/runner v0.0.0-20240703154152-d1783f1a017c
+	github.com/pentops/sqrlx.go v0.0.0-20240618224315-b9b023d5f689
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240610135401-a8a62080eff3

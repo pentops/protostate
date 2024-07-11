@@ -13,7 +13,7 @@ option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 message StateMetadata {
   // Time of the first event on the state machine
   google.protobuf.Timestamp created_at = 1 [(psm.list.v1.field).timestamp.sorting = {
-    sortable: true,
+    sortable: true
     default_sort: true
   }];
 
@@ -33,7 +33,7 @@ message EventMetadata {
   google.protobuf.Timestamp timestamp = 3 [
     (buf.validate.field).required = true,
     (psm.list.v1.field).timestamp.sorting = {
-      sortable: true,
+      sortable: true
       default_sort: true
     }
   ];
@@ -50,7 +50,7 @@ message EventPublishMetadata {
   google.protobuf.Timestamp timestamp = 3 [
     (buf.validate.field).required = true,
     (psm.list.v1.field).timestamp.sorting = {
-      sortable: true,
+      sortable: true
       default_sort: true
     }
   ];
@@ -63,7 +63,7 @@ message EventPublishMetadata {
 message Cause {
   oneof type {
     PSMEventCause psm_event = 1;
-    CommandCause command = 2;
+    o5.auth.v1.Action command = 2;
     ExternalEventCause external_event = 3;
     ReplyCause reply = 4;
   }
@@ -79,15 +79,6 @@ message PSMEventCause {
   // psm.state.v1.(State|Event)ObjectOptions.name
   // e.g. "foo.bar.v1.foobar" (not foo.bar.v1.FooBarState)
   string state_machine = 2;
-}
-
-// The event was caused by a 'Command' service, i.e. an authenticated gRPC call to a service
-// from outside of the environment boundary which was translated into an event
-message CommandCause {
-  // {package}.{service}/{method}. E.g. "foo.bar.v1.FooService/BarMethod"
-  string method_name = 1;
-
-  o5.auth.v1.Actor actor = 2;
 }
 
 // An external system replying to a side-effect request, e.g. where the
