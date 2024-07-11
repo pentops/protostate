@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 )
 
@@ -24,14 +25,18 @@ type EventSpec[
 	// The inner PSM Event type. Must be set for incomming events.
 	Event IE
 
-	// The cause of the event. Must be set for incomming events.
+	// The cause of the event, Cause or Action must be set for incomming events.
 	Cause *psm_pb.Cause
+
+	// The authenticated action cause for the event. Cause or Action must be set
+	// for incomming events.
+	Action *auth_pb.Action
 
 	// Optional, defaults to the system time (if Zero())
 	Timestamp time.Time
 }
 
-func (es EventSpec[K, S, ST, SD, E, IE]) validateIncomming() error {
+func (es EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
 
 	if !es.Keys.PSMIsSet() {
 		return fmt.Errorf("EventSpec.Keys is required")
@@ -40,9 +45,19 @@ func (es EventSpec[K, S, ST, SD, E, IE]) validateIncomming() error {
 	if !es.Event.PSMIsSet() {
 		return fmt.Errorf("EventSpec.Event must be set")
 	}
+	if es.Cause != nil && es.Action != nil {
+		return fmt.Errorf("EventSpec.Cause and EventSpec.Action are mutually exclusive")
+	}
 
 	if es.Cause == nil {
-		return fmt.Errorf("EventSpec.Cause must be set")
+		if es.Action == nil {
+			return fmt.Errorf("EventSpec.Cause or EventSpec.Action must be set")
+		}
+		es.Cause = &psm_pb.Cause{
+			Type: &psm_pb.Cause_Command{
+				Command: es.Action,
+			},
+		}
 	}
 
 	// check that the cause type is supported.

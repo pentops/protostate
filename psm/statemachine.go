@@ -536,7 +536,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
-	if err := outerEvent.validateIncomming(); err != nil {
+	if err := outerEvent.validateAndPrepare(); err != nil {
 		return *new(S), fmt.Errorf("event %s: %w", outerEvent.Event.ProtoReflect().Descriptor().FullName(), err)
 	}
 
