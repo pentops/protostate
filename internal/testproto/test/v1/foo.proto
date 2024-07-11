@@ -68,13 +68,13 @@ message FooKeys {
 
   optional string tenant_id = 2 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).primary_key = false,
+    (psm.state.v1.field).tenant_key = "tenant",
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   string meta_tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).primary_key = false,
+    (psm.state.v1.field).tenant_key = "meta_tenant",
     (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 }

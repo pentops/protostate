@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/pquery"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -88,9 +91,38 @@ func (gc *StateQuerySet[
 }
 
 type StateQueryOptions struct {
-	Auth       pquery.AuthProvider
+	Auth       TenantFilterProvider
 	AuthJoin   *pquery.LeftJoin
 	SkipEvents bool
+}
+
+type TenantFilterProvider interface {
+	GetRequiredTenantKeys(ctx context.Context) (map[string]string, error)
+}
+
+type TenantFilterProviderFunc func(ctx context.Context) (map[string]string, error)
+
+func (f TenantFilterProviderFunc) GetRequiredTenantKeys(ctx context.Context) (map[string]string, error) {
+	return f(ctx)
+}
+
+func ClaimTenantProvider(actionProvider func(ctx context.Context) (*auth_pb.Action, error)) TenantFilterProvider {
+	return TenantFilterProviderFunc(func(ctx context.Context) (map[string]string, error) {
+		action, err := actionProvider(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if action == nil || action.Actor == nil || action.Actor.Claim == nil {
+			return nil, fmt.Errorf("no claim in action")
+		}
+
+		claim := action.Actor.Claim
+		if len(claim.Tenant) == 0 {
+			return nil, fmt.Errorf("claim must have a tenant")
+		}
+
+		return claim.Tenant, nil
+	})
 }
 
 func BuildStateQuerySet[
@@ -105,15 +137,6 @@ func BuildStateQuerySet[
 	options StateQueryOptions,
 ) (*StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES], error) {
 
-	getSpec := pquery.GetSpec[GetREQ, GetRES]{
-		TableName:  smSpec.State.TableName,
-		DataColumn: smSpec.State.Root.ColumnName,
-		Auth:       options.Auth,
-	}
-	if options.AuthJoin != nil {
-		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
-	}
-
 	eventJoinMap := pquery.JoinFields{}
 	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
 
@@ -124,6 +147,7 @@ func BuildStateQuerySet[
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
+	tenantKeyMap := map[string]string{}
 	for _, keyColumn := range smSpec.KeyColumns {
 		matchingRequestField, ok := unmappedRequestFields[keyColumn.ProtoName]
 		if ok {
@@ -137,6 +161,10 @@ func BuildStateQuerySet[
 				JoinColumn: keyColumn.ColumnName,
 			})
 		}
+
+		if keyColumn.TenantKey != nil {
+			tenantKeyMap[*keyColumn.TenantKey] = keyColumn.ColumnName
+		}
 	}
 
 	if len(unmappedRequestFields) > 0 {
@@ -145,6 +173,35 @@ func BuildStateQuerySet[
 			fieldNames = append(fieldNames, string(k))
 		}
 		return nil, fmt.Errorf("unmapped fields in Get request: %v", fieldNames)
+	}
+
+	getSpec := pquery.GetSpec[GetREQ, GetRES]{
+		TableName:  smSpec.State.TableName,
+		DataColumn: smSpec.State.Root.ColumnName,
+	}
+
+	if options.AuthJoin != nil {
+		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
+	}
+
+	if options.Auth != nil {
+		getSpec.Auth = pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
+			requiredTenantKeys, err := options.Auth.GetRequiredTenantKeys(ctx)
+			if err != nil {
+				return nil, err
+			}
+			filter := map[string]string{}
+			// Every key provided by the auth func must match the entity key
+			// Not every entity key must match the claim
+			for tenantKey, claimValue := range requiredTenantKeys {
+				columnName, ok := tenantKeyMap[tenantKey]
+				if !ok {
+					return nil, status.Errorf(codes.PermissionDenied, "claim is restricted to tenant key %s which is does not exist for the entity type", tenantKey)
+				}
+				filter[columnName] = claimValue
+			}
+			return filter, nil
+		})
 	}
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
@@ -209,13 +266,11 @@ func BuildStateQuerySet[
 		TableSpec: pquery.TableSpec{
 			TableName:           smSpec.State.TableName,
 			DataColumn:          smSpec.State.Root.ColumnName,
-			Auth:                options.Auth,
 			FallbackSortColumns: statePrimaryKeys,
+			Auth:                getSpec.Auth,
+			AuthJoin:            getSpec.AuthJoin,
 		},
 		RequestFilter: smSpec.ListRequestFilter,
-	}
-	if options.AuthJoin != nil {
-		listSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
 	lister, err := pquery.NewLister(listSpec)
@@ -232,22 +287,12 @@ func BuildStateQuerySet[
 		return querySet, nil
 	}
 
-	eventsAuthJoin := []*pquery.LeftJoin{{
-		// Main is the events table, joining to the state table
-		TableName: smSpec.State.TableName,
-		On:        eventJoinMap.Reverse(),
-	}}
-
-	if options.AuthJoin != nil {
-		eventsAuthJoin = append(eventsAuthJoin, options.AuthJoin)
-	}
-
 	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
 		TableSpec: pquery.TableSpec{
 			TableName:  smSpec.Event.TableName,
 			DataColumn: smSpec.Event.Root.ColumnName,
-			Auth:       options.Auth,
-			AuthJoin:   eventsAuthJoin,
+			Auth:       getSpec.Auth,
+			AuthJoin:   getSpec.AuthJoin,
 			FallbackSortColumns: []pgstore.ProtoFieldSpec{{
 				ColumnName: smSpec.Event.ID.ColumnName,
 			}},

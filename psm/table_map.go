@@ -90,6 +90,7 @@ type KeyColumn struct {
 	Primary    bool
 	Required   bool
 	Unique     bool
+	TenantKey  *string
 }
 
 type KeyField struct {
@@ -174,6 +175,7 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 			ProtoName:  field.Name(),
 			Primary:    annotation.PrimaryKey,
 			Required:   annotation.PrimaryKey || !field.HasOptionalKeyword(),
+			TenantKey:  annotation.TenantKey,
 		}
 	}
 

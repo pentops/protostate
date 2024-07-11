@@ -27,6 +27,19 @@ message FieldOptions {
   // primary key for the state object. This field must exist on both the event
   // and the state
   bool primary_key = 1;
+
+  // The value matches a key in o5.auth.v1.Claim.tenant
+  //
+  // Queries will be limited to claims where all tenant keys specified in the
+  // claim match the given field in keys.
+  //
+  // - Claims with no keys are invalid.
+  // - Claims with one key must match one of the specified tenant_keys
+  // - Claims with multiple keys are valid, all claim keys must match their
+  //   related tenant_key, however, ONLY fields in the claim are checked,
+  //   unspecified fields are ignored, so specifying multiple tenant_keys on the
+  //   state entity allows multiple options for authorization.
+  optional string tenant_key = 2;
 }
 
 message EventTypeField {

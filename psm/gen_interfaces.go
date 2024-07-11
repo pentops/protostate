@@ -58,7 +58,7 @@ type IStatusEnum interface {
 type IKeyset interface {
 	IPSMMessage
 	PSMFullName() string
-	PSMKeyValues() (map[string]string, error)
+	PSMKeyValues() (map[string]string, error) // map of column_name to UUID string
 }
 
 // IState[K, ST, SD]is the main State Entity e.g. *testpb.FooState
