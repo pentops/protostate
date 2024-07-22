@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 )
 
@@ -28,17 +29,28 @@ func TokenFromCtx(ctx context.Context) (*token, error) {
 }
 
 func newTokenQueryStateOption() psm.StateQueryOptions {
+	fieldMap := map[string]string{
+		"tenant":      "tenant_id",
+		"meta_tenant": "meta_tenant_id",
+	}
 	return psm.StateQueryOptions{
-		Auth: psm.ClaimTenantProvider(func(ctx context.Context) (*auth_pb.Action, error) {
+		Auth: pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
 			token, err := TokenFromCtx(ctx)
 			if err != nil {
 				return nil, err
 			}
-			return &auth_pb.Action{
-				Actor: &auth_pb.Actor{
-					Claim: token.claim,
-				},
-			}, nil
+			keys := token.claim.Tenant
+
+			filter := map[string]string{}
+			for key, value := range keys {
+				if field, exists := fieldMap[key]; !exists {
+					return nil, fmt.Errorf("no field mapping for key %s", key)
+				} else {
+					filter[field] = value
+				}
+			}
+
+			return filter, nil
 		}),
 	}
 }
