@@ -5,10 +5,10 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "psm/list/v1/annotations.proto";
-import "psm/list/v1/page.proto";
-import "psm/list/v1/query.proto";
-import "psm/state/v1/annotations.proto";
+import "j5/ext/v1/annotations.proto";
+import "j5/list/v1/annotations.proto";
+import "j5/list/v1/page.proto";
+import "j5/list/v1/query.proto";
 import "psm/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb";
@@ -16,21 +16,21 @@ option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb
 // BarService is a little strange, it requires a lot of overrides for defaults
 // when building the state query and state machine.
 service BarService {
-  option (psm.state.v1.state_query).name = "bar";
+  option (j5.ext.v1.service).state_query.entity = "bar";
 
   rpc GetBar(GetBarRequest) returns (GetBarResponse) {
     option (google.api.http) = {get: "/test/v1/bar/{bar_id}"};
-    option (psm.state.v1.state_query_method).get = true;
+    option (j5.ext.v1.method).state_query.get = true;
   }
 
   rpc ListBars(ListBarsRequest) returns (ListBarsResponse) {
     option (google.api.http) = {get: "/test/v1/bars"};
-    option (psm.state.v1.state_query_method).list = true;
+    option (j5.ext.v1.method).state_query.list = true;
   }
 
   rpc ListBarEvents(ListBarEventsRequest) returns (ListBarEventsResponse) {
     option (google.api.http) = {get: "/test/v1/bar/{bar_id}/events"};
-    option (psm.state.v1.state_query_method).list_events = true;
+    option (j5.ext.v1.method).state_query.list_events = true;
   }
 }
 
@@ -44,16 +44,16 @@ message GetBarResponse {
 }
 
 message BarKeys {
-  option (psm.state.v1.psm).name = "bar";
+  option (j5.ext.v1.psm).entity_name = "bar";
 
   string bar_id = 2 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).primary_key = true
+    (j5.ext.v1.key).primary_key = true
   ];
 
   string bar_other_id = 3 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).primary_key = true
+    (j5.ext.v1.key).primary_key = true
   ];
 }
 
@@ -62,8 +62,8 @@ message BarState {
 
   BarKeys keys = 2;
 
-  BarStatus status = 6 [(psm.list.v1.field).enum.filtering = {
-    filterable: true,
+  BarStatus status = 6 [(j5.list.v1.field).enum.filtering = {
+    filterable: true
     default_filters: ["BAR_STATUS_ACTIVE"]
   }];
 
@@ -73,16 +73,16 @@ message BarState {
 message BarStateData {
   string tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+    (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
-  string name = 4 [(psm.list.v1.field).string.open_text.searching = {
+  string name = 4 [(j5.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_name"
   }];
 
-  string field = 5 [(psm.list.v1.field).string.open_text.searching = {
-    searchable: true,
+  string field = 5 [(j5.list.v1.field).string.open_text.searching = {
+    searchable: true
     field_identifier: "tsv_field"
   }];
 }
@@ -101,7 +101,7 @@ message BarEvent {
 
 message BarEventType {
   oneof type {
-    option (psm.list.v1.oneof).filtering.filterable = true;
+    option (j5.list.v1.oneof).filtering.filterable = true;
 
     Created created = 1;
     Updated updated = 2;
@@ -123,25 +123,25 @@ message BarEventType {
 
 message ListBarsRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest page = 2;
-  psm.list.v1.QueryRequest query = 3;
-  option (psm.list.v1.list_request) = {
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
+  option (j5.list.v1.list_request) = {
     sort_tiebreaker: ["keys.bar_id"]
   };
 }
 
 message ListBarsResponse {
   repeated BarState bars = 1;
-  psm.list.v1.PageResponse page = 2;
+  j5.list.v1.PageResponse page = 2;
 }
 
 message ListBarEventsRequest {
   string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest page = 2;
-  psm.list.v1.QueryRequest query = 3;
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
 }
 
 message ListBarEventsResponse {
   repeated BarEvent events = 1;
-  psm.list.v1.PageResponse page = 2;
+  j5.list.v1.PageResponse page = 2;
 }

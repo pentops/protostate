@@ -5,20 +5,20 @@ package psm.state.v1;
 import "buf/validate/validate.proto";
 import "google/protobuf/descriptor.proto";
 import "google/protobuf/timestamp.proto";
+import "j5/list/v1/annotations.proto";
 import "o5/auth/v1/actor.proto";
-import "psm/list/v1/annotations.proto";
 
 option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 
 message StateMetadata {
   // Time of the first event on the state machine
-  google.protobuf.Timestamp created_at = 1 [(psm.list.v1.field).timestamp.sorting = {
+  google.protobuf.Timestamp created_at = 1 [(j5.list.v1.field).timestamp.sorting = {
     sortable: true
     default_sort: true
   }];
 
   // Time of the most recent event on the state machine
-  google.protobuf.Timestamp updated_at = 2 [(psm.list.v1.field).timestamp.sorting = {sortable: true}];
+  google.protobuf.Timestamp updated_at = 2 [(j5.list.v1.field).timestamp.sorting = {sortable: true}];
 
   // Sequcence number of the most recent event on the state machine
   uint64 last_sequence = 3;
@@ -32,7 +32,7 @@ message EventMetadata {
 
   google.protobuf.Timestamp timestamp = 3 [
     (buf.validate.field).required = true,
-    (psm.list.v1.field).timestamp.sorting = {
+    (j5.list.v1.field).timestamp.sorting = {
       sortable: true
       default_sort: true
     }
@@ -49,7 +49,7 @@ message EventPublishMetadata {
 
   google.protobuf.Timestamp timestamp = 3 [
     (buf.validate.field).required = true,
-    (psm.list.v1.field).timestamp.sorting = {
+    (j5.list.v1.field).timestamp.sorting = {
       sortable: true
       default_sort: true
     }

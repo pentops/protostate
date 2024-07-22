@@ -13,13 +13,13 @@ func TestBuildTsvColumnMap(t *testing.T) {
 		"test.proto": `
 		syntax = "proto3";
 
-		import "psm/list/v1/annotations.proto";
+		import "j5/list/v1/annotations.proto";
 
 		package test;
 
 		message Foo {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "optioned_field"
 			}];
@@ -28,7 +28,7 @@ func TestBuildTsvColumnMap(t *testing.T) {
 
 		message Bar {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "bar_optioned_field"
 			}];
@@ -51,13 +51,13 @@ func TestValidateSearchAnnotations(t *testing.T) {
 			"test.proto": `
 		syntax = "proto3";
 
-		import "psm/list/v1/annotations.proto";
+		import "j5/list/v1/annotations.proto";
 
 		package test;
 
 		message Foo {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "optioned_field"
 			}];
@@ -66,7 +66,7 @@ func TestValidateSearchAnnotations(t *testing.T) {
 
 		message Bar {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "bar_optioned_field"
 			}];
@@ -85,13 +85,13 @@ func TestValidateSearchAnnotations(t *testing.T) {
 			"test.proto": `
 		syntax = "proto3";
 
-		import "psm/list/v1/annotations.proto";
+		import "j5/list/v1/annotations.proto";
 
 		package test;
 
 		message Msg {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "optioned_field"
 			}];
@@ -167,13 +167,13 @@ func TestValidateSearchAnnotations(t *testing.T) {
 			"test.proto": `
 		syntax = "proto3";
 
-		import "psm/list/v1/annotations.proto";
+		import "j5/list/v1/annotations.proto";
 
 		package test;
 
 		message Foo {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "optioned_field"
 			}];
@@ -182,7 +182,7 @@ func TestValidateSearchAnnotations(t *testing.T) {
 
 		message Bar {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: "optioned_field"
 			}];
@@ -200,13 +200,13 @@ func TestValidateSearchAnnotations(t *testing.T) {
 			"test.proto": `
 		syntax = "proto3";
 
-		import "psm/list/v1/annotations.proto";
+		import "j5/list/v1/annotations.proto";
 
 		package test;
 
 		message Foo {
 			string unoptioned_field = 1;
-			string optioned_field = 2 [(psm.list.v1.field).string.open_text.searching = {
+			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
 				field_identifier: ""
 			}];

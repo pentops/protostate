@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/psm"
@@ -68,11 +68,11 @@ func TestDynamicSearching(t *testing.T) {
 	t.Run("Simple Search Field", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Searches: []*psml_pb.Search{
+				Query: &list_j5pb.QueryRequest{
+					Searches: []*list_j5pb.Search{
 						{
 							Field: "data.field",
 							Value: "weighted 30",
@@ -112,17 +112,17 @@ func TestDynamicSearching(t *testing.T) {
 			nextToken := ""
 			ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 				req := &testpb.ListFoosRequest{
-					Page: &psml_pb.PageRequest{
+					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 					},
-					Query: &psml_pb.QueryRequest{
-						Filters: []*psml_pb.Filter{
+					Query: &list_j5pb.QueryRequest{
+						Filters: []*list_j5pb.Filter{
 							{
-								Type: &psml_pb.Filter_Field{
-									Field: &psml_pb.Field{
+								Type: &list_j5pb.Filter_Field{
+									Field: &list_j5pb.Field{
 										Name: "profiles.place",
-										Type: &psml_pb.Field_Range{
-											Range: &psml_pb.Range{
+										Type: &list_j5pb.Field_Range{
+											Range: &list_j5pb.Range{
 												Min: "15",
 												Max: "21",
 											},
@@ -176,18 +176,18 @@ func TestDynamicSearching(t *testing.T) {
 
 			ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 				req := &testpb.ListFoosRequest{
-					Page: &psml_pb.PageRequest{
+					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 						Token:    &nextToken,
 					},
-					Query: &psml_pb.QueryRequest{
-						Filters: []*psml_pb.Filter{
+					Query: &list_j5pb.QueryRequest{
+						Filters: []*list_j5pb.Filter{
 							{
-								Type: &psml_pb.Filter_Field{
-									Field: &psml_pb.Field{
+								Type: &list_j5pb.Filter_Field{
+									Field: &list_j5pb.Field{
 										Name: "profiles.place",
-										Type: &psml_pb.Field_Range{
-											Range: &psml_pb.Range{
+										Type: &list_j5pb.Field_Range{
+											Range: &list_j5pb.Range{
 												Min: "15",
 												Max: "21",
 											},

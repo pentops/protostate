@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/iancoleman/strcase"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -45,7 +45,7 @@ func WalkFile(file *protogen.File) (map[string]*PSMEntity, error) {
 		if err != nil {
 			return nil, err
 		}
-		stateMachines[stateSet.options.Name] = converted
+		stateMachines[stateSet.options.EntityName] = converted
 	}
 
 	return stateMachines, nil
@@ -57,7 +57,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 		message: message,
 	}
 
-	var keyOptions *psm_pb.PSMOptions
+	var keyOptions *ext_j5pb.PSMOptions
 	var keyMessage *protogen.Message
 
 	unusedFields := make([]*protogen.Field, 0, message.Desc.Fields().Len())
@@ -86,7 +86,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 			continue
 		}
 
-		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
 			if keyOptions != nil {
 				return fmt.Errorf("message %s has multiple PSM Key fields", message.Desc.Name())
@@ -115,10 +115,10 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 		return fmt.Errorf("message %s does not have a metadata field but, but imports the PSM Key Message (%s)", message.Desc.Name(), keyMessage.Desc.FullName())
 	}
 
-	stateSet, ok := se.stateMachines[keyOptions.Name]
+	stateSet, ok := se.stateMachines[keyOptions.EntityName]
 	if !ok {
 		stateSet = NewStateEntityGenerateSet(keyMessage, keyOptions)
-		se.stateMachines[keyOptions.Name] = stateSet
+		se.stateMachines[keyOptions.EntityName] = stateSet
 	}
 
 	if ww.isStateMessage {
@@ -141,7 +141,7 @@ type StateEntityGenerateSet struct {
 	// for errors / debugging, includes the proto source name
 	fullName string
 
-	options    *psm_pb.PSMOptions
+	options    *ext_j5pb.PSMOptions
 	keyMessage *protogen.Message
 
 	state *stateEntityState
@@ -163,10 +163,10 @@ type stateEntityEvent struct {
 	eventTypeField *protogen.Field
 }
 
-func NewStateEntityGenerateSet(keyMessage *protogen.Message, keyOptions *psm_pb.PSMOptions) *StateEntityGenerateSet {
+func NewStateEntityGenerateSet(keyMessage *protogen.Message, keyOptions *ext_j5pb.PSMOptions) *StateEntityGenerateSet {
 	return &StateEntityGenerateSet{
-		name:       keyOptions.Name,
-		fullName:   fmt.Sprintf("%s/%s", keyMessage.Desc.ParentFile().FullName(), keyOptions.Name),
+		name:       keyOptions.EntityName,
+		fullName:   fmt.Sprintf("%s/%s", keyMessage.Desc.ParentFile().FullName(), keyOptions.EntityName),
 		options:    keyOptions,
 		keyMessage: keyMessage,
 	}
@@ -251,15 +251,15 @@ func (src StateEntityGenerateSet) validate() error {
 func BuildStateSet(src StateEntityGenerateSet) (*PSMEntity, error) {
 
 	if err := src.validate(); err != nil {
-		return nil, fmt.Errorf("state object %s: %w", src.options.Name, err)
+		return nil, fmt.Errorf("state object %s: %w", src.options.EntityName, err)
 	}
 
-	namePrefix := strcase.ToCamel(src.options.Name)
+	namePrefix := strcase.ToCamel(src.options.EntityName)
 
 	ss := &PSMEntity{
 		state:         src.state,
 		event:         src.event,
-		specifiedName: src.options.Name,
+		specifiedName: src.options.EntityName,
 		namePrefix:    namePrefix,
 		machineName:   namePrefix + "PSM",
 		eventName:     namePrefix + "PSMEvent",

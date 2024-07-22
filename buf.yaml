@@ -1,10 +1,7 @@
 version: v2
 
 modules:
-  - path: ./proto/listify
-    name: buf.build/pentops/listify
-
-  - path: ./proto/protostate
+  - path: ./proto
     name: buf.build/pentops/protostate
 
 deps:

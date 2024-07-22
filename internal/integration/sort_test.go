@@ -9,7 +9,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -55,11 +55,11 @@ func TestSortingWithAuthScope(t *testing.T) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
-			Query: &psml_pb.QueryRequest{
-				Sorts: []*psml_pb.Sort{
+			Query: &list_j5pb.QueryRequest{
+				Sorts: []*list_j5pb.Sort{
 					{Field: "data.characteristics.weight"},
 				},
 			},
@@ -105,12 +105,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 				Token:    &nextToken,
 			},
-			Query: &psml_pb.QueryRequest{
-				Sorts: []*psml_pb.Sort{
+			Query: &list_j5pb.QueryRequest{
+				Sorts: []*list_j5pb.Sort{
 					{Field: "data.characteristics.weight"},
 				},
 			},
@@ -182,11 +182,11 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
-			Query: &psml_pb.QueryRequest{
-				Sorts: []*psml_pb.Sort{
+			Query: &list_j5pb.QueryRequest{
+				Sorts: []*list_j5pb.Sort{
 					{Field: "data.characteristics.weight"},
 				},
 			},
@@ -228,12 +228,12 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 				Token:    &nextToken,
 			},
-			Query: &psml_pb.QueryRequest{
-				Sorts: []*psml_pb.Sort{
+			Query: &list_j5pb.QueryRequest{
+				Sorts: []*list_j5pb.Sort{
 					{Field: "data.characteristics.weight"},
 				},
 			},
@@ -297,11 +297,11 @@ func TestDynamicSorting(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "metadata.createdAt"},
 					},
 				},
@@ -341,12 +341,12 @@ func TestDynamicSorting(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "metadata.createdAt"},
 					},
 				},
@@ -387,11 +387,11 @@ func TestDynamicSorting(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "data.characteristics.weight"},
 					},
 				},
@@ -431,12 +431,12 @@ func TestDynamicSorting(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "data.characteristics.weight"},
 					},
 				},
@@ -477,11 +477,11 @@ func TestDynamicSorting(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "data.characteristics.length"},
 						{Field: "data.characteristics.weight"},
 					},
@@ -526,12 +526,12 @@ func TestDynamicSorting(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{Field: "data.characteristics.length"},
 						{Field: "data.characteristics.weight"},
 					},
@@ -577,11 +577,11 @@ func TestDynamicSorting(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{
 							Field:      "data.characteristics.weight",
 							Descending: true,
@@ -624,12 +624,12 @@ func TestDynamicSorting(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Sorts: []*psml_pb.Sort{
+				Query: &list_j5pb.QueryRequest{
+					Sorts: []*list_j5pb.Sort{
 						{
 							Field:      "data.characteristics.weight",
 							Descending: true,

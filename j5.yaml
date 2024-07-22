@@ -2,16 +2,13 @@
 
 bundles:
   - name: protostate
-    dir: proto/protostate
-    deps: [listify]
-
-  - name: listify
-    dir: proto/listify
+    dir: proto
+  - name: test
+    dir: internal/testproto
 
 generate:
   - name: go
     inputs:
-      - local: listify
       - local: protostate
     output: .
     opts:
@@ -19,10 +16,39 @@ generate:
       module: github.com/pentops/protostate
     plugins:
       - base: go
+  - name: test
+    inputs:
+      - local: test
+    output: internal/testproto
+    opts:
+      paths: import
+      module: github.com/pentops/protostate/internal/testproto
+    plugins:
+      - base: go
+      - base: go-grpc
+      - base: go-sugar
+      - base: go-psm
+
+
+
 
 plugins:
   - name: go
     type: PLUGIN_PROTO
     docker:
       image: ghcr.io/pentops/protoc-gen-go:v1.32.0
+
+  - name: go-grpc
+    type: PLUGIN_PROTO
+    docker:
+      image: ghcr.io/pentops/protoc-gen-go-grpc:v1.4.0
+
+  - name: go-sugar
+    type: PLUGIN_PROTO
+    docker:
+      image: ghcr.io/pentops/protoc-gen-go-sugar:19495b5f5ac3fd3964a03031396d83f1bc1341ca
+
+  - name: go-psm
+    base: go
+    cmd: ./internal/testproto/protoc-gen-go-psm.sh
 

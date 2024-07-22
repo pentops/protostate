@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	sq "github.com/elgris/sqrl"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -140,13 +140,13 @@ func buildIndexes(tableName string, columnName string, rootType protoreflect.Mes
 			return nil
 		}
 
-		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 		if !ok {
 			return nil
 		}
 
 		switch fieldOpts.GetString_().GetWellKnown().(type) {
-		case *psml_pb.StringRules_OpenText:
+		case *list_j5pb.StringRules_OpenText:
 			searchOpts := fieldOpts.GetString_().GetOpenText().GetSearching()
 			if searchOpts == nil || !searchOpts.Searchable {
 				return nil

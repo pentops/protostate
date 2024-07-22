@@ -10,7 +10,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
@@ -56,7 +56,7 @@ func TestDefaultFiltering(t *testing.T) {
 
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(10),
 			},
 		}
@@ -137,17 +137,17 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		ctx = tkn.WithToken(ctx)
 
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
-			Query: &psml_pb.QueryRequest{
-				Filters: []*psml_pb.Filter{
+			Query: &list_j5pb.QueryRequest{
+				Filters: []*list_j5pb.Filter{
 					{
-						Type: &psml_pb.Filter_Field{
-							Field: &psml_pb.Field{
+						Type: &list_j5pb.Filter_Field{
+							Field: &list_j5pb.Field{
 								Name: "data.characteristics.weight",
-								Type: &psml_pb.Field_Range{
-									Range: &psml_pb.Range{
+								Type: &list_j5pb.Field_Range{
+									Range: &list_j5pb.Range{
 										Min: "12",
 										Max: "15",
 									},
@@ -216,17 +216,17 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Single Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &psml_pb.Field_Range{
-										Range: &psml_pb.Range{
+									Type: &list_j5pb.Field_Range{
+										Range: &list_j5pb.Range{
 											Min: "12",
 											Max: "15",
 										},
@@ -267,17 +267,17 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Min Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &psml_pb.Field_Range{
-										Range: &psml_pb.Range{
+									Type: &list_j5pb.Field_Range{
+										Range: &list_j5pb.Range{
 											Min: "12",
 										},
 									},
@@ -313,17 +313,17 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Max Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &psml_pb.Field_Range{
-										Range: &psml_pb.Range{
+									Type: &list_j5pb.Field_Range{
+										Range: &list_j5pb.Range{
 											Max: "15",
 										},
 									},
@@ -360,21 +360,21 @@ func TestDynamicFiltering(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Or{
-								Or: &psml_pb.Or{
-									Filters: []*psml_pb.Filter{
+							Type: &list_j5pb.Filter_Or{
+								Or: &list_j5pb.Or{
+									Filters: []*list_j5pb.Filter{
 										{
-											Type: &psml_pb.Filter_Field{
-												Field: &psml_pb.Field{
+											Type: &list_j5pb.Filter_Field{
+												Field: &list_j5pb.Field{
 													Name: "data.characteristics.weight",
-													Type: &psml_pb.Field_Range{
-														Range: &psml_pb.Range{
+													Type: &list_j5pb.Field_Range{
+														Range: &list_j5pb.Range{
 															Min: "12",
 															Max: "20",
 														},
@@ -383,11 +383,11 @@ func TestDynamicFiltering(t *testing.T) {
 											},
 										},
 										{
-											Type: &psml_pb.Filter_Field{
-												Field: &psml_pb.Field{
+											Type: &list_j5pb.Filter_Field{
+												Field: &list_j5pb.Field{
 													Name: "data.characteristics.height",
-													Type: &psml_pb.Field_Range{
-														Range: &psml_pb.Range{
+													Type: &list_j5pb.Field_Range{
+														Range: &list_j5pb.Range{
 															Min: "16",
 															Max: "18",
 														},
@@ -443,22 +443,22 @@ func TestDynamicFiltering(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Or{
-								Or: &psml_pb.Or{
-									Filters: []*psml_pb.Filter{
+							Type: &list_j5pb.Filter_Or{
+								Or: &list_j5pb.Or{
+									Filters: []*list_j5pb.Filter{
 										{
-											Type: &psml_pb.Filter_Field{
-												Field: &psml_pb.Field{
+											Type: &list_j5pb.Filter_Field{
+												Field: &list_j5pb.Field{
 													Name: "data.characteristics.weight",
-													Type: &psml_pb.Field_Range{
-														Range: &psml_pb.Range{
+													Type: &list_j5pb.Field_Range{
+														Range: &list_j5pb.Range{
 															Min: "12",
 															Max: "20",
 														},
@@ -467,11 +467,11 @@ func TestDynamicFiltering(t *testing.T) {
 											},
 										},
 										{
-											Type: &psml_pb.Filter_Field{
-												Field: &psml_pb.Field{
+											Type: &list_j5pb.Filter_Field{
+												Field: &list_j5pb.Field{
 													Name: "data.characteristics.height",
-													Type: &psml_pb.Field_Range{
-														Range: &psml_pb.Range{
+													Type: &list_j5pb.Field_Range{
+														Range: &list_j5pb.Range{
 															Min: "16",
 															Max: "18",
 														},
@@ -516,16 +516,16 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Non filterable fields", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "foo_id",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "d34d826f-afe3-410d-8326-4e9af3f09467",
 									},
 								},
@@ -546,16 +546,16 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Enum values", func(t *testing.T) {
 		ss.Step("List Page short enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "active",
 									},
 								},
@@ -588,16 +588,16 @@ func TestDynamicFiltering(t *testing.T) {
 
 		ss.Step("List Page full enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "FOO_STATUS_ACTIVE",
 									},
 								},
@@ -630,16 +630,16 @@ func TestDynamicFiltering(t *testing.T) {
 
 		ss.Step("List Page bad enum name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "FOO_STATUS_UNUSED",
 									},
 								},
@@ -661,17 +661,17 @@ func TestDynamicFiltering(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "data.profiles.place",
-									Type: &psml_pb.Field_Range{
-										Range: &psml_pb.Range{
+									Type: &list_j5pb.Field_Range{
+										Range: &list_j5pb.Range{
 											Min: "15",
 											Max: "21",
 										},
@@ -725,18 +725,18 @@ func TestDynamicFiltering(t *testing.T) {
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFoosRequest{
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "data.profiles.place",
-									Type: &psml_pb.Field_Range{
-										Range: &psml_pb.Range{
+									Type: &list_j5pb.Field_Range{
+										Range: &list_j5pb.Range{
 											Min: "15",
 											Max: "21",
 										},
@@ -782,16 +782,16 @@ func TestDynamicFiltering(t *testing.T) {
 		ss.Step("List Page (created)", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "created",
 									},
 								},
@@ -836,16 +836,16 @@ func TestDynamicFiltering(t *testing.T) {
 
 			req := &testpb.ListFooEventsRequest{
 				FooId: id,
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "deleted",
 									},
 								},
@@ -879,16 +879,16 @@ func TestDynamicFiltering(t *testing.T) {
 		ss.Step("List Page bad name", func(ctx context.Context, t flowtest.Asserter) {
 			req := &testpb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
-				Page: &psml_pb.PageRequest{
+				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
-				Query: &psml_pb.QueryRequest{
-					Filters: []*psml_pb.Filter{
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
 						{
-							Type: &psml_pb.Filter_Field{
-								Field: &psml_pb.Field{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &psml_pb.Field_Value{
+									Type: &list_j5pb.Field_Value{
 										Value: "damaged",
 									},
 								},
