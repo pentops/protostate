@@ -5,10 +5,10 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "psm/list/v1/annotations.proto";
-import "psm/list/v1/page.proto";
-import "psm/list/v1/query.proto";
-import "psm/state/v1/annotations.proto";
+import "j5/ext/v1/annotations.proto";
+import "j5/list/v1/annotations.proto";
+import "j5/list/v1/page.proto";
+import "j5/list/v1/query.proto";
 import "psm/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb";
@@ -17,21 +17,21 @@ option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb
 // take advantage of all defaults when constructing the state query and state
 // machine
 service FooService {
-  option (psm.state.v1.state_query).name = "foo";
+  option (j5.ext.v1.service).state_query.entity = "foo";
 
   rpc GetFoo(GetFooRequest) returns (GetFooResponse) {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}"};
-    option (psm.state.v1.state_query_method).get = true;
+    option (j5.ext.v1.method).state_query.get = true;
   }
 
   rpc ListFoos(ListFoosRequest) returns (ListFoosResponse) {
     option (google.api.http) = {get: "/test/v1/foos"};
-    option (psm.state.v1.state_query_method).list = true;
+    option (j5.ext.v1.method).state_query.list = true;
   }
 
   rpc ListFooEvents(ListFooEventsRequest) returns (ListFooEventsResponse) {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
-    option (psm.state.v1.state_query_method).list_events = true;
+    option (j5.ext.v1.method).state_query.list_events = true;
   }
 
   rpc FooSummary(FooSummaryRequest) returns (FooSummaryResponse) {
@@ -58,24 +58,24 @@ message FooSummaryResponse {
 }
 
 message FooKeys {
-  option (psm.state.v1.psm).name = "foo";
+  option (j5.ext.v1.psm).entity_name = "foo";
 
   string foo_id = 1 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).primary_key = true,
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+    (j5.ext.v1.key).primary_key = true,
+    (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   optional string tenant_id = 2 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).tenant_key = "tenant",
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+    (j5.ext.v1.key).tenant_key = "tenant",
+    (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   string meta_tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
-    (psm.state.v1.field).tenant_key = "meta_tenant",
-    (psm.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
+    (j5.ext.v1.key).tenant_key = "meta_tenant",
+    (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 }
 
@@ -84,7 +84,7 @@ message FooState {
 
   FooKeys keys = 2 [(buf.validate.field).required = true];
 
-  FooStatus status = 3 [(psm.list.v1.field).enum.filtering = {
+  FooStatus status = 3 [(j5.list.v1.field).enum.filtering = {
     filterable: true
     default_filters: ["FOO_STATUS_ACTIVE"]
   }];
@@ -93,17 +93,17 @@ message FooState {
 }
 
 message FooStateData {
-  string name = 5 [(psm.list.v1.field).string.open_text.searching = {
+  string name = 5 [(j5.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_name"
   }];
 
-  string field = 6 [(psm.list.v1.field).string.open_text.searching = {
+  string field = 6 [(j5.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_field"
   }];
 
-  optional string description = 7 [(psm.list.v1.field).string.open_text.searching = {
+  optional string description = 7 [(j5.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_description"
   }];
@@ -113,28 +113,28 @@ message FooStateData {
 }
 
 message FooCharacteristics {
-  int64 weight = 1 [(psm.list.v1.field).int64 = {
+  int64 weight = 1 [(j5.list.v1.field).int64 = {
     filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 
-  int64 height = 2 [(psm.list.v1.field).int64 = {
+  int64 height = 2 [(j5.list.v1.field).int64 = {
     filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 
-  int64 length = 3 [(psm.list.v1.field).int64 = {
+  int64 length = 3 [(j5.list.v1.field).int64 = {
     filtering: {filterable: true}
     sorting: {sortable: true}
   }];
 }
 
 message FooProfile {
-  int64 place = 1 [(psm.list.v1.field).int64 = {
+  int64 place = 1 [(j5.list.v1.field).int64 = {
     filtering: {filterable: true}
   }];
 
-  string name = 2 [(psm.list.v1.field).string.open_text.searching = {
+  string name = 2 [(j5.list.v1.field).string.open_text.searching = {
     searchable: true
     field_identifier: "tsv_profile_name"
   }];
@@ -156,7 +156,7 @@ message FooEvent {
 
 message FooEventType {
   oneof type {
-    option (psm.list.v1.oneof).filtering.filterable = true;
+    option (j5.list.v1.oneof).filtering.filterable = true;
 
     Created created = 1;
     Updated updated = 2;
@@ -189,22 +189,22 @@ message FooEventType {
 
 message ListFoosRequest {
   optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest page = 2;
-  psm.list.v1.QueryRequest query = 3;
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
 }
 
 message ListFoosResponse {
   repeated FooState foos = 1;
-  psm.list.v1.PageResponse page = 2;
+  j5.list.v1.PageResponse page = 2;
 }
 
 message ListFooEventsRequest {
   string foo_id = 1 [(buf.validate.field).string.uuid = true];
-  psm.list.v1.PageRequest page = 2;
-  psm.list.v1.QueryRequest query = 3;
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
 }
 
 message ListFooEventsResponse {
   repeated FooEvent events = 1;
-  psm.list.v1.PageResponse page = 2;
+  j5.list.v1.PageResponse page = 2;
 }

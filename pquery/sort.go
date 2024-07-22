@@ -3,7 +3,7 @@ package pquery
 import (
 	"fmt"
 
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -20,7 +20,7 @@ func (ss sortSpec) errorName() string {
 }
 
 func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []pgstore.ProtoFieldSpec) ([]sortSpec, error) {
-	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), psml_pb.E_ListRequest).(*psml_pb.ListRequestMessage)
+	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), list_j5pb.E_ListRequest).(*list_j5pb.ListRequestMessage)
 	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
 		for _, tieBreaker := range listRequestAnnotation.SortTiebreaker {
@@ -83,7 +83,7 @@ func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor
 			return nil // oneof or something
 		}
 
-		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 
 		if fieldOpts == nil {
 			return nil
@@ -91,55 +91,55 @@ func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor
 		isDefaultSort := false
 
 		switch fieldOps := fieldOpts.Type.(type) {
-		case *psml_pb.FieldConstraint_Double:
+		case *list_j5pb.FieldConstraint_Double:
 			if fieldOps.Double.Sorting != nil && fieldOps.Double.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Fixed32:
+		case *list_j5pb.FieldConstraint_Fixed32:
 			if fieldOps.Fixed32.Sorting != nil && fieldOps.Fixed32.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Fixed64:
+		case *list_j5pb.FieldConstraint_Fixed64:
 			if fieldOps.Fixed64.Sorting != nil && fieldOps.Fixed64.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Float:
+		case *list_j5pb.FieldConstraint_Float:
 			if fieldOps.Float.Sorting != nil && fieldOps.Float.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Int32:
+		case *list_j5pb.FieldConstraint_Int32:
 			if fieldOps.Int32.Sorting != nil && fieldOps.Int32.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Int64:
+		case *list_j5pb.FieldConstraint_Int64:
 			if fieldOps.Int64.Sorting != nil && fieldOps.Int64.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Sfixed32:
+		case *list_j5pb.FieldConstraint_Sfixed32:
 			if fieldOps.Sfixed32.Sorting != nil && fieldOps.Sfixed32.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Sfixed64:
+		case *list_j5pb.FieldConstraint_Sfixed64:
 			if fieldOps.Sfixed64.Sorting != nil && fieldOps.Sfixed64.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Sint32:
+		case *list_j5pb.FieldConstraint_Sint32:
 			if fieldOps.Sint32.Sorting != nil && fieldOps.Sint32.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Sint64:
+		case *list_j5pb.FieldConstraint_Sint64:
 			if fieldOps.Sint64.Sorting != nil && fieldOps.Sint64.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Uint32:
+		case *list_j5pb.FieldConstraint_Uint32:
 			if fieldOps.Uint32.Sorting != nil && fieldOps.Uint32.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Uint64:
+		case *list_j5pb.FieldConstraint_Uint64:
 			if fieldOps.Uint64.Sorting != nil && fieldOps.Uint64.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
-		case *psml_pb.FieldConstraint_Timestamp:
+		case *list_j5pb.FieldConstraint_Timestamp:
 			if fieldOps.Timestamp.Sorting != nil && fieldOps.Timestamp.Sorting.DefaultSort {
 				isDefaultSort = true
 			}
@@ -162,7 +162,7 @@ func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor
 	return defaultSortFields, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*psml_pb.Sort) ([]sortSpec, error) {
+func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sortSpec, error) {
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
@@ -217,7 +217,7 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 				} else {
 					if field.Cardinality() == protoreflect.Repeated {
 						// check options of subfield for sorting
-						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+						fieldOpts := proto.GetExtension(subField.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 						if isSortingAnnotated(fieldOpts) {
 							return fmt.Errorf("sorting not allowed on subfield of repeated parent: %s", field.Name())
 						}
@@ -227,7 +227,7 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 		} else {
 			if field.Cardinality() == protoreflect.Repeated {
 				// check options of parent field for sorting
-				fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+				fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 				if isSortingAnnotated(fieldOpts) {
 					return fmt.Errorf("sorting not allowed on repeated field, must be a scalar: %s", field.Name())
 				}
@@ -239,60 +239,60 @@ func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
 	return nil
 }
 
-func isSortingAnnotated(opts *psml_pb.FieldConstraint) bool {
+func isSortingAnnotated(opts *list_j5pb.FieldConstraint) bool {
 	annotated := false
 
 	if opts != nil {
 		switch opts.Type.(type) {
-		case *psml_pb.FieldConstraint_Double:
+		case *list_j5pb.FieldConstraint_Double:
 			if opts.GetDouble().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Fixed32:
+		case *list_j5pb.FieldConstraint_Fixed32:
 			if opts.GetFixed32().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Fixed64:
+		case *list_j5pb.FieldConstraint_Fixed64:
 			if opts.GetFixed64().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Float:
+		case *list_j5pb.FieldConstraint_Float:
 			if opts.GetFloat().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Int32:
+		case *list_j5pb.FieldConstraint_Int32:
 			if opts.GetInt32().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Int64:
+		case *list_j5pb.FieldConstraint_Int64:
 			if opts.GetInt64().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Sfixed32:
+		case *list_j5pb.FieldConstraint_Sfixed32:
 			if opts.GetSfixed32().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Sfixed64:
+		case *list_j5pb.FieldConstraint_Sfixed64:
 			if opts.GetSfixed64().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Sint32:
+		case *list_j5pb.FieldConstraint_Sint32:
 			if opts.GetSint32().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Sint64:
+		case *list_j5pb.FieldConstraint_Sint64:
 			if opts.GetSint64().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Uint32:
+		case *list_j5pb.FieldConstraint_Uint32:
 			if opts.GetUint32().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Uint64:
+		case *list_j5pb.FieldConstraint_Uint64:
 			if opts.GetUint64().Sorting != nil {
 				annotated = true
 			}
-		case *psml_pb.FieldConstraint_Timestamp:
+		case *list_j5pb.FieldConstraint_Timestamp:
 			if opts.GetTimestamp().Sorting != nil {
 				annotated = true
 			}
@@ -302,7 +302,7 @@ func isSortingAnnotated(opts *psml_pb.FieldConstraint) bool {
 	return annotated
 }
 
-func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*psml_pb.Sort) error {
+func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*list_j5pb.Sort) error {
 	for _, sort := range sorts {
 		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
 		spec, err := pgstore.NewJSONPath(message, pathSpec)
@@ -316,7 +316,7 @@ func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*
 		}
 
 		// validate the fields are annotated correctly for the request query
-		sortOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		sortOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 		if !ok {
 			return fmt.Errorf("requested sort field '%s' does not have any sortable constraints defined", sort.Field)
 		}

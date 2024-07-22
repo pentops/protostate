@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -64,7 +64,7 @@ func TestPagination(t *testing.T) {
 		}
 	})
 
-	var pageResp *psml_pb.PageResponse
+	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{}
@@ -95,7 +95,7 @@ func TestPagination(t *testing.T) {
 
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				Token: pageResp.NextToken,
 			},
 		}
@@ -171,7 +171,7 @@ func TestEventPagination(t *testing.T) {
 		}
 	})
 
-	var pageResp *psml_pb.PageResponse
+	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 
@@ -228,7 +228,7 @@ func TestEventPagination(t *testing.T) {
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 
 		req := &testpb.ListFooEventsRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				Token: pageResp.NextToken,
 			},
 			FooId: fooID,
@@ -312,7 +312,7 @@ func TestPageSize(t *testing.T) {
 		}
 	})
 
-	var pageResp *psml_pb.PageResponse
+	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page (default)", func(ctx context.Context, t flowtest.Asserter) {
 		req := &testpb.ListFoosRequest{}
@@ -344,7 +344,7 @@ func TestPageSize(t *testing.T) {
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(5)
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: &pageSize,
 			},
 		}
@@ -376,7 +376,7 @@ func TestPageSize(t *testing.T) {
 	ss.Step("List Page (exceeding)", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(50)
 		req := &testpb.ListFoosRequest{
-			Page: &psml_pb.PageRequest{
+			Page: &list_j5pb.PageRequest{
 				PageSize: &pageSize,
 			},
 		}

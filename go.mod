@@ -10,9 +10,9 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20240623020118-02bf89f30b87
-	github.com/pentops/j5 v0.0.0-20240711003053-d3c9c2687e30
+	github.com/pentops/j5 v0.0.0-20240722191741-4d3f241781ad
 	github.com/pentops/log.go v0.0.0-20240618224413-ed85018bafd9
-	github.com/pentops/o5-auth v0.0.0-20240710232951-07b338137443
+	github.com/pentops/o5-auth v0.0.0-20240711024624-27c66d6f1d01
 	github.com/pentops/o5-messaging v0.0.0-20240703174511-caef57f4978b
 	github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734
 	github.com/pentops/prototools v0.0.0-20240614222903-e9c266e2e96b

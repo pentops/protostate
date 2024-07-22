@@ -22,10 +22,10 @@ func (c composed) toString() string {
 		out += "message ListFoosRequest {\n" + c.ListFoosRequest + "\n}\n"
 	} else {
 		out += `message ListFoosRequest {
-				psm.list.v1.PageRequest page = 1;
-				psm.list.v1.QueryRequest query = 2;
+				j5.list.v1.PageRequest page = 1;
+				j5.list.v1.QueryRequest query = 2;
 
-				option (psm.list.v1.list_request) = {
+				option (j5.list.v1.list_request) = {
 					sort_tiebreaker: ["id"]
 				};
 			}`
@@ -36,7 +36,7 @@ func (c composed) toString() string {
 	} else {
 		out += `message ListFoosResponse {
 				repeated Foo foos = 1;
-				psm.list.v1.PageResponse page = 2;
+				j5.list.v1.PageResponse page = 2;
 			}`
 	}
 
@@ -62,9 +62,9 @@ func TestBuildListReflection(t *testing.T) {
 				package test;
 
 				// Import everything which may be used
-				import "psm/list/v1/page.proto";
-				import "psm/list/v1/query.proto";
-				import "psm/list/v1/annotations.proto";
+				import "j5/list/v1/page.proto";
+				import "j5/list/v1/query.proto";
+				import "j5/list/v1/annotations.proto";
 				import "buf/validate/validate.proto";
 				import "google/protobuf/timestamp.proto";
 				` + input,
@@ -110,17 +110,17 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy("full success", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["id"]
 			};
 		}
 
 		message ListFoosResponse {
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
@@ -140,10 +140,10 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy("override default page size by validation", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["id"]
 			};
 		}
@@ -152,7 +152,7 @@ func TestBuildListReflection(t *testing.T) {
 			repeated Foo foos = 1 [
 				(buf.validate.field).repeated.max_items = 10
 			];
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
@@ -166,8 +166,8 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy("tie breaker fallback", composed{
 		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 		`,
 	}.toString(),
 		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
@@ -187,17 +187,17 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy("sort by bar", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["bar.id"]
 			};
 		}
 
 		message ListFoosResponse {
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
@@ -222,16 +222,16 @@ func TestBuildListReflection(t *testing.T) {
 
 	runHappy("sort by bar by walking", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 			};
 		}
 
 		message ListFoosResponse {
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
@@ -242,7 +242,7 @@ func TestBuildListReflection(t *testing.T) {
 		message Bar {
 			string id = 1;
 			google.protobuf.Timestamp timestamp = 2 [
-				(psm.list.v1.field).timestamp = {
+				(j5.list.v1.field).timestamp = {
 					sorting: {
 						default_sort: true
 					}
@@ -270,7 +270,7 @@ func TestBuildListReflection(t *testing.T) {
 	runSad("non message field in response", composed{
 		ListFoosResponse: `
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 			Foo dangling = 3;
 		`,
 	}.toString(),
@@ -280,7 +280,7 @@ func TestBuildListReflection(t *testing.T) {
 	runSad("non message in response", composed{
 		ListFoosResponse: `
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 			string dangling = 3;
 		`,
 	}.toString(),
@@ -291,7 +291,7 @@ func TestBuildListReflection(t *testing.T) {
 	runSad("extra array field in response", composed{
 		ListFoosResponse: `
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 			repeated Foo dangling = 3;
 		`,
 	}.toString(),
@@ -300,7 +300,7 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("no array field in response", composed{
 		ListFoosResponse: `
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 			`,
 	}.toString(),
 		nil,
@@ -320,8 +320,8 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("no fallback sort field", composed{
 		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 		`,
 	}.toString(),
 		nil,
@@ -330,9 +330,9 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("tie breaker not in response", composed{
 		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
-			option (psm.list.v1.list_request) = {
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["missing"]
 			};
 			`,
@@ -343,9 +343,9 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("no page field", composed{
 		ListFoosRequest: `
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.QueryRequest query = 2;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["id"]
 			};
 			`,
@@ -356,9 +356,9 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("no query field", composed{
 		ListFoosRequest: `
-			psm.list.v1.PageRequest page = 1;
+			j5.list.v1.PageRequest page = 1;
 
-			option (psm.list.v1.list_request) = {
+			option (j5.list.v1.list_request) = {
 				sort_tiebreaker: ["id"]
 			};
 			`,
@@ -369,19 +369,19 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("repeated field sort", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 		}
 
 		message ListFoosResponse {
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
 			string id = 1;
-			int64 seq = 2 [(psm.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
-			repeated int64 weight = 3 [(psm.list.v1.field).int64.sorting.sortable = true];
+			int64 seq = 2 [(j5.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
+			repeated int64 weight = 3 [(j5.list.v1.field).int64.sorting.sortable = true];
 		}
 		`,
 		nil,
@@ -390,24 +390,24 @@ func TestBuildListReflection(t *testing.T) {
 
 	runSad("repeated sub field sort", `
 		message ListFoosRequest {
-			psm.list.v1.PageRequest page = 1;
-			psm.list.v1.QueryRequest query = 2;
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
 		}
 
 		message ListFoosResponse {
 			repeated Foo foos = 1;
-			psm.list.v1.PageResponse page = 2;
+			j5.list.v1.PageResponse page = 2;
 		}
 
 		message Foo {
 			string id = 1;
-			int64 seq = 2 [(psm.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
+			int64 seq = 2 [(j5.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
 			repeated Profile profiles = 3;
 		}
 
 		message Profile {
 			string name = 1;
-			int64 weight = 2 [(psm.list.v1.field).int64.sorting.sortable = true];
+			int64 weight = 2 [(j5.list.v1.field).int64.sorting.sortable = true];
 		}
 		`,
 		nil,

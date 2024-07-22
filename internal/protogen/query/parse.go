@@ -3,9 +3,10 @@ package query
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/iancoleman/strcase"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -23,26 +24,40 @@ func WalkFile(file *protogen.File) (map[string]*PSMQuerySet, error) {
 	}
 
 	for _, service := range file.Services {
-		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), psm_pb.E_StateQuery).(*psm_pb.StateQueryServiceOptions)
+		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), ext_j5pb.E_Service).(*ext_j5pb.ServiceOptions)
+		if stateQueryAnnotation == nil {
+			continue
+		}
+		stateQuery := stateQueryAnnotation.GetStateQuery()
+		if stateQuery == nil {
+			continue
+		}
+
+		methodSet := NewQueryServiceGenerateSet(stateQuery.Entity, service.Desc.FullName())
 
 		for _, method := range service.Methods {
-			methodOpt := proto.GetExtension(method.Desc.Options(), psm_pb.E_StateQueryMethod).(*psm_pb.StateQueryMethodOptions)
+			methodOpt := proto.GetExtension(method.Desc.Options(), ext_j5pb.E_Method).(*ext_j5pb.MethodOptions)
 			if methodOpt == nil {
-				continue
-			}
-			if methodOpt.Name == "" {
-				if stateQueryAnnotation == nil || stateQueryAnnotation.Name == "" {
-					return nil, fmt.Errorf("service %s method %s does not have a state query name, and no service default", service.GoName, method.GoName)
+				name := string(method.Desc.Name())
+				methodOpt := &ext_j5pb.MethodOptions{}
+				if strings.HasPrefix(name, "Get") {
+					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+						Get: true,
+					}
+				} else if strings.HasPrefix(name, "List") && strings.HasSuffix(name, "Events") {
+					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+						ListEvents: true,
+					}
+				} else if strings.HasPrefix(name, "List") {
+					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+						List: true,
+					}
+				} else {
+					return nil, fmt.Errorf("method %s does not have a state query type", name)
 				}
-				methodOpt.Name = stateQueryAnnotation.Name
 			}
 
-			methodSet, ok := qss.QuerySets[methodOpt.Name]
-			if !ok {
-				methodSet = NewQueryServiceGenerateSet(methodOpt.Name, service.Desc.FullName())
-				qss.QuerySets[methodOpt.Name] = methodSet
-			}
-			if err := methodSet.AddMethod(method, methodOpt); err != nil {
+			if err := methodSet.AddMethod(method, methodOpt.StateQuery); err != nil {
 				return nil, fmt.Errorf("adding method %s to %s: %w", method.Desc.Name(), service.Desc.FullName(), err)
 			}
 		}
@@ -79,7 +94,7 @@ func NewQueryServiceGenerateSet(name string, serviceFullName protoreflect.FullNa
 	}
 }
 
-func (qs *QueryServiceGenerateSet) AddMethod(method *protogen.Method, methodOpt *psm_pb.StateQueryMethodOptions) error {
+func (qs *QueryServiceGenerateSet) AddMethod(method *protogen.Method, methodOpt *ext_j5pb.StateQueryMethodOptions) error {
 
 	if methodOpt.Get {
 		if qs.getMethod != nil {

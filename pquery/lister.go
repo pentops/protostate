@@ -16,7 +16,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
@@ -107,7 +107,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 			return nil, fmt.Errorf("field %s is a '%s', but should be a message", field.Name(), field.Kind())
 		}
 
-		if msg.FullName() == "psm.list.v1.PageResponse" {
+		if msg.FullName() == "j5.list.v1.PageResponse" {
 			ll.pageResponseField = field
 			continue
 		}
@@ -129,7 +129,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	if ll.pageResponseField == nil {
-		return nil, fmt.Errorf("no page field in response, %s must have a psm.list.v1.PageResponse", res.FullName())
+		return nil, fmt.Errorf("no page field in response, %s must have a j5.list.v1.PageResponse", res.FullName())
 	}
 
 	err = validateListAnnotations(ll.arrayField.Message().Fields())
@@ -166,10 +166,10 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		msg := field.Message()
 		if msg != nil {
 			switch msg.FullName() {
-			case "psm.list.v1.PageRequest":
+			case "j5.list.v1.PageRequest":
 				ll.pageRequestField = field
 				continue
-			case "psm.list.v1.QueryRequest":
+			case "j5.list.v1.QueryRequest":
 				ll.queryRequestField = field
 				continue
 			default:
@@ -189,11 +189,11 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	if ll.pageRequestField == nil {
-		return nil, fmt.Errorf("no page field in request, %s must have a psm.list.v1.PageRequest", req.FullName())
+		return nil, fmt.Errorf("no page field in request, %s must have a j5.list.v1.PageRequest", req.FullName())
 	}
 
 	if ll.queryRequestField == nil {
-		return nil, fmt.Errorf("no query field in request, %s must have a psm.list.v1.QueryRequest", req.FullName())
+		return nil, fmt.Errorf("no query field in request, %s must have a j5.list.v1.QueryRequest", req.FullName())
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
@@ -337,7 +337,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	}
 
 	if nextToken != "" {
-		pageResponse := &psml_pb.PageResponse{
+		pageResponse := &list_j5pb.PageResponse{
 			NextToken: &nextToken,
 		}
 
@@ -374,7 +374,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 	}
 
-	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*psml_pb.QueryRequest)
+	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*list_j5pb.QueryRequest)
 	if ok && reqQuery != nil {
 		if err := ll.validateQueryRequest(reqQuery); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "query validation: %s", err)
@@ -473,7 +473,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 	selectQuery.Limit(pageSize + 1)
 
-	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
+	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*list_j5pb.PageRequest)
 	if ok && reqPage != nil && reqPage.GetToken() != "" {
 		rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
 
@@ -612,7 +612,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
 	pageSize := ll.defaultPageSize
 
-	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*psml_pb.PageRequest)
+	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*list_j5pb.PageRequest)
 	if ok && pageReq != nil && pageReq.PageSize != nil {
 		pageSize = uint64(*pageReq.PageSize)
 
@@ -658,7 +658,7 @@ func validateListAnnotations(fields protoreflect.FieldDescriptors) error {
 	return nil
 }
 
-func (ll *Lister[REQ, RES]) validateQueryRequest(query *psml_pb.QueryRequest) error {
+func (ll *Lister[REQ, RES]) validateQueryRequest(query *list_j5pb.QueryRequest) error {
 	err := validateQueryRequestSorts(ll.arrayField.Message(), query.GetSorts())
 	if err != nil {
 		return fmt.Errorf("sort validation: %w", err)

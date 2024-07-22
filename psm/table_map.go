@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -90,7 +90,7 @@ type KeyColumn struct {
 	Primary    bool
 	Required   bool
 	Unique     bool
-	TenantKey  *string
+	//TenantKey  *string
 }
 
 type KeyField struct {
@@ -123,21 +123,21 @@ func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescript
 }
 
 func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap, error) {
-	stateObjectAnnotation, ok := proto.GetExtension(keyMessage.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+	stateObjectAnnotation, ok := proto.GetExtension(keyMessage.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
 	if !ok || stateObjectAnnotation == nil {
 		return nil, fmt.Errorf("message %s has no PSM Key field", keyMessage.Name())
 	}
 
 	tm := &TableMap{
 		State: StateTableSpec{
-			TableName: safeTableName(stateObjectAnnotation.Name),
+			TableName: safeTableName(stateObjectAnnotation.EntityName),
 			Root: &FieldSpec{
 				ColumnName: "state",
 				//PathFromRoot: psm.PathSpec{},
 			},
 		},
 		Event: EventTableSpec{
-			TableName: safeTableName(stateObjectAnnotation.Name + "_event"),
+			TableName: safeTableName(stateObjectAnnotation.EntityName + "_event"),
 			Root: &FieldSpec{
 				ColumnName: "data",
 				//PathFromRoot: psm.PathSpec{},
@@ -165,9 +165,9 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 	for idx := 0; idx < fields.Len(); idx++ {
 		field := fields.Get(idx)
 
-		annotation := proto.GetExtension(field.Options(), psm_pb.E_Field).(*psm_pb.FieldOptions)
+		annotation := proto.GetExtension(field.Options(), ext_j5pb.E_Key).(*ext_j5pb.KeyFieldOptions)
 		if annotation == nil {
-			annotation = &psm_pb.FieldOptions{}
+			annotation = &ext_j5pb.KeyFieldOptions{}
 		}
 
 		tm.KeyColumns[idx] = KeyColumn{
@@ -175,7 +175,7 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 			ProtoName:  field.Name(),
 			Primary:    annotation.PrimaryKey,
 			Required:   annotation.PrimaryKey || !field.HasOptionalKeyword(),
-			TenantKey:  annotation.TenantKey,
+			//TenantKey:  annotation.TenantKey,
 		}
 	}
 
@@ -194,7 +194,7 @@ func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 			continue
 		}
 		msg := field.Message()
-		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
 			keyMessage = msg
 			stateKeyField = field
@@ -216,7 +216,7 @@ func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 		}
 		msg := field.Message()
 
-		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), psm_pb.E_Psm).(*psm_pb.PSMOptions)
+		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
 			if keyMessage.FullName() != msg.FullName() {
 				return nil, fmt.Errorf("%s.%s is a %s, but %s.%s is a %s, these should be the same",

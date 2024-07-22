@@ -7,8 +7,6 @@ import (
 	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/pquery"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -147,7 +145,6 @@ func BuildStateQuerySet[
 	}
 
 	pkFields := map[string]protoreflect.FieldDescriptor{}
-	tenantKeyMap := map[string]string{}
 	for _, keyColumn := range smSpec.KeyColumns {
 		matchingRequestField, ok := unmappedRequestFields[keyColumn.ProtoName]
 		if ok {
@@ -162,9 +159,6 @@ func BuildStateQuerySet[
 			})
 		}
 
-		if keyColumn.TenantKey != nil {
-			tenantKeyMap[*keyColumn.TenantKey] = keyColumn.ColumnName
-		}
 	}
 
 	if len(unmappedRequestFields) > 0 {
@@ -184,25 +178,26 @@ func BuildStateQuerySet[
 		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
-	if options.Auth != nil {
-		getSpec.Auth = pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
-			requiredTenantKeys, err := options.Auth.GetRequiredTenantKeys(ctx)
-			if err != nil {
-				return nil, err
-			}
-			filter := map[string]string{}
-			// Every key provided by the auth func must match the entity key
-			// Not every entity key must match the claim
-			for tenantKey, claimValue := range requiredTenantKeys {
-				columnName, ok := tenantKeyMap[tenantKey]
-				if !ok {
-					return nil, status.Errorf(codes.PermissionDenied, "claim is restricted to tenant key %s which is does not exist for the entity type", tenantKey)
+	/*
+		if options.Auth != nil {
+			getSpec.Auth = pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
+				requiredTenantKeys, err := options.Auth.GetRequiredTenantKeys(ctx)
+				if err != nil {
+					return nil, err
 				}
-				filter[columnName] = claimValue
-			}
-			return filter, nil
-		})
-	}
+				filter := map[string]string{}
+				// Every key provided by the auth func must match the entity key
+				// Not every entity key must match the claim
+				for tenantKey, claimValue := range requiredTenantKeys {
+					columnName, ok := tenantKeyMap[tenantKey]
+					if !ok {
+						return nil, status.Errorf(codes.PermissionDenied, "claim is restricted to tenant key %s which is does not exist for the entity type", tenantKey)
+					}
+					filter[columnName] = claimValue
+				}
+				return filter, nil
+			})
+		}*/
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
 		refl := req.ProtoReflect()

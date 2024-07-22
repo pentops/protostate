@@ -9,7 +9,7 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/google/uuid"
-	"github.com/pentops/protostate/gen/list/v1/psml_pb"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -24,7 +24,7 @@ type filterSpec struct {
 
 func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) {
 
-	fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+	fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 	vals := []interface{}{}
 
 	if fieldOpts == nil {
@@ -32,7 +32,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 	}
 
 	switch fieldOps := fieldOpts.Type.(type) {
-	case *psml_pb.FieldConstraint_Float:
+	case *list_j5pb.FieldConstraint_Float:
 		if fieldOps.Float.Filtering != nil && fieldOps.Float.Filtering.Filterable {
 			for _, val := range fieldOps.Float.Filtering.DefaultFilters {
 				v, err := strconv.ParseFloat(val, 32)
@@ -44,7 +44,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Double:
+	case *list_j5pb.FieldConstraint_Double:
 		if fieldOps.Double.Filtering != nil && fieldOps.Double.Filtering.Filterable {
 			for _, val := range fieldOps.Double.Filtering.DefaultFilters {
 				v, err := strconv.ParseFloat(val, 64)
@@ -56,7 +56,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Fixed32:
+	case *list_j5pb.FieldConstraint_Fixed32:
 		if fieldOps.Fixed32.Filtering != nil && fieldOps.Fixed32.Filtering.Filterable {
 			for _, val := range fieldOps.Fixed32.Filtering.DefaultFilters {
 				v, err := strconv.ParseUint(val, 10, 32)
@@ -68,7 +68,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Fixed64:
+	case *list_j5pb.FieldConstraint_Fixed64:
 		if fieldOps.Fixed64.Filtering != nil && fieldOps.Fixed64.Filtering.Filterable {
 			for _, val := range fieldOps.Fixed64.Filtering.DefaultFilters {
 				v, err := strconv.ParseUint(val, 10, 64)
@@ -80,7 +80,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Int32:
+	case *list_j5pb.FieldConstraint_Int32:
 		if fieldOps.Int32.Filtering != nil && fieldOps.Int32.Filtering.Filterable {
 			for _, val := range fieldOps.Int32.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 32)
@@ -92,7 +92,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Int64:
+	case *list_j5pb.FieldConstraint_Int64:
 		if fieldOps.Int64.Filtering != nil && fieldOps.Int64.Filtering.Filterable {
 			for _, val := range fieldOps.Int64.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 64)
@@ -104,7 +104,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Sfixed32:
+	case *list_j5pb.FieldConstraint_Sfixed32:
 		if fieldOps.Sfixed32.Filtering != nil && fieldOps.Sfixed32.Filtering.Filterable {
 			for _, val := range fieldOps.Sfixed32.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 32)
@@ -116,7 +116,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Sfixed64:
+	case *list_j5pb.FieldConstraint_Sfixed64:
 		if fieldOps.Sfixed64.Filtering != nil && fieldOps.Sfixed64.Filtering.Filterable {
 			for _, val := range fieldOps.Sfixed64.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 64)
@@ -128,7 +128,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Sint32:
+	case *list_j5pb.FieldConstraint_Sint32:
 		if fieldOps.Sint32.Filtering != nil && fieldOps.Sint32.Filtering.Filterable {
 			for _, val := range fieldOps.Sint32.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 32)
@@ -140,7 +140,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Sint64:
+	case *list_j5pb.FieldConstraint_Sint64:
 		if fieldOps.Sint64.Filtering != nil && fieldOps.Sint64.Filtering.Filterable {
 			for _, val := range fieldOps.Sint64.Filtering.DefaultFilters {
 				v, err := strconv.ParseInt(val, 10, 64)
@@ -152,7 +152,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Uint32:
+	case *list_j5pb.FieldConstraint_Uint32:
 		if fieldOps.Uint32.Filtering != nil && fieldOps.Uint32.Filtering.Filterable {
 			for _, val := range fieldOps.Uint32.Filtering.DefaultFilters {
 				v, err := strconv.ParseUint(val, 10, 32)
@@ -164,7 +164,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Uint64:
+	case *list_j5pb.FieldConstraint_Uint64:
 		if fieldOps.Uint64.Filtering != nil && fieldOps.Uint64.Filtering.Filterable {
 			for _, val := range fieldOps.Uint64.Filtering.DefaultFilters {
 				v, err := strconv.ParseUint(val, 10, 64)
@@ -176,7 +176,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Bool:
+	case *list_j5pb.FieldConstraint_Bool:
 		if fieldOps.Bool.Filtering != nil && fieldOps.Bool.Filtering.Filterable {
 			for _, val := range fieldOps.Bool.Filtering.DefaultFilters {
 				v, err := strconv.ParseBool(val)
@@ -188,9 +188,9 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_String_:
+	case *list_j5pb.FieldConstraint_String_:
 		switch fieldOps := fieldOps.String_.WellKnown.(type) {
-		case *psml_pb.StringRules_Date:
+		case *list_j5pb.StringRules_Date:
 			if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
 				for _, val := range fieldOps.Date.Filtering.DefaultFilters {
 					if !dateRegex.MatchString(val) {
@@ -203,16 +203,16 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 				}
 			}
 
-		case *psml_pb.StringRules_ForeignKey:
+		case *list_j5pb.StringRules_ForeignKey:
 			switch fieldOps := fieldOps.ForeignKey.Type.(type) {
-			case *psml_pb.ForeignKeyRules_UniqueString:
+			case *list_j5pb.ForeignKeyRules_UniqueString:
 				if fieldOps.UniqueString.Filtering != nil && fieldOps.UniqueString.Filtering.Filterable {
 					for _, val := range fieldOps.UniqueString.Filtering.DefaultFilters {
 						vals = append(vals, val)
 					}
 				}
 
-			case *psml_pb.ForeignKeyRules_Uuid:
+			case *list_j5pb.ForeignKeyRules_Uuid:
 				if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
 					for _, val := range fieldOps.Uuid.Filtering.DefaultFilters {
 						_, err := uuid.Parse(val)
@@ -227,14 +227,14 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Enum:
+	case *list_j5pb.FieldConstraint_Enum:
 		if fieldOps.Enum.Filtering != nil && fieldOps.Enum.Filtering.Filterable {
 			for _, val := range fieldOps.Enum.Filtering.DefaultFilters {
 				vals = append(vals, val)
 			}
 		}
 
-	case *psml_pb.FieldConstraint_Timestamp:
+	case *list_j5pb.FieldConstraint_Timestamp:
 		if fieldOps.Timestamp.Filtering != nil && fieldOps.Timestamp.Filtering.Filterable {
 			for _, val := range fieldOps.Timestamp.Filtering.DefaultFilters {
 				t, err := time.Parse(time.RFC3339, val)
@@ -281,12 +281,12 @@ func buildDefaultFilters(columnName string, message protoreflect.MessageDescript
 	return filters, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psml_pb.Filter) ([]sq.Sqlizer, error) {
+func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*list_j5pb.Filter) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range filters {
 		switch filters[i].GetType().(type) {
-		case *psml_pb.Filter_Field:
+		case *list_j5pb.Filter_Field:
 			pathSpec := pgstore.ParseJSONPathSpec(filters[i].GetField().GetName())
 			spec, err := pgstore.NewJSONPath(ll.arrayField.Message(), pathSpec)
 			if err != nil {
@@ -315,7 +315,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 			}
 
 			out = append(out, o)
-		case *psml_pb.Filter_And:
+		case *list_j5pb.Filter_And:
 			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetAnd().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: and: %w", err)
@@ -324,7 +324,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 			and = append(and, f...)
 
 			out = append(out, and)
-		case *psml_pb.Filter_Or:
+		case *list_j5pb.Filter_Or:
 			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetOr().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: or: %w", err)
@@ -339,7 +339,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*psm
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgstore.NestedField, filter *psml_pb.Filter) (sq.Sqlizer, error) {
+func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	if filter.GetField() == nil {
@@ -349,7 +349,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 	leafField := spec.Path.LeafField()
 
 	switch filter.GetField().GetType().(type) {
-	case *psml_pb.Field_Value:
+	case *list_j5pb.Field_Value:
 		val := filter.GetField().GetValue()
 		if leafField.Kind() == protoreflect.EnumKind {
 			name := strings.ToTitle(val)
@@ -369,7 +369,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 				spec.Path.JSONPathQuery(),
 			), pg.JSONB(val))}
 
-	case *psml_pb.Field_Range:
+	case *list_j5pb.Field_Range:
 		min := filter.GetField().GetRange().GetMin()
 		max := filter.GetField().GetRange().GetMax()
 
@@ -389,7 +389,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pgstore.NestedField, filter *psml_pb.Filter) (sq.Sqlizer, error) {
+func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	if filter.GetField() == nil {
@@ -397,7 +397,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pg
 	}
 
 	switch filter.GetField().GetType().(type) {
-	case *psml_pb.Field_Value:
+	case *list_j5pb.Field_Value:
 		val := filter.GetField().GetValue()
 
 		// Val is used directly here instead of passed in as an expression
@@ -405,21 +405,21 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pg
 		// field names.
 		exprStr := fmt.Sprintf("jsonb_array_length(jsonb_path_query_array(%s.%s, '%s ?? (exists(@.%s))')) > 0", tableAlias, ospec.RootColumn, ospec.Path.JSONPathQuery(), val)
 		out = sq.And{sq.Expr(exprStr)}
-	case *psml_pb.Field_Range:
+	case *list_j5pb.Field_Range:
 		return nil, fmt.Errorf("oneofs cannot be filtered by range")
 	}
 
 	return out, nil
 }
 
-func validateQueryRequestFilters(message protoreflect.MessageDescriptor, filters []*psml_pb.Filter) error {
+func validateQueryRequestFilters(message protoreflect.MessageDescriptor, filters []*list_j5pb.Filter) error {
 	for i := range filters {
 		switch filters[i].GetType().(type) {
-		case *psml_pb.Filter_Field:
+		case *list_j5pb.Filter_Field:
 			return validateQueryRequestFilterField(message, filters[i].GetField())
-		case *psml_pb.Filter_And:
+		case *list_j5pb.Filter_And:
 			return validateQueryRequestFilters(message, filters[i].GetAnd().GetFilters())
-		case *psml_pb.Filter_Or:
+		case *list_j5pb.Filter_Or:
 			return validateQueryRequestFilters(message, filters[i].GetOr().GetFilters())
 		}
 	}
@@ -433,7 +433,7 @@ func validateFiltersAnnotations(_ protoreflect.FieldDescriptors) error {
 	return nil
 }
 
-func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, filterField *psml_pb.Field) error {
+func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, filterField *list_j5pb.Field) error {
 
 	jsonPath := pgstore.ParseJSONPathSpec(filterField.GetName())
 	spec, err := pgstore.NewJSONPath(message, jsonPath)
@@ -448,7 +448,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 	case protoreflect.OneofDescriptor:
 		filterable := false
 
-		filterOpts, ok := proto.GetExtension(leaf.Options().(*descriptorpb.OneofOptions), psml_pb.E_Oneof).(*psml_pb.OneofConstraint)
+		filterOpts, ok := proto.GetExtension(leaf.Options().(*descriptorpb.OneofOptions), list_j5pb.E_Oneof).(*list_j5pb.OneofRules)
 		if !ok {
 			return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
 		}
@@ -458,7 +458,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 
 			if filterable {
 				switch filterField.Type.(type) {
-				case *psml_pb.Field_Value:
+				case *list_j5pb.Field_Value:
 					val := filterField.GetValue()
 
 					found := false
@@ -473,7 +473,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 					if !found {
 						return fmt.Errorf("filter value '%s' is not found in oneof '%s'", val, filterField.Name)
 					}
-				case *psml_pb.Field_Range:
+				case *list_j5pb.Field_Range:
 					return fmt.Errorf("oneofs cannot be filtered by range")
 				}
 			}
@@ -486,7 +486,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 		return nil
 	case protoreflect.FieldDescriptor:
 
-		filterOpts, ok := proto.GetExtension(leaf.Options().(*descriptorpb.FieldOptions), psml_pb.E_Field).(*psml_pb.FieldConstraint)
+		filterOpts, ok := proto.GetExtension(leaf.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 		if !ok {
 			return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
 		}
@@ -525,13 +525,13 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 				filterable = filterOpts.GetEnum().GetFiltering().Filterable
 			case protoreflect.StringKind:
 				switch filterOpts.GetString_().WellKnown.(type) {
-				case *psml_pb.StringRules_Date:
+				case *list_j5pb.StringRules_Date:
 					filterable = filterOpts.GetString_().GetDate().Filtering.Filterable
-				case *psml_pb.StringRules_ForeignKey:
+				case *list_j5pb.StringRules_ForeignKey:
 					switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
-					case *psml_pb.ForeignKeyRules_UniqueString:
+					case *list_j5pb.ForeignKeyRules_UniqueString:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
-					case *psml_pb.ForeignKeyRules_Uuid:
+					case *list_j5pb.ForeignKeyRules_Uuid:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
 					}
 				}
@@ -543,12 +543,12 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 
 			if filterable {
 				switch filterField.Type.(type) {
-				case *psml_pb.Field_Value:
+				case *list_j5pb.Field_Value:
 					err := validateFilterFieldValue(filterOpts, leaf, filterField.GetValue())
 					if err != nil {
 						return fmt.Errorf("filter value: %w", err)
 					}
-				case *psml_pb.Field_Range:
+				case *list_j5pb.Field_Range:
 					err := validateFilterFieldValue(filterOpts, leaf, filterField.GetRange().GetMin())
 					if err != nil {
 						return fmt.Errorf("filter min value: %w", err)
@@ -572,7 +572,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 	}
 }
 
-func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, field protoreflect.FieldDescriptor, value string) error {
+func validateFilterFieldValue(filterOpts *list_j5pb.FieldConstraint, field protoreflect.FieldDescriptor, value string) error {
 	if value == "" {
 		return nil
 	}
@@ -685,7 +685,7 @@ func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, field protore
 		}
 	case protoreflect.StringKind:
 		switch filterOpts.GetString_().WellKnown.(type) {
-		case *psml_pb.StringRules_Date:
+		case *list_j5pb.StringRules_Date:
 			if filterOpts.GetString_().GetDate().Filtering.Filterable {
 				_, err := time.Parse("2006-01-02", value)
 				if err != nil {
@@ -698,9 +698,9 @@ func validateFilterFieldValue(filterOpts *psml_pb.FieldConstraint, field protore
 					}
 				}
 			}
-		case *psml_pb.StringRules_ForeignKey:
+		case *list_j5pb.StringRules_ForeignKey:
 			switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
-			case *psml_pb.ForeignKeyRules_Uuid:
+			case *list_j5pb.ForeignKeyRules_Uuid:
 				if filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable {
 					_, err := uuid.Parse(value)
 					if err != nil {
