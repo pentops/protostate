@@ -89,7 +89,7 @@ func (gc *StateQuerySet[
 }
 
 type StateQueryOptions struct {
-	Auth       TenantFilterProvider
+	Auth       pquery.AuthProvider
 	AuthJoin   *pquery.LeftJoin
 	SkipEvents bool
 }
@@ -178,26 +178,9 @@ func BuildStateQuerySet[
 		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
 	}
 
-	/*
-		if options.Auth != nil {
-			getSpec.Auth = pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
-				requiredTenantKeys, err := options.Auth.GetRequiredTenantKeys(ctx)
-				if err != nil {
-					return nil, err
-				}
-				filter := map[string]string{}
-				// Every key provided by the auth func must match the entity key
-				// Not every entity key must match the claim
-				for tenantKey, claimValue := range requiredTenantKeys {
-					columnName, ok := tenantKeyMap[tenantKey]
-					if !ok {
-						return nil, status.Errorf(codes.PermissionDenied, "claim is restricted to tenant key %s which is does not exist for the entity type", tenantKey)
-					}
-					filter[columnName] = claimValue
-				}
-				return filter, nil
-			})
-		}*/
+	if options.Auth != nil {
+		getSpec.Auth = options.Auth
+	}
 
 	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
 		refl := req.ProtoReflect()
