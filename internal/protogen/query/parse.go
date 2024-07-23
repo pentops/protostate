@@ -61,6 +61,8 @@ func WalkFile(file *protogen.File) (map[string]*PSMQuerySet, error) {
 				return nil, fmt.Errorf("adding method %s to %s: %w", method.Desc.Name(), service.Desc.FullName(), err)
 			}
 		}
+
+		qss.QuerySets[stateQuery.Entity] = methodSet
 	}
 
 	out := map[string]*PSMQuerySet{}
