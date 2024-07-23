@@ -49,6 +49,7 @@ plugins:
       image: ghcr.io/pentops/protoc-gen-go-sugar:19495b5f5ac3fd3964a03031396d83f1bc1341ca
 
   - name: go-psm
-    base: go
-    cmd: ./internal/testproto/protoc-gen-go-psm.sh
+    type: PLUGIN_PROTO
+    cmd: bash
+    args: [./internal/testproto/protoc-gen-go-psm.sh]
 

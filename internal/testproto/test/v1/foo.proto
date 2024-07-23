@@ -16,7 +16,7 @@ option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb
 // FooService is an idealistic, everything-is-normal state machine, which will
 // take advantage of all defaults when constructing the state query and state
 // machine
-service FooService {
+service FooQueryService {
   option (j5.ext.v1.service).state_query.entity = "foo";
 
   rpc GetFoo(GetFooRequest) returns (GetFooResponse) {
@@ -33,7 +33,9 @@ service FooService {
     option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
     option (j5.ext.v1.method).state_query.list_events = true;
   }
+}
 
+service FooService {
   rpc FooSummary(FooSummaryRequest) returns (FooSummaryResponse) {
     option (google.api.http) = {get: "/test/v1/foo/summary"};
   }

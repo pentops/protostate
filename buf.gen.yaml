@@ -1,9 +1,0 @@
-version: v2
-plugins:
-  - remote: buf.build/protocolbuffers/go:v1.31.0
-    out: .
-    opt: paths=import,module=github.com/pentops/protostate
-
-inputs:
-  - directory: ./proto/protostate
-  - directory: ./proto/listify
