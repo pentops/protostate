@@ -3,8 +3,6 @@
 bundles:
   - name: protostate
     dir: proto
-  - name: test
-    dir: internal/testproto
 
 generate:
   - name: go
