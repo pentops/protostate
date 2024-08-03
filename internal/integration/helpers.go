@@ -9,8 +9,8 @@ import (
 	"github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
+	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/testpb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
@@ -85,10 +85,9 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 		ti := 0
 		for tenant, fooIDs := range ids {
 			tkn := &token{
-				claim: &auth_pb.Claim{
-					Tenant: map[string]string{
-						"tenant": tenant,
-					},
+				claim: &auth_j5pb.Claim{
+					TenantType: "tenant",
+					TenantId:   tenant,
 				},
 			}
 			ctx = tkn.WithToken(ctx)

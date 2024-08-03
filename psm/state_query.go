@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
@@ -102,25 +101,6 @@ type TenantFilterProviderFunc func(ctx context.Context) (map[string]string, erro
 
 func (f TenantFilterProviderFunc) GetRequiredTenantKeys(ctx context.Context) (map[string]string, error) {
 	return f(ctx)
-}
-
-func ClaimTenantProvider(actionProvider func(ctx context.Context) (*auth_pb.Action, error)) TenantFilterProvider {
-	return TenantFilterProviderFunc(func(ctx context.Context) (map[string]string, error) {
-		action, err := actionProvider(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if action == nil || action.Actor == nil || action.Actor.Claim == nil {
-			return nil, fmt.Errorf("no claim in action")
-		}
-
-		claim := action.Actor.Claim
-		if len(claim.Tenant) == 0 {
-			return nil, fmt.Errorf("claim must have a tenant")
-		}
-
-		return claim.Tenant, nil
-	})
 }
 
 func BuildStateQuerySet[

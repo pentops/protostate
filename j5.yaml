@@ -4,6 +4,9 @@ bundles:
   - name: protostate
     dir: proto
 
+  - name: test
+    dir: internal/testproto
+
 generate:
   - name: go
     inputs:
@@ -14,6 +17,7 @@ generate:
       module: github.com/pentops/protostate
     plugins:
       - base: go
+
   - name: test
     inputs:
       - local: test

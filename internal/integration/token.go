@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
+	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 )
@@ -12,7 +12,7 @@ import (
 type tokenCtxKey struct{}
 
 type token struct {
-	claim *auth_pb.Claim
+	claim *auth_j5pb.Claim
 }
 
 func (t *token) WithToken(ctx context.Context) context.Context {
@@ -39,18 +39,15 @@ func newTokenQueryStateOption() psm.StateQueryOptions {
 			if err != nil {
 				return nil, err
 			}
-			keys := token.claim.Tenant
 
-			filter := map[string]string{}
-			for key, value := range keys {
-				if field, exists := fieldMap[key]; !exists {
-					return nil, fmt.Errorf("no field mapping for key %s", key)
-				} else {
-					filter[field] = value
-				}
+			tt, ok := fieldMap[token.claim.TenantType]
+			if !ok {
+				return nil, fmt.Errorf("no field mapping for tenant type %s", token.claim.TenantType)
 			}
 
-			return filter, nil
+			return map[string]string{
+				tt: token.claim.TenantId,
+			}, nil
 		}),
 	}
 }
