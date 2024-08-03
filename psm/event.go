@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pentops/o5-auth/gen/o5/auth/v1/auth_pb"
+	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 )
 
@@ -30,7 +30,7 @@ type EventSpec[
 
 	// The authenticated action cause for the event. Cause or Action must be set
 	// for incomming events.
-	Action *auth_pb.Action
+	Action *auth_j5pb.Action
 
 	// Optional, defaults to the system time (if Zero())
 	Timestamp time.Time

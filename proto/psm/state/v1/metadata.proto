@@ -5,8 +5,8 @@ package psm.state.v1;
 import "buf/validate/validate.proto";
 import "google/protobuf/descriptor.proto";
 import "google/protobuf/timestamp.proto";
+import "j5/auth/v1/actor.proto";
 import "j5/list/v1/annotations.proto";
-import "o5/auth/v1/actor.proto";
 
 option go_package = "github.com/pentops/protostate/gen/state/v1/psm_pb";
 
@@ -63,7 +63,7 @@ message EventPublishMetadata {
 message Cause {
   oneof type {
     PSMEventCause psm_event = 1;
-    o5.auth.v1.Action command = 2;
+    j5.auth.v1.Action command = 2;
     ExternalEventCause external_event = 3;
     ReplyCause reply = 4;
   }
