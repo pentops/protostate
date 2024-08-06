@@ -8,14 +8,15 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type Universe struct {
-	FooStateMachine *testpb.FooPSMDB
-	BarStateMachine *testpb.BarPSMDB
+	FooStateMachine *test_pb.FooPSMDB
+	BarStateMachine *test_pb.BarPSMDB
 
 	FooQuery *MiniFooController
 	BarQuery *MiniBarController
@@ -48,13 +49,13 @@ func setupUniverse(ctx context.Context, t flowtest.Asserter, uu *Universe) {
 		t.Fatal(err.Error())
 	}
 
-	fooQuery, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.Foo.StateTableSpec()), psm.StateQueryOptions{})
+	fooQuery, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.Foo.StateTableSpec()), psm.StateQueryOptions{})
 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	barQuery, err := testpb.NewBarPSMQuerySet(testpb.DefaultBarPSMQuerySpec(sm.Bar.StateTableSpec()), psm.StateQueryOptions{})
+	barQuery, err := test_spb.NewBarPSMQuerySet(test_spb.DefaultBarPSMQuerySpec(sm.Bar.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -67,19 +68,19 @@ func setupUniverse(ctx context.Context, t flowtest.Asserter, uu *Universe) {
 
 type MiniFooController struct {
 	db    *sqrlx.Wrapper
-	query *testpb.FooPSMQuerySet
+	query *test_spb.FooPSMQuerySet
 }
 
-func NewMiniFooController(db *sqrlx.Wrapper, query *testpb.FooPSMQuerySet) *MiniFooController {
+func NewMiniFooController(db *sqrlx.Wrapper, query *test_spb.FooPSMQuerySet) *MiniFooController {
 	return &MiniFooController{
 		db:    db,
 		query: query,
 	}
 }
 
-func (c *MiniFooController) FooSummary(ctx context.Context, req *testpb.FooSummaryRequest) (*testpb.FooSummaryResponse, error) {
+func (c *MiniFooController) FooSummary(ctx context.Context, req *test_spb.FooSummaryRequest) (*test_spb.FooSummaryResponse, error) {
 
-	res := &testpb.FooSummaryResponse{}
+	res := &test_spb.FooSummaryResponse{}
 
 	query := sq.Select("count(id)", "sum(weight)", "sum(height)", "sum(length)").From("foo_cache")
 	err := c.db.Transact(ctx, nil, func(ctx context.Context, tx sqrlx.Transaction) error {
@@ -91,8 +92,8 @@ func (c *MiniFooController) FooSummary(ctx context.Context, req *testpb.FooSumma
 	return res, nil
 }
 
-func (c *MiniFooController) GetFoo(ctx context.Context, req *testpb.GetFooRequest) (*testpb.GetFooResponse, error) {
-	res := &testpb.GetFooResponse{}
+func (c *MiniFooController) GetFoo(ctx context.Context, req *test_spb.GetFooRequest) (*test_spb.GetFooResponse, error) {
+	res := &test_spb.GetFooResponse{}
 	err := c.query.Get(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -100,8 +101,8 @@ func (c *MiniFooController) GetFoo(ctx context.Context, req *testpb.GetFooReques
 	return res, nil
 }
 
-func (c *MiniFooController) ListFoos(ctx context.Context, req *testpb.ListFoosRequest) (*testpb.ListFoosResponse, error) {
-	res := &testpb.ListFoosResponse{}
+func (c *MiniFooController) ListFoos(ctx context.Context, req *test_spb.ListFoosRequest) (*test_spb.ListFoosResponse, error) {
+	res := &test_spb.ListFoosResponse{}
 	err := c.query.List(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -109,8 +110,8 @@ func (c *MiniFooController) ListFoos(ctx context.Context, req *testpb.ListFoosRe
 	return res, nil
 }
 
-func (c *MiniFooController) ListFooEvents(ctx context.Context, req *testpb.ListFooEventsRequest) (*testpb.ListFooEventsResponse, error) {
-	res := &testpb.ListFooEventsResponse{}
+func (c *MiniFooController) ListFooEvents(ctx context.Context, req *test_spb.ListFooEventsRequest) (*test_spb.ListFooEventsResponse, error) {
+	res := &test_spb.ListFooEventsResponse{}
 	err := c.query.ListEvents(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -120,18 +121,18 @@ func (c *MiniFooController) ListFooEvents(ctx context.Context, req *testpb.ListF
 
 type MiniBarController struct {
 	db    *sqrlx.Wrapper
-	query *testpb.BarPSMQuerySet
+	query *test_spb.BarPSMQuerySet
 }
 
-func NewMiniBarController(db *sqrlx.Wrapper, query *testpb.BarPSMQuerySet) *MiniBarController {
+func NewMiniBarController(db *sqrlx.Wrapper, query *test_spb.BarPSMQuerySet) *MiniBarController {
 	return &MiniBarController{
 		db:    db,
 		query: query,
 	}
 }
 
-func (b *MiniBarController) GetBar(ctx context.Context, req *testpb.GetBarRequest) (*testpb.GetBarResponse, error) {
-	res := &testpb.GetBarResponse{}
+func (b *MiniBarController) GetBar(ctx context.Context, req *test_spb.GetBarRequest) (*test_spb.GetBarResponse, error) {
+	res := &test_spb.GetBarResponse{}
 	err := b.query.Get(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err
@@ -139,8 +140,8 @@ func (b *MiniBarController) GetBar(ctx context.Context, req *testpb.GetBarReques
 	return res, nil
 }
 
-func (b *MiniBarController) ListBars(ctx context.Context, req *testpb.ListBarsRequest) (*testpb.ListBarsResponse, error) {
-	res := &testpb.ListBarsResponse{}
+func (b *MiniBarController) ListBars(ctx context.Context, req *test_spb.ListBarsRequest) (*test_spb.ListBarsResponse, error) {
+	res := &test_spb.ListBarsResponse{}
 	err := b.query.List(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err
@@ -148,8 +149,8 @@ func (b *MiniBarController) ListBars(ctx context.Context, req *testpb.ListBarsRe
 	return res, nil
 }
 
-func (b *MiniBarController) ListBarEvents(ctx context.Context, req *testpb.ListBarEventsRequest) (*testpb.ListBarEventsResponse, error) {
-	res := &testpb.ListBarEventsResponse{}
+func (b *MiniBarController) ListBarEvents(ctx context.Context, req *test_spb.ListBarEventsRequest) (*test_spb.ListBarEventsResponse, error) {
+	res := &test_spb.ListBarEventsResponse{}
 	err := b.query.ListEvents(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err

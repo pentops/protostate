@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.4.0
 // - protoc             (unknown)
-// source: test/v1/bar.proto
+// source: test/v1/service/bar.proto
 
-package testpb
+package test_spb
 
 import (
 	context "context"
@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	BarService_GetBar_FullMethodName        = "/test.v1.BarService/GetBar"
-	BarService_ListBars_FullMethodName      = "/test.v1.BarService/ListBars"
-	BarService_ListBarEvents_FullMethodName = "/test.v1.BarService/ListBarEvents"
+	BarService_GetBar_FullMethodName        = "/test.v1.service.BarService/GetBar"
+	BarService_ListBars_FullMethodName      = "/test.v1.service.BarService/ListBars"
+	BarService_ListBarEvents_FullMethodName = "/test.v1.service.BarService/ListBarEvents"
 )
 
 // BarServiceClient is the client API for BarService service.
@@ -171,7 +171,7 @@ func _BarService_ListBarEvents_Handler(srv interface{}, ctx context.Context, dec
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var BarService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "test.v1.BarService",
+	ServiceName: "test.v1.service.BarService",
 	HandlerType: (*BarServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -188,5 +188,5 @@ var BarService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "test/v1/bar.proto",
+	Metadata: "test/v1/service/bar.proto",
 }

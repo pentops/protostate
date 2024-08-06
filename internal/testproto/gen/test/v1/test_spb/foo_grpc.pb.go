@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.4.0
 // - protoc             (unknown)
-// source: test/v1/foo.proto
+// source: test/v1/service/foo.proto
 
-package testpb
+package test_spb
 
 import (
 	context "context"
@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	FooQueryService_GetFoo_FullMethodName        = "/test.v1.FooQueryService/GetFoo"
-	FooQueryService_ListFoos_FullMethodName      = "/test.v1.FooQueryService/ListFoos"
-	FooQueryService_ListFooEvents_FullMethodName = "/test.v1.FooQueryService/ListFooEvents"
+	FooQueryService_GetFoo_FullMethodName        = "/test.v1.service.FooQueryService/GetFoo"
+	FooQueryService_ListFoos_FullMethodName      = "/test.v1.service.FooQueryService/ListFoos"
+	FooQueryService_ListFooEvents_FullMethodName = "/test.v1.service.FooQueryService/ListFooEvents"
 )
 
 // FooQueryServiceClient is the client API for FooQueryService service.
@@ -173,7 +173,7 @@ func _FooQueryService_ListFooEvents_Handler(srv interface{}, ctx context.Context
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var FooQueryService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "test.v1.FooQueryService",
+	ServiceName: "test.v1.service.FooQueryService",
 	HandlerType: (*FooQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -190,11 +190,11 @@ var FooQueryService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "test/v1/foo.proto",
+	Metadata: "test/v1/service/foo.proto",
 }
 
 const (
-	FooService_FooSummary_FullMethodName = "/test.v1.FooService/FooSummary"
+	FooService_FooSummary_FullMethodName = "/test.v1.service.FooService/FooSummary"
 )
 
 // FooServiceClient is the client API for FooService service.
@@ -272,7 +272,7 @@ func _FooService_FooSummary_Handler(srv interface{}, ctx context.Context, dec fu
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var FooService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "test.v1.FooService",
+	ServiceName: "test.v1.service.FooService",
 	HandlerType: (*FooServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -281,5 +281,5 @@ var FooService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "test/v1/foo.proto",
+	Metadata: "test/v1/service/foo.proto",
 }

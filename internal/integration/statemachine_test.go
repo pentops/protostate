@@ -10,7 +10,8 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"github.com/pressly/goose"
@@ -35,12 +36,12 @@ func TestMermaidPrinter(t *testing.T) {
 }
 
 func TestStateEntityExtensions(t *testing.T) {
-	event := &testpb.FooEvent{}
-	assert.Equal(t, testpb.FooPSMEventNil, event.PSMEventKey())
-	if err := event.SetPSMEvent(&testpb.FooEventType_Created{}); err != nil {
+	event := &test_pb.FooEvent{}
+	assert.Equal(t, test_pb.FooPSMEventNil, event.PSMEventKey())
+	if err := event.SetPSMEvent(&test_pb.FooEventType_Created{}); err != nil {
 		t.Fatal(err.Error())
 	}
-	assert.Equal(t, testpb.FooPSMEventCreated, event.PSMEventKey())
+	assert.Equal(t, test_pb.FooPSMEventCreated, event.PSMEventKey())
 }
 
 func TestFooStateField(t *testing.T) {
@@ -56,7 +57,7 @@ func TestFooStateField(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	barSpec, err := testpb.BarPSMBuilder().BuildQueryTableSpec()
+	barSpec, err := test_pb.BarPSMBuilder().BuildQueryTableSpec()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -84,32 +85,32 @@ func TestFooStateField(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		t.Equal(test_pb.FooStatus_ACTIVE, stateOut.Status)
 		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
 	ss.Step("Update OK, Same Key", func(ctx context.Context, t flowtest.Asserter) {
-		event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+		event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 			u.Weight = ptr.To(int64(11))
 		})
 		stateOut, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+		t.Equal(test_pb.FooStatus_ACTIVE, stateOut.Status)
 		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
 	ss.Step("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
-		event := &testpb.FooPSMEventSpec{
+		event := &test_pb.FooPSMEventSpec{
 			EventID: uuid.NewString(),
-			Keys: &testpb.FooKeys{
+			Keys: &test_pb.FooKeys{
 				FooId:        fooID,
 				TenantId:     &differentTenantId,
 				MetaTenantId: metaTenant,
 			},
-			Event: &testpb.FooEventType_Updated{
+			Event: &test_pb.FooEventType_Updated{
 				Name:   "foo",
 				Field:  "event3",
 				Weight: ptr.To(int64(11)),
@@ -144,7 +145,7 @@ func TestBarStateMachine(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	if stateOut.GetStatus() != testpb.BarStatus_ACTIVE {
+	if stateOut.GetStatus() != test_pb.BarStatus_ACTIVE {
 		t.Fatalf("Expect state ACTIVE, got %s", stateOut.GetStatus().ShortString())
 	}
 }
@@ -163,7 +164,7 @@ func TestStateMachineHook(t *testing.T) {
 		foo2ID := uuid.NewString()
 		event3 := newFooCreatedEvent(foo2ID, tenantID, nil)
 
-		for _, event := range []*testpb.FooPSMEventSpec{event1, event3} {
+		for _, event := range []*test_pb.FooPSMEventSpec{event1, event3} {
 			_, err := uu.FooStateMachine.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -172,7 +173,7 @@ func TestStateMachineHook(t *testing.T) {
 	})
 
 	flow.Step("Summary", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.FooSummaryRequest{}
+		req := &test_spb.FooSummaryRequest{}
 
 		res, err := uu.FooQuery.FooSummary(ctx, req)
 		if err != nil {
@@ -186,7 +187,7 @@ func TestStateMachineHook(t *testing.T) {
 	})
 
 	flow.Step("Mutate", func(ctx context.Context, t flowtest.Asserter) {
-		updatedEvent := newFooUpdatedEvent(foo1ID, tenantID, func(u *testpb.FooEventType_Updated) {
+		updatedEvent := newFooUpdatedEvent(foo1ID, tenantID, func(u *test_pb.FooEventType_Updated) {
 			u.Name = "updated"
 			u.Delete = true
 		})
@@ -197,23 +198,23 @@ func TestStateMachineHook(t *testing.T) {
 		}
 
 		// Returns the state after the initial transition
-		t.Equal(testpb.FooStatus_ACTIVE, ss.Status)
+		t.Equal(test_pb.FooStatus_ACTIVE, ss.Status)
 		t.Equal("updated", ss.Data.Name)
 
 		// The delete=true flag causes a chain event, which sets the status to
 		// DELETED
 
-		res2, err := uu.FooQuery.GetFoo(ctx, &testpb.GetFooRequest{
+		res2, err := uu.FooQuery.GetFoo(ctx, &test_spb.GetFooRequest{
 			FooId: foo1ID,
 		})
 		t.NoError(err)
-		t.Equal(testpb.FooStatus_DELETED, res2.State.Status)
+		t.Equal(test_pb.FooStatus_DELETED, res2.State.Status)
 
 	})
 
 	flow.Step("Hook should have pushed to Bar", func(ctx context.Context, t flowtest.Asserter) {
 
-		res, err := uu.BarQuery.ListBars(ctx, &testpb.ListBarsRequest{})
+		res, err := uu.BarQuery.ListBars(ctx, &test_spb.ListBarsRequest{})
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -249,7 +250,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if state.GetStatus() != testpb.FooStatus_ACTIVE {
+		if state.GetStatus() != test_pb.FooStatus_ACTIVE {
 			t.Fatalf("expected state ACTIVE, got %s", state.GetStatus().ShortString())
 		}
 
@@ -263,11 +264,11 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if state.GetStatus() != testpb.FooStatus_ACTIVE {
+		if state.GetStatus() != test_pb.FooStatus_ACTIVE {
 			t.Fatalf("expected state ACTIVE, got %s", state.GetStatus().ShortString())
 		}
 
-		req := &testpb.ListFooEventsRequest{
+		req := &test_spb.ListFooEventsRequest{
 			FooId: fooID,
 		}
 
@@ -286,7 +287,7 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 	flow.Step("Different Event Data", func(ctx context.Context, t flowtest.Asserter) {
 		// idempotency test
 		// event 1 should be idempotent
-		event1.Event.(*testpb.FooEventType_Created).Name = "foo2"
+		event1.Event.(*test_pb.FooEventType_Created).Name = "foo2"
 		_, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err == nil {
 			t.Fatal("expected error")
@@ -305,7 +306,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
-	event1 := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+	event1 := newFooCreatedEvent(fooID, tenantID, func(c *test_pb.FooEventType_Created) {
 		c.Name = "1"
 	})
 
@@ -315,7 +316,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if state.GetStatus() != testpb.FooStatus_ACTIVE {
+		if state.GetStatus() != test_pb.FooStatus_ACTIVE {
 			t.Fatalf("expected state ACTIVE, got %s", state.GetStatus().ShortString())
 		}
 
@@ -326,7 +327,7 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 	})
 
 	flow.Step("Update", func(ctx context.Context, t flowtest.Asserter) {
-		state, err := uu.FooStateMachine.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+		state, err := uu.FooStateMachine.Transition(ctx, newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 			u.Name = "2"
 		}))
 		if err != nil {
@@ -365,13 +366,13 @@ func TestFooStateMachine(t *testing.T) {
 
 	foo2ID := uuid.NewString()
 	event3 := newFooCreatedEvent(foo2ID, tenantID, nil)
-	event4 := newFooUpdatedEvent(foo2ID, tenantID, func(u *testpb.FooEventType_Updated) {
+	event4 := newFooUpdatedEvent(foo2ID, tenantID, func(u *test_pb.FooEventType_Updated) {
 		u.Delete = true
 	})
-	statesOut := map[string]*testpb.FooState{}
+	statesOut := map[string]*test_pb.FooState{}
 
 	flow.Setup(func(ctx context.Context, t flowtest.Asserter) error {
-		for _, event := range []*testpb.FooPSMEventSpec{event1, event2, event3, event4} {
+		for _, event := range []*test_pb.FooPSMEventSpec{event1, event2, event3, event4} {
 			stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 			if err != nil {
 				t.Fatal(err.Error())
@@ -379,14 +380,14 @@ func TestFooStateMachine(t *testing.T) {
 			statesOut[event.Keys.FooId] = stateOut
 		}
 
-		if statesOut[fooID].GetStatus() != testpb.FooStatus_ACTIVE {
+		if statesOut[fooID].GetStatus() != test_pb.FooStatus_ACTIVE {
 			t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 		}
 		return nil
 	})
 
 	flow.Step("Get1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.GetFooRequest{
+		req := &test_spb.GetFooRequest{
 			FooId: fooID,
 		}
 
@@ -406,7 +407,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("ListEvents1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFooEventsRequest{
+		req := &test_spb.ListFooEventsRequest{
 			FooId: fooID,
 		}
 
@@ -430,7 +431,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("Get2", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.GetFooRequest{
+		req := &test_spb.GetFooRequest{
 			FooId: foo2ID,
 		}
 
@@ -439,7 +440,7 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		if res.State.Status != testpb.FooStatus_DELETED {
+		if res.State.Status != test_pb.FooStatus_DELETED {
 			t.Fatalf("expected state DELETED, got %s - Did the chain run?", res.State.Status.ShortString())
 		}
 
@@ -468,7 +469,7 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("List", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFoosRequest{}
+		req := &test_spb.ListFoosRequest{}
 
 		res, err := uu.FooQuery.ListFoos(ctx, req)
 		if err != nil {

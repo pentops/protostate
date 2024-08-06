@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package test.v1.service;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "j5/ext/v1/annotations.proto";
+import "j5/list/v1/page.proto";
+import "j5/list/v1/query.proto";
+import "test/v1/foo.proto";
+
+option go_package = "github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb";
+
+// FooService is an idealistic, everything-is-normal state machine, which will
+// take advantage of all defaults when constructing the state query and state
+// machine
+service FooQueryService {
+  option (j5.ext.v1.service).state_query.entity = "foo";
+
+  rpc GetFoo(GetFooRequest) returns (GetFooResponse) {
+    option (google.api.http) = {get: "/test/v1/foo/{foo_id}"};
+    option (j5.ext.v1.method).state_query.get = true;
+  }
+
+  rpc ListFoos(ListFoosRequest) returns (ListFoosResponse) {
+    option (google.api.http) = {get: "/test/v1/foos"};
+    option (j5.ext.v1.method).state_query.list = true;
+  }
+
+  rpc ListFooEvents(ListFooEventsRequest) returns (ListFooEventsResponse) {
+    option (google.api.http) = {get: "/test/v1/foo/{foo_id}/events"};
+    option (j5.ext.v1.method).state_query.list_events = true;
+  }
+}
+message GetFooRequest {
+  string foo_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetFooResponse {
+  test.v1.FooState state = 1;
+  repeated test.v1.FooEvent events = 2;
+}
+
+message ListFoosRequest {
+  optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
+}
+
+message ListFoosResponse {
+  repeated test.v1.FooState foos = 1;
+  j5.list.v1.PageResponse page = 2;
+}
+
+message ListFooEventsRequest {
+  string foo_id = 1 [(buf.validate.field).string.uuid = true];
+  j5.list.v1.PageRequest page = 2;
+  j5.list.v1.QueryRequest query = 3;
+}
+
+message ListFooEventsResponse {
+  repeated FooEvent events = 1;
+  j5.list.v1.PageResponse page = 2;
+}
+
+service FooService {
+  rpc FooSummary(FooSummaryRequest) returns (FooSummaryResponse) {
+    option (google.api.http) = {get: "/test/v1/foo/summary"};
+  }
+}
+
+message FooSummaryRequest {}
+
+message FooSummaryResponse {
+  int64 count_foos = 1;
+  int64 total_weight = 2;
+  int64 total_height = 3;
+  int64 total_length = 4;
+}

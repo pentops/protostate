@@ -11,7 +11,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
 )
@@ -71,7 +71,7 @@ func getRawEvent(db *sqrlx.Wrapper, id string) (string, error) {
 	return string(data), nil
 }
 
-func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *testpb.FooPSMDB, tenants []string, count int) map[string][]string {
+func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *test_pb.FooPSMDB, tenants []string, count int) map[string][]string {
 	ids := make(map[string][]string, len(tenants))
 
 	for ti := range tenants {
@@ -98,12 +98,12 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 			for ii, fooID := range fooIDs {
 				tt := time.Now()
 
-				event := newFooCreatedEvent(fooID, tenants[ti], func(c *testpb.FooEventType_Created) {
+				event := newFooCreatedEvent(fooID, tenants[ti], func(c *test_pb.FooEventType_Created) {
 					c.Field = fmt.Sprintf("foo %d at %s (weighted %d, height %d, length %d)", ii, tt.Format(time.RFC3339Nano), (10+ii)*(ti+1), (50-ii)*(ti+1), (ii%2)*(ti+1))
 					c.Weight = ptr.To((10 + int64(ii)) * (int64(ti) + 1))
 					c.Height = ptr.To((50 - int64(ii)) * (int64(ti) + 1))
 					c.Length = ptr.To((int64(ii%2) * (int64(ti) + 1)))
-					c.Profiles = []*testpb.FooProfile{
+					c.Profiles = []*test_pb.FooProfile{
 						{
 							Name:  fmt.Sprintf("profile %d", ii),
 							Place: int64(ii) + 50,
@@ -119,7 +119,7 @@ func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *te
 				if err != nil {
 					t.Fatalf("setup foo: %s (%#v)", err.Error(), event.Keys)
 				}
-				t.Equal(testpb.FooStatus_ACTIVE, stateOut.Status)
+				t.Equal(test_pb.FooStatus_ACTIVE, stateOut.Status)
 				t.Equal(tenants[ti], *stateOut.Keys.TenantId)
 			}
 

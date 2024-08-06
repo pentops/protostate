@@ -10,7 +10,8 @@ import (
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"github.com/pressly/goose"
@@ -30,8 +31,8 @@ func TestDynamicSearching(t *testing.T) {
 	}
 
 	barSpec, err := psm.BuildQueryTableSpec(
-		(&testpb.BarState{}).ProtoReflect().Descriptor(),
-		(&testpb.BarEvent{}).ProtoReflect().Descriptor(),
+		(&test_pb.BarState{}).ProtoReflect().Descriptor(),
+		(&test_pb.BarEvent{}).ProtoReflect().Descriptor(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +58,7 @@ func TestDynamicSearching(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestDynamicSearching")
 	defer ss.RunSteps(t)
 
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -67,7 +68,7 @@ func TestDynamicSearching(t *testing.T) {
 
 	t.Run("Simple Search Field", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -80,7 +81,7 @@ func TestDynamicSearching(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -111,7 +112,7 @@ func TestDynamicSearching(t *testing.T) {
 		t.Run("Complex Search Field", func(t *testing.T) {
 			nextToken := ""
 			ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-				req := &testpb.ListFoosRequest{
+				req := &test_spb.ListFoosRequest{
 					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 					},
@@ -133,7 +134,7 @@ func TestDynamicSearching(t *testing.T) {
 						},
 					},
 				}
-				res := &testpb.ListFoosResponse{}
+				res := &test_spb.ListFoosResponse{}
 
 				err = queryer.List(ctx, db, req, res)
 				if err != nil {
@@ -175,7 +176,7 @@ func TestDynamicSearching(t *testing.T) {
 			})
 
 			ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-				req := &testpb.ListFoosRequest{
+				req := &test_spb.ListFoosRequest{
 					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 						Token:    &nextToken,
@@ -198,7 +199,7 @@ func TestDynamicSearching(t *testing.T) {
 						},
 					},
 				}
-				res := &testpb.ListFoosResponse{}
+				res := &test_spb.ListFoosResponse{}
 
 				err = queryer.List(ctx, db, req, res)
 				if err != nil {
