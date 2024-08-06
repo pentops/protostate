@@ -9,13 +9,13 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20240806061922-203f84b98211
-	github.com/pentops/j5 v0.0.0-20240806072247-f8eb72c42656
-	github.com/pentops/log.go v0.0.0-20240806063310-95e64c81229c
-	github.com/pentops/o5-messaging v0.0.0-20240806071006-1f45532d6c43
+	github.com/pentops/flowtest v0.0.0-20240806162256-23b05c4df309
+	github.com/pentops/j5 v0.0.0-20240806163133-74352b85fff4
+	github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24
+	github.com/pentops/o5-messaging v0.0.0-20240806162328-c77f99413b9e
 	github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542
-	github.com/pentops/prototools v0.0.0-20240806071129-ea08af0283c0
-	github.com/pentops/runner v0.0.0-20240806071010-e0c7d77968fc
+	github.com/pentops/prototools v0.0.0-20240806163000-2d02c62be4f1
+	github.com/pentops/runner v0.0.0-20240806162317-0eb1ced9ab3d
 	github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.9.0
@@ -45,7 +45,7 @@ require (
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240805194559-2c9e96a0b5d4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
