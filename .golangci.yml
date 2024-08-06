@@ -18,7 +18,6 @@ linters:
     - typecheck
     - unused
   disable:
-    - unparam
     - wsl
     - prealloc
     - gochecknoglobals
