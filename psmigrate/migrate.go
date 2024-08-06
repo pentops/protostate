@@ -1,4 +1,4 @@
-package migrate
+package psmigrate
 
 import (
 	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
