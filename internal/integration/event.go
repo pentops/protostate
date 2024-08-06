@@ -5,15 +5,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pentops/protostate/gen/state/v1/psm_pb"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+
 	"k8s.io/utils/ptr"
 )
 
 var metaTenant = uuid.NewString()
 
-func newFooCreatedEvent(fooID, tenantID string, mod func(c *testpb.FooEventType_Created)) *testpb.FooPSMEventSpec {
+func newFooCreatedEvent(fooID, tenantID string, mod func(c *test_pb.FooEventType_Created)) *test_pb.FooPSMEventSpec {
 	weight := int64(10)
-	created := &testpb.FooEventType_Created{
+	created := &test_pb.FooEventType_Created{
 		Name:        "foo",
 		Field:       fmt.Sprintf("weight: %d", weight),
 		Description: ptr.To("creation event for foo: " + fooID),
@@ -24,16 +25,16 @@ func newFooCreatedEvent(fooID, tenantID string, mod func(c *testpb.FooEventType_
 		mod(created)
 	}
 
-	return newFooEvent(&testpb.FooKeys{
+	return newFooEvent(&test_pb.FooKeys{
 		FooId:        fooID,
 		TenantId:     &tenantID,
 		MetaTenantId: metaTenant,
 	}, created)
 }
 
-func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_Updated)) *testpb.FooPSMEventSpec {
+func newFooUpdatedEvent(fooID, tenantID string, mod func(u *test_pb.FooEventType_Updated)) *test_pb.FooPSMEventSpec {
 	weight := int64(20)
-	updated := &testpb.FooEventType_Updated{
+	updated := &test_pb.FooEventType_Updated{
 		Name:        "foo",
 		Field:       fmt.Sprintf("weight: %d", weight),
 		Description: ptr.To("update event for foo: " + fooID),
@@ -44,19 +45,19 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *testpb.FooEventType_
 		mod(updated)
 	}
 
-	return newFooEvent(&testpb.FooKeys{
+	return newFooEvent(&test_pb.FooKeys{
 		FooId:        fooID,
 		TenantId:     &tenantID,
 		MetaTenantId: metaTenant,
 	}, updated)
 }
 
-func newFooEvent(keys *testpb.FooKeys, et testpb.FooPSMEvent) *testpb.FooPSMEventSpec {
+func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSMEventSpec {
 
 	if keys.MetaTenantId == "" {
 		panic("metaTenantId is required")
 	}
-	e := &testpb.FooPSMEventSpec{
+	e := &test_pb.FooPSMEventSpec{
 		EventID: uuid.NewString(),
 		Keys:    keys,
 		Cause: &psm_pb.Cause{
@@ -73,8 +74,8 @@ func newFooEvent(keys *testpb.FooKeys, et testpb.FooPSMEvent) *testpb.FooPSMEven
 	return e
 }
 
-func newBarCreatedEvent(barID string, mod func(c *testpb.BarEventType_Created)) *testpb.BarPSMEventSpec {
-	created := &testpb.BarEventType_Created{
+func newBarCreatedEvent(barID string, mod func(c *test_pb.BarEventType_Created)) *test_pb.BarPSMEventSpec {
+	created := &test_pb.BarEventType_Created{
 		Name:  "bar",
 		Field: "event",
 	}
@@ -83,17 +84,17 @@ func newBarCreatedEvent(barID string, mod func(c *testpb.BarEventType_Created)) 
 		mod(created)
 	}
 
-	return newBarEvent(barID, func(e *testpb.BarPSMEventSpec) {
+	return newBarEvent(barID, func(e *test_pb.BarPSMEventSpec) {
 		e.Event = created
 	})
 }
 
 var barOtherID = "FCC73FA5-B653-4DCC-AA6F-3548BECB7B2A"
 
-func newBarEvent(barID string, mod func(e *testpb.BarPSMEventSpec)) *testpb.BarPSMEventSpec {
-	e := &testpb.BarPSMEventSpec{
+func newBarEvent(barID string, mod func(e *test_pb.BarPSMEventSpec)) *test_pb.BarPSMEventSpec {
+	e := &test_pb.BarPSMEventSpec{
 		EventID: uuid.NewString(),
-		Keys: &testpb.BarKeys{
+		Keys: &test_pb.BarKeys{
 			BarId:      barID,
 			BarOtherId: barOtherID,
 		},

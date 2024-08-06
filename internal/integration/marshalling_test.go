@@ -8,7 +8,8 @@ import (
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
@@ -28,7 +29,7 @@ func TestMarshaling(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -41,7 +42,7 @@ func TestMarshaling(t *testing.T) {
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
-			event := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+			event := newFooCreatedEvent(fooID, tenantID, func(c *test_pb.FooEventType_Created) {
 				c.Description = ptr.To("")
 			})
 
@@ -50,11 +51,11 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.GetFooRequest{
+			req := &test_spb.GetFooRequest{
 				FooId: fooID,
 			}
 
-			res := &testpb.GetFooResponse{}
+			res := &test_spb.GetFooResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
@@ -89,7 +90,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
-			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Description = ptr.To("non blank description")
 			})
 			_, err := sm.Transition(ctx, event)
@@ -97,11 +98,11 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.GetFooRequest{
+			req := &test_spb.GetFooRequest{
 				FooId: fooID,
 			}
 
-			res := &testpb.GetFooResponse{}
+			res := &test_spb.GetFooResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
@@ -136,7 +137,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with missing", func(t *testing.T) {
-			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Description = nil
 			})
 
@@ -145,11 +146,11 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.GetFooRequest{
+			req := &test_spb.GetFooRequest{
 				FooId: fooID,
 			}
 
-			res := &testpb.GetFooResponse{}
+			res := &test_spb.GetFooResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
@@ -184,7 +185,7 @@ func TestMarshaling(t *testing.T) {
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
-			event := newFooCreatedEvent(fooID, tenantID, func(c *testpb.FooEventType_Created) {
+			event := newFooCreatedEvent(fooID, tenantID, func(c *test_pb.FooEventType_Created) {
 				c.Field = ""
 				c.Description = nil
 			})
@@ -194,11 +195,11 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.GetFooRequest{
+			req := &test_spb.GetFooRequest{
 				FooId: fooID,
 			}
 
-			res := &testpb.GetFooResponse{}
+			res := &test_spb.GetFooResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
@@ -229,7 +230,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
-			event := newFooUpdatedEvent(fooID, tenantID, func(u *testpb.FooEventType_Updated) {
+			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Field = "non empty"
 				u.Description = nil
 			})
@@ -239,11 +240,11 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.GetFooRequest{
+			req := &test_spb.GetFooRequest{
 				FooId: fooID,
 			}
 
-			res := &testpb.GetFooResponse{}
+			res := &test_spb.GetFooResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {

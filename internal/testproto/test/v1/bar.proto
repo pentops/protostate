@@ -3,44 +3,11 @@ syntax = "proto3";
 package test.v1;
 
 import "buf/validate/validate.proto";
-import "google/api/annotations.proto";
 import "j5/ext/v1/annotations.proto";
 import "j5/list/v1/annotations.proto";
-import "j5/list/v1/page.proto";
-import "j5/list/v1/query.proto";
 import "psm/state/v1/metadata.proto";
 
-option go_package = "github.com/pentops/protostate/internal/testproto/gen/testpb";
-
-// BarService is a little strange, it requires a lot of overrides for defaults
-// when building the state query and state machine.
-service BarService {
-  option (j5.ext.v1.service).state_query.entity = "bar";
-
-  rpc GetBar(GetBarRequest) returns (GetBarResponse) {
-    option (google.api.http) = {get: "/test/v1/bar/{bar_id}"};
-    option (j5.ext.v1.method).state_query.get = true;
-  }
-
-  rpc ListBars(ListBarsRequest) returns (ListBarsResponse) {
-    option (google.api.http) = {get: "/test/v1/bars"};
-    option (j5.ext.v1.method).state_query.list = true;
-  }
-
-  rpc ListBarEvents(ListBarEventsRequest) returns (ListBarEventsResponse) {
-    option (google.api.http) = {get: "/test/v1/bar/{bar_id}/events"};
-    option (j5.ext.v1.method).state_query.list_events = true;
-  }
-}
-
-message GetBarRequest {
-  string bar_id = 1 [(buf.validate.field).string.uuid = true];
-}
-
-message GetBarResponse {
-  BarState state = 1;
-  repeated BarEvent events = 2;
-}
+option go_package = "github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb";
 
 message BarKeys {
   option (j5.ext.v1.psm).entity_name = "bar";
@@ -118,29 +85,4 @@ message BarEventType {
   }
 
   message Deleted {}
-}
-
-message ListBarsRequest {
-  optional string tenant_id = 1 [(buf.validate.field).string.uuid = true];
-  j5.list.v1.PageRequest page = 2;
-  j5.list.v1.QueryRequest query = 3;
-  option (j5.list.v1.list_request) = {
-    sort_tiebreaker: ["keys.bar_id"]
-  };
-}
-
-message ListBarsResponse {
-  repeated BarState bars = 1;
-  j5.list.v1.PageResponse page = 2;
-}
-
-message ListBarEventsRequest {
-  string bar_id = 1 [(buf.validate.field).string.uuid = true];
-  j5.list.v1.PageRequest page = 2;
-  j5.list.v1.QueryRequest query = 3;
-}
-
-message ListBarEventsResponse {
-  repeated BarEvent events = 1;
-  j5.list.v1.PageResponse page = 2;
 }

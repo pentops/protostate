@@ -2,6 +2,10 @@
 packages:
   - name: test.v1
 
+options:
+  subPackages:
+    - name: "service"
+
 dependencies:
   - local: protostate
 

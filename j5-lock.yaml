@@ -3,11 +3,5 @@ inputs:
       version: a6c49f84cc0f4e038680d390392e2ab0
     - name: buf/googleapis/googleapis
       version: 8bc2c51e08c447cd8886cdea48a73e14
-    - name: registry/v1/pentops/j5
-      version: main
-    - name: buf/bufbuild/protovalidate
-      version: a6c49f84cc0f4e038680d390392e2ab0
-    - name: buf/googleapis/googleapis
-      version: 8bc2c51e08c447cd8886cdea48a73e14
-    - name: registry/v1/pentops/j5
-      version: main
+    - name: registry/pentops/j5
+      version: f8eb72c42656d81bac3d4e340577daca09750f86

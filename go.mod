@@ -3,38 +3,37 @@ module github.com/pentops/protostate
 go 1.22.4
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.2-20240508200655-46a4cf4ba109.2
-	github.com/bufbuild/protovalidate-go v0.6.2
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.2-20240717164558-a6c49f84cc0f.2
+	github.com/bufbuild/protovalidate-go v0.6.3
 	github.com/elgris/sqrl v0.0.0-20210727210741-7e0198b30236
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20240623020118-02bf89f30b87
-	github.com/pentops/j5 v0.0.0-20240803010150-e188cb318f63
-	github.com/pentops/log.go v0.0.0-20240618224413-ed85018bafd9
-	github.com/pentops/o5-auth v0.0.0-20240803172238-f9b7d7c2ad01
-	github.com/pentops/o5-messaging v0.0.0-20240802182716-a8d0dc2a0eb0
-	github.com/pentops/pgtest.go v0.0.0-20240604005819-2035f4562734
-	github.com/pentops/prototools v0.0.0-20240614222903-e9c266e2e96b
-	github.com/pentops/runner v0.0.0-20240703154152-d1783f1a017c
-	github.com/pentops/sqrlx.go v0.0.0-20240618224315-b9b023d5f689
+	github.com/pentops/flowtest v0.0.0-20240806061922-203f84b98211
+	github.com/pentops/j5 v0.0.0-20240806072247-f8eb72c42656
+	github.com/pentops/log.go v0.0.0-20240806063310-95e64c81229c
+	github.com/pentops/o5-messaging v0.0.0-20240806071006-1f45532d6c43
+	github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542
+	github.com/pentops/prototools v0.0.0-20240806071129-ea08af0283c0
+	github.com/pentops/runner v0.0.0-20240806071010-e0c7d77968fc
+	github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20240610135401-a8a62080eff3
-	google.golang.org/grpc v1.64.0
+	google.golang.org/genproto/googleapis/api v0.0.0-20240805194559-2c9e96a0b5d4
+	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
-	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
+	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 )
 
 require (
-	buf.build/gen/go/bufbuild/buf/grpc/go v1.4.0-20240517182809-0b7e724f50eb.1 // indirect
-	buf.build/gen/go/bufbuild/buf/protocolbuffers/go v1.34.2-20240517182809-0b7e724f50eb.2 // indirect
+	buf.build/gen/go/bufbuild/buf/grpc/go v1.5.1-20240801225352-56ed5eaafdd5.1 // indirect
+	buf.build/gen/go/bufbuild/buf/protocolbuffers/go v1.34.2-20240801225352-56ed5eaafdd5.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/bufbuild/protocompile v0.14.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/cel-go v0.20.1 // indirect
+	github.com/google/cel-go v0.21.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/jhump/protoreflect v1.16.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -42,12 +41,12 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
-	golang.org/x/exp v0.0.0-20240604190554-fc45aab8b7f8 // indirect
-	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+	golang.org/x/net v0.27.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240610135401-a8a62080eff3 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240805194559-2c9e96a0b5d4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

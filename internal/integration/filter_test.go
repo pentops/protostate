@@ -11,7 +11,8 @@ import (
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/testproto/gen/testpb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
+	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -33,7 +34,7 @@ func TestDefaultFiltering(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T](t.Name())
 	defer ss.RunSteps(t)
 
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -43,7 +44,7 @@ func TestDefaultFiltering(t *testing.T) {
 
 	ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
 		for _, id := range tenantIDs[tenants[0]][:2] {
-			event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
+			event := newFooUpdatedEvent(id, tenants[0], func(u *test_pb.FooEventType_Updated) {
 				u.Delete = true
 			})
 
@@ -55,12 +56,12 @@ func TestDefaultFiltering(t *testing.T) {
 	})
 
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-		req := &testpb.ListFoosRequest{
+		req := &test_spb.ListFoosRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(10),
 			},
 		}
-		res := &testpb.ListFoosResponse{}
+		res := &test_spb.ListFoosResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
@@ -76,8 +77,8 @@ func TestDefaultFiltering(t *testing.T) {
 		}
 
 		for _, state := range res.Foos {
-			if state.Status != testpb.FooStatus_ACTIVE {
-				t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
+			if state.Status != test_pb.FooStatus_ACTIVE {
+				t.Fatalf("expected status %s, got %s", test_pb.FooStatus_ACTIVE, state.Status)
 			}
 		}
 
@@ -113,7 +114,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestFooFilteringWithAuth")
 	defer ss.RunSteps(t)
 
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), newTokenQueryStateOption())
+	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), newTokenQueryStateOption())
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -135,7 +136,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
-		req := &testpb.ListFoosRequest{
+		req := &test_spb.ListFoosRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
@@ -157,7 +158,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 				},
 			},
 		}
-		res := &testpb.ListFoosResponse{}
+		res := &test_spb.ListFoosResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
@@ -203,7 +204,7 @@ func TestDynamicFiltering(t *testing.T) {
 	ss := flowtest.NewStepper[*testing.T]("TestDynamicFiltering")
 	defer ss.RunSteps(t)
 
-	queryer, err := testpb.NewFooPSMQuerySet(testpb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
+	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -214,7 +215,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Single Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -236,7 +237,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -265,7 +266,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Min Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -286,7 +287,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -311,7 +312,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Max Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -332,7 +333,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -358,7 +359,7 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Multi Range Filter", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 				},
@@ -401,7 +402,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -441,7 +442,7 @@ func TestDynamicFiltering(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 					Token:    &nextToken,
@@ -485,7 +486,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -514,7 +515,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Non filterable fields", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -533,7 +534,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err == nil {
@@ -544,7 +545,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Enum values", func(t *testing.T) {
 		ss.Step("List Page short enum name", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -563,7 +564,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err := queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -579,14 +580,14 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for _, state := range res.Foos {
-				if state.Status != testpb.FooStatus_ACTIVE {
-					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
+				if state.Status != test_pb.FooStatus_ACTIVE {
+					t.Fatalf("expected status %s, got %s", test_pb.FooStatus_ACTIVE, state.Status)
 				}
 			}
 		})
 
 		ss.Step("List Page full enum name", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -605,7 +606,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err := queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -621,14 +622,14 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			for _, state := range res.Foos {
-				if state.Status != testpb.FooStatus_ACTIVE {
-					t.Fatalf("expected status %s, got %s", testpb.FooStatus_ACTIVE, state.Status)
+				if state.Status != test_pb.FooStatus_ACTIVE {
+					t.Fatalf("expected status %s, got %s", test_pb.FooStatus_ACTIVE, state.Status)
 				}
 			}
 		})
 
 		ss.Step("List Page bad enum name", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -647,7 +648,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err := queryer.List(ctx, db, req, res)
 			if err == nil {
@@ -659,7 +660,7 @@ func TestDynamicFiltering(t *testing.T) {
 	t.Run("Single Complex Range Filter", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -681,7 +682,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -723,7 +724,7 @@ func TestDynamicFiltering(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFoosRequest{
+			req := &test_spb.ListFoosRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
@@ -746,7 +747,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFoosResponse{}
+			res := &test_spb.ListFoosResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
@@ -779,7 +780,7 @@ func TestDynamicFiltering(t *testing.T) {
 
 	t.Run("Oneof filter", func(t *testing.T) {
 		ss.Step("List Page (created)", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFooEventsRequest{
+			req := &test_spb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -799,7 +800,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFooEventsResponse{}
+			res := &test_spb.ListFooEventsResponse{}
 
 			err := queryer.EventLister.List(ctx, db, req, res)
 			if err != nil {
@@ -812,9 +813,9 @@ func TestDynamicFiltering(t *testing.T) {
 
 			for ii, event := range res.Events {
 				switch event.Event.Type.(type) {
-				case *testpb.FooEventType_Created_:
+				case *test_pb.FooEventType_Created_:
 				default:
-					t.Fatalf("expected event to be of type %T, got %T", &testpb.FooEventType_Created_{}, event.Event.Type)
+					t.Fatalf("expected event to be of type %T, got %T", &test_pb.FooEventType_Created_{}, event.Event.Type)
 				}
 
 				t.Logf("%d: %s", ii, event.Event)
@@ -824,7 +825,7 @@ func TestDynamicFiltering(t *testing.T) {
 		ss.Step("List Page (delted)", func(ctx context.Context, t flowtest.Asserter) {
 			id := ids[tenants[0]][0]
 
-			event := newFooUpdatedEvent(id, tenants[0], func(u *testpb.FooEventType_Updated) {
+			event := newFooUpdatedEvent(id, tenants[0], func(u *test_pb.FooEventType_Updated) {
 				u.Delete = true
 			})
 
@@ -833,7 +834,7 @@ func TestDynamicFiltering(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &testpb.ListFooEventsRequest{
+			req := &test_spb.ListFooEventsRequest{
 				FooId: id,
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -853,7 +854,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFooEventsResponse{}
+			res := &test_spb.ListFooEventsResponse{}
 
 			err = queryer.EventLister.List(ctx, db, req, res)
 			if err != nil {
@@ -866,9 +867,9 @@ func TestDynamicFiltering(t *testing.T) {
 
 			for ii, event := range res.Events {
 				switch event.Event.Type.(type) {
-				case *testpb.FooEventType_Deleted_:
+				case *test_pb.FooEventType_Deleted_:
 				default:
-					t.Fatalf("expected event to be of type %T, got %T", &testpb.FooEventType_Deleted_{}, event.Event.Type)
+					t.Fatalf("expected event to be of type %T, got %T", &test_pb.FooEventType_Deleted_{}, event.Event.Type)
 				}
 
 				t.Logf("%d: %s", ii, event.Event)
@@ -876,7 +877,7 @@ func TestDynamicFiltering(t *testing.T) {
 		})
 
 		ss.Step("List Page bad name", func(ctx context.Context, t flowtest.Asserter) {
-			req := &testpb.ListFooEventsRequest{
+			req := &test_spb.ListFooEventsRequest{
 				FooId: ids[tenants[0]][0],
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -896,7 +897,7 @@ func TestDynamicFiltering(t *testing.T) {
 					},
 				},
 			}
-			res := &testpb.ListFooEventsResponse{}
+			res := &test_spb.ListFooEventsResponse{}
 
 			err := queryer.EventLister.List(ctx, db, req, res)
 			if err == nil {
