@@ -80,6 +80,7 @@ type ColumnType string
 
 const (
 	UUID        ColumnType = "uuid"
+	Text        ColumnType = "text"
 	Timestamptz ColumnType = "timestamptz"
 	JSONB       ColumnType = "jsonb"
 	Int         ColumnType = "int"

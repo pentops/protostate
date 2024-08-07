@@ -7,6 +7,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -210,36 +211,56 @@ func writeIndexes(ctx context.Context, conn sqrlx.Connection, specs []searchSpec
 
 }
 
+const (
+	uuidType        = ColumnType("uuid")
+	textType        = ColumnType("text")
+	intType         = ColumnType("int")
+	timestamptzType = ColumnType("timestamptz")
+	jsonbType       = ColumnType("jsonb")
+)
+
+var columnTypeMap = map[schema_j5pb.KeyFormat]ColumnType{
+	schema_j5pb.KeyFormat_UUID:        uuidType,
+	schema_j5pb.KeyFormat_NATURAL_KEY: textType,
+	schema_j5pb.KeyFormat_UNSPECIFIED: textType,
+}
+
 func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	stateTable := CreateTable(spec.State.TableName)
 
 	eventTable := CreateTable(spec.Event.TableName).
-		Column(spec.Event.ID.ColumnName, "uuid", PrimaryKey)
+		Column(spec.Event.ID.ColumnName, uuidType, PrimaryKey)
 
 	eventForeignKey := eventTable.ForeignKey("state", spec.State.TableName)
 	for _, key := range spec.KeyColumns {
+
+		format, ok := columnTypeMap[key.Format]
+		if !ok {
+			return nil, nil, fmt.Errorf("unsupported key format %v", key.Format)
+		}
+
 		if key.Primary {
-			stateTable.Column(key.ColumnName, "uuid", PrimaryKey)
-			eventTable.Column(key.ColumnName, "uuid", NotNull)
+			stateTable.Column(key.ColumnName, format, PrimaryKey)
+			eventTable.Column(key.ColumnName, format, NotNull)
 			eventForeignKey.Column(key.ColumnName, key.ColumnName)
 			continue
 		}
 		if key.Required {
-			stateTable.Column(key.ColumnName, "uuid", NotNull)
-			eventTable.Column(key.ColumnName, "uuid", NotNull)
+			stateTable.Column(key.ColumnName, format, NotNull)
+			eventTable.Column(key.ColumnName, format, NotNull)
 			continue
 		}
-		stateTable.Column(key.ColumnName, "uuid")
-		eventTable.Column(key.ColumnName, "uuid")
+		stateTable.Column(key.ColumnName, format)
+		eventTable.Column(key.ColumnName, format)
 	}
 
-	stateTable.Column(spec.State.Root.ColumnName, "jsonb", NotNull)
+	stateTable.Column(spec.State.Root.ColumnName, jsonbType, NotNull)
 
-	eventTable.Column(spec.Event.Timestamp.ColumnName, "timestamptz", NotNull).
-		Column(spec.Event.Sequence.ColumnName, "int", NotNull).
-		Column(spec.Event.Root.ColumnName, "jsonb", NotNull).
-		Column(spec.Event.StateSnapshot.ColumnName, "jsonb", NotNull)
+	eventTable.Column(spec.Event.Timestamp.ColumnName, timestamptzType, NotNull).
+		Column(spec.Event.Sequence.ColumnName, intType, NotNull).
+		Column(spec.Event.Root.ColumnName, jsonbType, NotNull).
+		Column(spec.Event.StateSnapshot.ColumnName, jsonbType, NotNull)
 
 	state, err := stateTable.Build()
 	if err != nil {
