@@ -7,16 +7,6 @@ options:
     - name: "service"
 
 dependencies:
-  - local: protostate
-
-  - bufRegistry:
-      owner: bufbuild
-      name: protovalidate
-
-  - bufRegistry:
-      owner: googleapis
-      name: googleapis
-
   - registry:
       owner: pentops
       name: j5

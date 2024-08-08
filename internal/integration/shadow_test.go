@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"google.golang.org/protobuf/types/known/timestamppb"

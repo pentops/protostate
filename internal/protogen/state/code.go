@@ -29,7 +29,7 @@ var (
 	smIInnerEvent = smImportPath.Ident("IInnerEvent")
 	smIKeyset     = smImportPath.Ident("IKeyset")
 
-	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/protostate/gen/state/v1/psm_pb")
+	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/j5/gen/psm/state/v1/psm_pb")
 	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
 	psmStateMetadataStruct = psmProtoImportPath.Ident("StateMetadata")
 )
