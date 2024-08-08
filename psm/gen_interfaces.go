@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
 	"github.com/pentops/o5-messaging/o5msg"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 )

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 
 	"k8s.io/utils/ptr"

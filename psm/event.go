@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
-	"github.com/pentops/protostate/gen/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
 )
 
 type EventSpec[
