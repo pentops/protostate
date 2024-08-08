@@ -27,9 +27,10 @@ type walkingMessage struct {
 
 type sourceSet struct {
 	stateMachines map[string]*StateEntityGenerateSet
+	inOrder       []*StateEntityGenerateSet
 }
 
-func WalkFile(file *protogen.File) (map[string]*PSMEntity, error) {
+func WalkFile(file *protogen.File) ([]*PSMEntity, error) {
 	se := &sourceSet{
 		stateMachines: make(map[string]*StateEntityGenerateSet),
 	}
@@ -39,13 +40,13 @@ func WalkFile(file *protogen.File) (map[string]*PSMEntity, error) {
 		}
 	}
 
-	stateMachines := make(map[string]*PSMEntity, len(se.stateMachines))
-	for _, stateSet := range se.stateMachines {
+	stateMachines := make([]*PSMEntity, 0, len(se.stateMachines))
+	for _, stateSet := range se.inOrder {
 		converted, err := BuildStateSet(*stateSet)
 		if err != nil {
 			return nil, err
 		}
-		stateMachines[stateSet.options.EntityName] = converted
+		stateMachines = append(stateMachines, converted)
 	}
 
 	return stateMachines, nil
@@ -119,6 +120,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 	if !ok {
 		stateSet = NewStateEntityGenerateSet(keyMessage, keyOptions)
 		se.stateMachines[keyOptions.EntityName] = stateSet
+		se.inOrder = append(se.inOrder, stateSet)
 	}
 
 	if ww.isStateMessage {

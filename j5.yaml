@@ -18,9 +18,6 @@ generate:
       - base: go-sugar
       - base: go-psm
 
-
-
-
 plugins:
   - name: go
     type: PLUGIN_PROTO

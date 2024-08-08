@@ -15,14 +15,12 @@ import (
 )
 
 type QueryServiceSourceSet struct {
-	QuerySets map[string]*QueryServiceGenerateSet
+	QuerySets []*QueryServiceGenerateSet
 }
 
-func WalkFile(file *protogen.File) (map[string]*PSMQuerySet, error) {
-	qss := &QueryServiceSourceSet{
-		QuerySets: map[string]*QueryServiceGenerateSet{},
-	}
+func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 
+	sets := make([]*PSMQuerySet, 0)
 	for _, service := range file.Services {
 		stateQueryAnnotation := proto.GetExtension(service.Desc.Options(), ext_j5pb.E_Service).(*ext_j5pb.ServiceOptions)
 		if stateQueryAnnotation == nil {
@@ -62,19 +60,14 @@ func WalkFile(file *protogen.File) (map[string]*PSMQuerySet, error) {
 			}
 		}
 
-		qss.QuerySets[stateQuery.Entity] = methodSet
-	}
-
-	out := map[string]*PSMQuerySet{}
-	for _, qs := range qss.QuerySets {
-		converted, err := BuildQuerySet(*qs)
+		converted, err := BuildQuerySet(*methodSet)
 		if err != nil {
 			return nil, err
 		}
-		out[qs.name] = converted
+		sets = append(sets, converted)
 	}
 
-	return out, nil
+	return sets, nil
 }
 
 type QueryServiceGenerateSet struct {
