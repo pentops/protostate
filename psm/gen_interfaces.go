@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +66,7 @@ type IState[K IKeyset, ST IStatusEnum, SD IStateData] interface {
 	IPSMMessage
 	GetStatus() ST
 	SetStatus(ST)
-	PSMMetadata() *psm_pb.StateMetadata
+	PSMMetadata() *psm_j5pb.StateMetadata
 	PSMKeys() K
 	SetPSMKeys(K)
 	PSMData() SD
@@ -91,7 +91,7 @@ type IEvent[
 	SetPSMEvent(Inner) error
 	PSMKeys() K
 	SetPSMKeys(K)
-	PSMMetadata() *psm_pb.EventMetadata
+	PSMMetadata() *psm_j5pb.EventMetadata
 	PSMIsSet() bool
 }
 
@@ -116,7 +116,7 @@ type HookBaton[
 	SideEffect(o5msg.Message)
 	ChainEvent(IE)
 	FullCause() E
-	AsCause() *psm_pb.Cause
+	AsCause() *psm_j5pb.Cause
 }
 
 type transitionMutationWrapper[
@@ -366,9 +366,9 @@ func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunLinkTransition(ctx conte
 		return err
 	}
 
-	cause := &psm_pb.Cause{
-		Type: &psm_pb.Cause_PsmEvent{
-			PsmEvent: &psm_pb.PSMEventCause{
+	cause := &psm_j5pb.Cause{
+		Type: &psm_j5pb.Cause_PsmEvent{
+			PsmEvent: &psm_j5pb.PSMEventCause{
 				EventId:      event.PSMMetadata().EventId,
 				StateMachine: (*new(K)).PSMFullName(),
 			},
@@ -396,7 +396,7 @@ type LinkDestination[
 	transitionFromLink(
 		ctx context.Context,
 		tx sqrlx.Transaction,
-		cause *psm_pb.Cause,
+		cause *psm_j5pb.Cause,
 		destKeys DK,
 		destEvent DIE,
 	) error

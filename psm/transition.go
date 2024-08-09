@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -36,11 +36,11 @@ func (td *hookBaton[K, S, ST, SD, E, IE]) FullCause() E {
 	return td.causedBy
 }
 
-func (td *hookBaton[K, S, ST, SD, E, IE]) AsCause() *psm_pb.Cause {
+func (td *hookBaton[K, S, ST, SD, E, IE]) AsCause() *psm_j5pb.Cause {
 	causeMetadata := td.causedBy.PSMMetadata()
-	return &psm_pb.Cause{
-		Type: &psm_pb.Cause_PsmEvent{
-			PsmEvent: &psm_pb.PSMEventCause{
+	return &psm_j5pb.Cause{
+		Type: &psm_j5pb.Cause_PsmEvent{
+			PsmEvent: &psm_j5pb.PSMEventCause{
 				EventId:      causeMetadata.EventId,
 				StateMachine: td.causedBy.PSMKeys().PSMFullName(),
 			},
