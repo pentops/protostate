@@ -75,8 +75,8 @@ github.com/pentops/j5 v0.0.0-20240809205235-0d9578f35b67 h1:kkrTwRY9F66Lh/PT4zMz
 github.com/pentops/j5 v0.0.0-20240809205235-0d9578f35b67/go.mod h1:qB/lz7LcjkfGlGNN1MzrU9/eUhT/nrD07pDpCPwjBiQ=
 github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24 h1:PzCwWkSWY7GO8fS7RQ9F0ZOE6PuaY27mh6ApaXLBMJI=
 github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24/go.mod h1:Rx5b9QWbqb3gOMBILxQYMberRKvarMa8R5PxF/ejJeU=
-github.com/pentops/o5-messaging v0.0.0-20240809212322-391b45788df3 h1:CyIFtTQe4Fcm5xjyFA4c1WusZGTxEoZ8Fos0OjNDhdE=
-github.com/pentops/o5-messaging v0.0.0-20240809212322-391b45788df3/go.mod h1:lriOcsmQ1J7F0DddyFqCIS2304eTAyYbvddTa/aq8OM=
+github.com/pentops/o5-messaging v0.0.0-20240809223038-43c84e3c90c8 h1:qhGmyEuZbjkZ87/7171lmDd7zKm2wtPvhEVTmW6GB3o=
+github.com/pentops/o5-messaging v0.0.0-20240809223038-43c84e3c90c8/go.mod h1:lriOcsmQ1J7F0DddyFqCIS2304eTAyYbvddTa/aq8OM=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542 h1:fYu4o1pc99WCCbMSk3WLdLplHbUpqtceTnhKmqfAeEE=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4 h1:zBn6k4ZRoQngAU5rrlwDKCULUJW/xg2OP0uGGHlP3F8=
