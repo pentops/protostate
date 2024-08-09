@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -21,10 +21,10 @@ func TestStateMachineShadow(t *testing.T) {
 	foo2ID := uuid.NewString()
 
 	events := []*test_pb.FooEvent{{
-		Metadata: &psm_pb.EventMetadata{
+		Metadata: &psm_j5pb.EventMetadata{
 			EventId:   uuid.NewString(),
 			Sequence:  1,
-			Cause:     &psm_pb.Cause{},
+			Cause:     &psm_j5pb.Cause{},
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &test_pb.FooKeys{
@@ -40,10 +40,10 @@ func TestStateMachineShadow(t *testing.T) {
 			},
 		},
 	}, {
-		Metadata: &psm_pb.EventMetadata{
+		Metadata: &psm_j5pb.EventMetadata{
 			EventId:   uuid.NewString(),
 			Sequence:  1,
-			Cause:     &psm_pb.Cause{},
+			Cause:     &psm_j5pb.Cause{},
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &test_pb.FooKeys{

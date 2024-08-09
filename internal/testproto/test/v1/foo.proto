@@ -5,7 +5,7 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "j5/ext/v1/annotations.proto";
 import "j5/list/v1/annotations.proto";
-import "psm/state/v1/metadata.proto";
+import "j5/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb";
 
@@ -32,7 +32,7 @@ message FooKeys {
 }
 
 message FooState {
-  psm.state.v1.StateMetadata metadata = 1 [(buf.validate.field).required = true];
+  j5.state.v1.StateMetadata metadata = 1 [(buf.validate.field).required = true];
 
   FooKeys keys = 2 [(buf.validate.field).required = true];
 
@@ -99,7 +99,7 @@ enum FooStatus {
 }
 
 message FooEvent {
-  psm.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
+  j5.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
 
   FooKeys keys = 2 [(buf.validate.field).required = true];
 

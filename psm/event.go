@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 )
 
 type EventSpec[
@@ -26,7 +26,7 @@ type EventSpec[
 	Event IE
 
 	// The cause of the event, Cause or Action must be set for incomming events.
-	Cause *psm_pb.Cause
+	Cause *psm_j5pb.Cause
 
 	// The authenticated action cause for the event. Cause or Action must be set
 	// for incomming events.
@@ -53,8 +53,8 @@ func (es EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
 		if es.Action == nil {
 			return fmt.Errorf("EventSpec.Cause or EventSpec.Action must be set")
 		}
-		es.Cause = &psm_pb.Cause{
-			Type: &psm_pb.Cause_Command{
+		es.Cause = &psm_j5pb.Cause{
+			Type: &psm_j5pb.Cause_Command{
 				Command: es.Action,
 			},
 		}
@@ -62,7 +62,7 @@ func (es EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
 
 	// check that the cause type is supported.
 	switch es.Cause.Type.(type) {
-	case *psm_pb.Cause_PsmEvent, *psm_pb.Cause_Command, *psm_pb.Cause_ExternalEvent, *psm_pb.Cause_Reply:
+	case *psm_j5pb.Cause_PsmEvent, *psm_j5pb.Cause_Command, *psm_j5pb.Cause_ExternalEvent, *psm_j5pb.Cause_Reply:
 		// All OK
 	default:
 		return fmt.Errorf("EventSpec.Cause.Source must be set")

@@ -5,7 +5,7 @@ package test.v1;
 import "buf/validate/validate.proto";
 import "j5/ext/v1/annotations.proto";
 import "j5/list/v1/annotations.proto";
-import "psm/state/v1/metadata.proto";
+import "j5/state/v1/metadata.proto";
 
 option go_package = "github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb";
 
@@ -24,7 +24,7 @@ message BarKeys {
 }
 
 message BarState {
-  psm.state.v1.StateMetadata metadata = 1;
+  j5.state.v1.StateMetadata metadata = 1;
 
   BarKeys keys = 2;
 
@@ -60,7 +60,7 @@ enum BarStatus {
 }
 
 message BarEvent {
-  psm.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
+  j5.state.v1.EventMetadata metadata = 1 [(buf.validate.field).required = true];
   BarKeys keys = 2 [(buf.validate.field).required = true];
   BarEventType event = 3 [(buf.validate.field).required = true];
 }

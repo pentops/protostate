@@ -10,7 +10,7 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/outbox"
 	"github.com/pentops/protostate/internal/dbconvert"
@@ -797,7 +797,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSp
 	return
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Context, tx sqrlx.Transaction, cause *psm_pb.Cause, keys K, innerEvent IE) error { // nolint: unused // Used when the state machine is implementing LinkDestination
+func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Context, tx sqrlx.Transaction, cause *psm_j5pb.Cause, keys K, innerEvent IE) error { // nolint: unused // Used when the state machine is implementing LinkDestination
 	event := &EventSpec[K, S, ST, SD, E, IE]{
 		Keys:      keys,
 		Timestamp: time.Now(),
@@ -830,9 +830,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (e
 		Timestamp: time.Now(),
 		Event:     chained,
 		EventID:   eventID,
-		Cause: &psm_pb.Cause{
-			Type: &psm_pb.Cause_PsmEvent{
-				PsmEvent: &psm_pb.PSMEventCause{
+		Cause: &psm_j5pb.Cause{
+			Type: &psm_j5pb.Cause_PsmEvent{
+				PsmEvent: &psm_j5pb.PSMEventCause{
 					EventId:      causeMetadata.EventId,
 					StateMachine: psmKeys.PSMFullName(),
 				},

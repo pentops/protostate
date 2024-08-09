@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	eventMetadataProtoName = protoreflect.FullName("psm.state.v1.EventMetadata")
-	stateMetadataProtoName = protoreflect.FullName("psm.state.v1.StateMetadata")
+	eventMetadataProtoName = protoreflect.FullName("j5.state.v1.EventMetadata")
+	stateMetadataProtoName = protoreflect.FullName("j5.state.v1.StateMetadata")
 )
 
 type walkingMessage struct {

@@ -5,7 +5,7 @@ package test_pb
 import (
 	context "context"
 	fmt "fmt"
-	psm_pb "github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	psm_j5pb "github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -77,9 +77,9 @@ func (msg *FooState) PSMIsSet() bool {
 	return msg != nil
 }
 
-func (msg *FooState) PSMMetadata() *psm_pb.StateMetadata {
+func (msg *FooState) PSMMetadata() *psm_j5pb.StateMetadata {
 	if msg.Metadata == nil {
-		msg.Metadata = &psm_pb.StateMetadata{}
+		msg.Metadata = &psm_j5pb.StateMetadata{}
 	}
 	return msg.Metadata
 }
@@ -117,9 +117,9 @@ func (msg *FooEvent) PSMIsSet() bool {
 	return msg != nil
 }
 
-func (msg *FooEvent) PSMMetadata() *psm_pb.EventMetadata {
+func (msg *FooEvent) PSMMetadata() *psm_j5pb.EventMetadata {
 	if msg.Metadata == nil {
-		msg.Metadata = &psm_pb.EventMetadata{}
+		msg.Metadata = &psm_j5pb.EventMetadata{}
 	}
 	return msg.Metadata
 }

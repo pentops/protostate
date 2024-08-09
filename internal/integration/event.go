@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/pentops/j5/gen/psm/state/v1/psm_pb"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 
 	"k8s.io/utils/ptr"
@@ -60,9 +60,9 @@ func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSME
 	e := &test_pb.FooPSMEventSpec{
 		EventID: uuid.NewString(),
 		Keys:    keys,
-		Cause: &psm_pb.Cause{
-			Type: &psm_pb.Cause_ExternalEvent{
-				ExternalEvent: &psm_pb.ExternalEventCause{
+		Cause: &psm_j5pb.Cause{
+			Type: &psm_j5pb.Cause_ExternalEvent{
+				ExternalEvent: &psm_j5pb.ExternalEventCause{
 					SystemName: "a",
 					EventName:  "b",
 				},
@@ -98,9 +98,9 @@ func newBarEvent(barID string, mod func(e *test_pb.BarPSMEventSpec)) *test_pb.Ba
 			BarId:      barID,
 			BarOtherId: barOtherID,
 		},
-		Cause: &psm_pb.Cause{
-			Type: &psm_pb.Cause_ExternalEvent{
-				ExternalEvent: &psm_pb.ExternalEventCause{
+		Cause: &psm_j5pb.Cause{
+			Type: &psm_j5pb.Cause_ExternalEvent{
+				ExternalEvent: &psm_j5pb.ExternalEventCause{
 					SystemName: "a",
 					EventName:  "b",
 				},
