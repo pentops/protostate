@@ -71,12 +71,12 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/pentops/flowtest v0.0.0-20240806162256-23b05c4df309 h1:CLcaCi3pH3qqEUgScvAFRP1b+LM7+WvJUKeErAyiY30=
 github.com/pentops/flowtest v0.0.0-20240806162256-23b05c4df309/go.mod h1:klQLA1IXCIN8mQoQ9uq6TSxHyamObeIlJ51YT165KeE=
-github.com/pentops/j5 v0.0.0-20240809205235-0d9578f35b67 h1:kkrTwRY9F66Lh/PT4zMzUGjA7uUwHLvvotLQho6mJUw=
-github.com/pentops/j5 v0.0.0-20240809205235-0d9578f35b67/go.mod h1:qB/lz7LcjkfGlGNN1MzrU9/eUhT/nrD07pDpCPwjBiQ=
+github.com/pentops/j5 v0.0.0-20240810013210-12540c68f639 h1:n6+6IWEn8nwU+xxibXziQoysFp4R9kNaj5YZF1q5tlc=
+github.com/pentops/j5 v0.0.0-20240810013210-12540c68f639/go.mod h1:qB/lz7LcjkfGlGNN1MzrU9/eUhT/nrD07pDpCPwjBiQ=
 github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24 h1:PzCwWkSWY7GO8fS7RQ9F0ZOE6PuaY27mh6ApaXLBMJI=
 github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24/go.mod h1:Rx5b9QWbqb3gOMBILxQYMberRKvarMa8R5PxF/ejJeU=
-github.com/pentops/o5-messaging v0.0.0-20240809223038-43c84e3c90c8 h1:qhGmyEuZbjkZ87/7171lmDd7zKm2wtPvhEVTmW6GB3o=
-github.com/pentops/o5-messaging v0.0.0-20240809223038-43c84e3c90c8/go.mod h1:lriOcsmQ1J7F0DddyFqCIS2304eTAyYbvddTa/aq8OM=
+github.com/pentops/o5-messaging v0.0.0-20240810013929-db56de35f3ed h1:hWSZoUVbV3N2ozc80yYKIgHakMczq9Jei6HYm+q/UiM=
+github.com/pentops/o5-messaging v0.0.0-20240810013929-db56de35f3ed/go.mod h1:AWRFW50+2q4/IFOP8YWuYcsJ6bkqiEQr6czVua7YfmQ=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542 h1:fYu4o1pc99WCCbMSk3WLdLplHbUpqtceTnhKmqfAeEE=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4 h1:zBn6k4ZRoQngAU5rrlwDKCULUJW/xg2OP0uGGHlP3F8=
