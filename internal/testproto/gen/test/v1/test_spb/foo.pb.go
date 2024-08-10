@@ -7,6 +7,9 @@
 package test_spb
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	_ "github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	list_j5pb "github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
@@ -14,8 +17,6 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
