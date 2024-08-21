@@ -230,6 +230,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 		return state, err
 	}
 	for _, key := range allKeys.values {
+		if !key.Primary {
+			continue
+		}
 		selectQuery = selectQuery.Where(sq.Eq{key.ColumnName: key.value})
 	}
 
