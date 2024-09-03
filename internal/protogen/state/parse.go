@@ -71,7 +71,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 
 		if field.Message.Desc.FullName() == stateMetadataProtoName {
 			if ww.metadataField != nil {
-				return fmt.Errorf("message %s has multiple metadata fields", message.Desc.Name())
+				return fmt.Errorf("message %s has multiple metadata fields", message.Desc.FullName())
 			}
 			ww.isStateMessage = true
 			ww.metadataField = field
@@ -80,7 +80,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 
 		if field.Message.Desc.FullName() == eventMetadataProtoName {
 			if ww.metadataField != nil {
-				return fmt.Errorf("message %s has multiple metadata fields", message.Desc.Name())
+				return fmt.Errorf("message %s has multiple metadata fields", message.Desc.FullName())
 			}
 			ww.isEventMessage = true
 			ww.metadataField = field
@@ -90,7 +90,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
 		if ok && stateObjectAnnotation != nil {
 			if keyOptions != nil {
-				return fmt.Errorf("message %s has multiple PSM Key fields", message.Desc.Name())
+				return fmt.Errorf("message has multiple PSM Key fields %s and %s", field.Desc.FullName(), ww.keyField.Desc.FullName())
 			}
 			keyOptions = stateObjectAnnotation
 			keyMessage = field.Message
