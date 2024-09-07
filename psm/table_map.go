@@ -93,7 +93,7 @@ type KeyColumn struct {
 	Required   bool
 	Unique     bool
 
-	Format schema_j5pb.KeyFormat
+	Format *schema_j5pb.KeyFormat
 
 	//TenantKey  *string
 }
@@ -192,9 +192,9 @@ func keyFieldColumn(field protoreflect.FieldDescriptor) (*KeyColumn, error) {
 		return nil, fmt.Errorf("key fields must be strings, %s is %s", field.Name(), field.Kind().String())
 	}
 
-	annotation := proto.GetExtension(field.Options(), ext_j5pb.E_Key).(*ext_j5pb.KeyFieldOptions)
+	annotation := proto.GetExtension(field.Options(), ext_j5pb.E_Key).(*ext_j5pb.PSMKeyFieldOptions)
 	if annotation == nil {
-		annotation = &ext_j5pb.KeyFieldOptions{}
+		annotation = &ext_j5pb.PSMKeyFieldOptions{}
 	}
 
 	format, err := stringFieldFormat(field)
@@ -213,27 +213,23 @@ func keyFieldColumn(field protoreflect.FieldDescriptor) (*KeyColumn, error) {
 	return kc, nil
 }
 
-func stringFieldFormat(field protoreflect.FieldDescriptor) (schema_j5pb.KeyFormat, error) {
+func stringFieldFormat(field protoreflect.FieldDescriptor) (*schema_j5pb.KeyFormat, error) {
 
 	validateConstraint := proto.GetExtension(field.Options(), validate.E_Field).(*validate.FieldConstraints)
 
 	if validateConstraint != nil && validateConstraint.Type != nil {
 		stringConstraint, ok := validateConstraint.Type.(*validate.FieldConstraints_String_)
 		if !ok {
-			return schema_j5pb.KeyFormat_UNSPECIFIED, fmt.Errorf("wrong constraint type for string: %T", validateConstraint.Type)
+			return nil, fmt.Errorf("wrong constraint type for string: %T", validateConstraint.Type)
 		}
 
 		constraint := stringConstraint.String_
 		switch wkt := constraint.WellKnown.(type) {
 		case *validate.StringRules_Uuid:
 			if wkt.Uuid {
-				return schema_j5pb.KeyFormat_UUID, nil
+				return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Uuid{Uuid: &schema_j5pb.KeyFormat_UUID{}}}, nil
 			}
 
-		case *validate.StringRules_Email:
-			if wkt.Email {
-				return schema_j5pb.KeyFormat_NATURAL_KEY, nil
-			}
 		}
 	}
 
@@ -242,13 +238,13 @@ func stringFieldFormat(field protoreflect.FieldDescriptor) (schema_j5pb.KeyForma
 	if fk := listRules.GetForeignKey(); fk != nil {
 		switch fk.Type.(type) {
 		case *list_j5pb.ForeignKeyRules_UniqueString:
-			return schema_j5pb.KeyFormat_NATURAL_KEY, nil
+			return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Informal_{Informal: &schema_j5pb.KeyFormat_Informal{}}}, nil
 		case *list_j5pb.ForeignKeyRules_Uuid:
-			return schema_j5pb.KeyFormat_UUID, nil
+			return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Uuid{Uuid: &schema_j5pb.KeyFormat_UUID{}}}, nil
 		}
 	}
 
-	return schema_j5pb.KeyFormat_UNSPECIFIED, nil
+	return nil, nil
 }
 
 func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*TableMap, error) {
