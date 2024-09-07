@@ -348,9 +348,9 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 
 	leafField := spec.Path.LeafField()
 
-	switch filter.GetField().GetType().(type) {
-	case *list_j5pb.Field_Value:
-		val := filter.GetField().GetValue()
+	switch ft := filter.GetField().GetType().Type.(type) {
+	case *list_j5pb.FieldType_Value:
+		val := ft.Value
 		if leafField.Kind() == protoreflect.EnumKind {
 			name := strings.ToTitle(val)
 			prefix := strings.TrimSuffix(string(leafField.Enum().Values().Get(0).Name()), "_UNSPECIFIED")
@@ -369,9 +369,9 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 				spec.Path.JSONPathQuery(),
 			), pg.JSONB(val))}
 
-	case *list_j5pb.Field_Range:
-		min := filter.GetField().GetRange().GetMin()
-		max := filter.GetField().GetRange().GetMax()
+	case *list_j5pb.FieldType_Range:
+		min := ft.Range.GetMin()
+		max := ft.Range.GetMax()
 
 		switch {
 		case min != "" && max != "":
@@ -396,16 +396,16 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pg
 		return nil, fmt.Errorf("dynamic filter: field is nil")
 	}
 
-	switch filter.GetField().GetType().(type) {
-	case *list_j5pb.Field_Value:
-		val := filter.GetField().GetValue()
+	switch ft := filter.GetField().GetType().Type.(type) {
+	case *list_j5pb.FieldType_Value:
+		val := ft.Value
 
 		// Val is used directly here instead of passed in as an expression
 		// parameter. It has been sanitized by validation against the oneof
 		// field names.
 		exprStr := fmt.Sprintf("jsonb_array_length(jsonb_path_query_array(%s.%s, '%s ?? (exists(@.%s))')) > 0", tableAlias, ospec.RootColumn, ospec.Path.JSONPathQuery(), val)
 		out = sq.And{sq.Expr(exprStr)}
-	case *list_j5pb.Field_Range:
+	case *list_j5pb.FieldType_Range:
 		return nil, fmt.Errorf("oneofs cannot be filtered by range")
 	}
 
@@ -457,9 +457,9 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 			filterable = filterOpts.GetFiltering().Filterable
 
 			if filterable {
-				switch filterField.Type.(type) {
-				case *list_j5pb.Field_Value:
-					val := filterField.GetValue()
+				switch filterField.Type.Type.(type) {
+				case *list_j5pb.FieldType_Value:
+					val := filterField.Type.GetValue()
 
 					found := false
 					for i := 0; i < leaf.Fields().Len(); i++ {
@@ -473,7 +473,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 					if !found {
 						return fmt.Errorf("filter value '%s' is not found in oneof '%s'", val, filterField.Name)
 					}
-				case *list_j5pb.Field_Range:
+				case *list_j5pb.FieldType_Range:
 					return fmt.Errorf("oneofs cannot be filtered by range")
 				}
 			}
@@ -542,19 +542,19 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 			}
 
 			if filterable {
-				switch filterField.Type.(type) {
-				case *list_j5pb.Field_Value:
-					err := validateFilterFieldValue(filterOpts, leaf, filterField.GetValue())
+				switch filterField.Type.Type.(type) {
+				case *list_j5pb.FieldType_Value:
+					err := validateFilterFieldValue(filterOpts, leaf, filterField.Type.GetValue())
 					if err != nil {
 						return fmt.Errorf("filter value: %w", err)
 					}
-				case *list_j5pb.Field_Range:
-					err := validateFilterFieldValue(filterOpts, leaf, filterField.GetRange().GetMin())
+				case *list_j5pb.FieldType_Range:
+					err := validateFilterFieldValue(filterOpts, leaf, filterField.Type.GetRange().GetMin())
 					if err != nil {
 						return fmt.Errorf("filter min value: %w", err)
 					}
 
-					err = validateFilterFieldValue(filterOpts, leaf, filterField.GetRange().GetMax())
+					err = validateFilterFieldValue(filterOpts, leaf, filterField.Type.GetRange().GetMax())
 					if err != nil {
 						return fmt.Errorf("filter max value: %w", err)
 					}

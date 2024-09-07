@@ -146,10 +146,12 @@ func TestFilteringWithAuthScope(t *testing.T) {
 						Type: &list_j5pb.Filter_Field{
 							Field: &list_j5pb.Field{
 								Name: "data.characteristics.weight",
-								Type: &list_j5pb.Field_Range{
-									Range: &list_j5pb.Range{
-										Min: "12",
-										Max: "15",
+								Type: &list_j5pb.FieldType{
+									Type: &list_j5pb.FieldType_Range{
+										Range: &list_j5pb.Range{
+											Min: "12",
+											Max: "15",
+										},
 									},
 								},
 							},
@@ -225,10 +227,12 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &list_j5pb.Field_Range{
-										Range: &list_j5pb.Range{
-											Min: "12",
-											Max: "15",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Range{
+											Range: &list_j5pb.Range{
+												Min: "12",
+												Max: "15",
+											},
 										},
 									},
 								},
@@ -276,9 +280,11 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &list_j5pb.Field_Range{
-										Range: &list_j5pb.Range{
-											Min: "12",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Range{
+											Range: &list_j5pb.Range{
+												Min: "12",
+											},
 										},
 									},
 								},
@@ -322,9 +328,11 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "data.characteristics.weight",
-									Type: &list_j5pb.Field_Range{
-										Range: &list_j5pb.Range{
-											Max: "15",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Range{
+											Range: &list_j5pb.Range{
+												Max: "15",
+											},
 										},
 									},
 								},
@@ -373,10 +381,12 @@ func TestDynamicFiltering(t *testing.T) {
 											Type: &list_j5pb.Filter_Field{
 												Field: &list_j5pb.Field{
 													Name: "data.characteristics.weight",
-													Type: &list_j5pb.Field_Range{
-														Range: &list_j5pb.Range{
-															Min: "12",
-															Max: "20",
+													Type: &list_j5pb.FieldType{
+														Type: &list_j5pb.FieldType_Range{
+															Range: &list_j5pb.Range{
+																Min: "12",
+																Max: "20",
+															},
 														},
 													},
 												},
@@ -386,10 +396,12 @@ func TestDynamicFiltering(t *testing.T) {
 											Type: &list_j5pb.Filter_Field{
 												Field: &list_j5pb.Field{
 													Name: "data.characteristics.height",
-													Type: &list_j5pb.Field_Range{
-														Range: &list_j5pb.Range{
-															Min: "16",
-															Max: "18",
+													Type: &list_j5pb.FieldType{
+														Type: &list_j5pb.FieldType_Range{
+															Range: &list_j5pb.Range{
+																Min: "16",
+																Max: "18",
+															},
 														},
 													},
 												},
@@ -457,10 +469,12 @@ func TestDynamicFiltering(t *testing.T) {
 											Type: &list_j5pb.Filter_Field{
 												Field: &list_j5pb.Field{
 													Name: "data.characteristics.weight",
-													Type: &list_j5pb.Field_Range{
-														Range: &list_j5pb.Range{
-															Min: "12",
-															Max: "20",
+													Type: &list_j5pb.FieldType{
+														Type: &list_j5pb.FieldType_Range{
+															Range: &list_j5pb.Range{
+																Min: "12",
+																Max: "20",
+															},
 														},
 													},
 												},
@@ -470,10 +484,12 @@ func TestDynamicFiltering(t *testing.T) {
 											Type: &list_j5pb.Filter_Field{
 												Field: &list_j5pb.Field{
 													Name: "data.characteristics.height",
-													Type: &list_j5pb.Field_Range{
-														Range: &list_j5pb.Range{
-															Min: "16",
-															Max: "18",
+													Type: &list_j5pb.FieldType{
+														Type: &list_j5pb.FieldType_Range{
+															Range: &list_j5pb.Range{
+																Min: "16",
+																Max: "18",
+															},
 														},
 													},
 												},
@@ -525,8 +541,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "foo_id",
-									Type: &list_j5pb.Field_Value{
-										Value: "d34d826f-afe3-410d-8326-4e9af3f09467",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "d34d826f-afe3-410d-8326-4e9af3f09467",
+										},
 									},
 								},
 							},
@@ -555,8 +573,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &list_j5pb.Field_Value{
-										Value: "active",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "active",
+										},
 									},
 								},
 							},
@@ -597,8 +617,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &list_j5pb.Field_Value{
-										Value: "FOO_STATUS_ACTIVE",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "FOO_STATUS_ACTIVE",
+										},
 									},
 								},
 							},
@@ -639,8 +661,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "status",
-									Type: &list_j5pb.Field_Value{
-										Value: "FOO_STATUS_UNUSED",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "FOO_STATUS_UNUSED",
+										},
 									},
 								},
 							},
@@ -670,10 +694,12 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "data.profiles.place",
-									Type: &list_j5pb.Field_Range{
-										Range: &list_j5pb.Range{
-											Min: "15",
-											Max: "21",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Range{
+											Range: &list_j5pb.Range{
+												Min: "15",
+												Max: "21",
+											},
 										},
 									},
 								},
@@ -735,10 +761,12 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "data.profiles.place",
-									Type: &list_j5pb.Field_Range{
-										Range: &list_j5pb.Range{
-											Min: "15",
-											Max: "21",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Range{
+											Range: &list_j5pb.Range{
+												Min: "15",
+												Max: "21",
+											},
 										},
 									},
 								},
@@ -791,8 +819,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &list_j5pb.Field_Value{
-										Value: "created",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "created",
+										},
 									},
 								},
 							},
@@ -845,8 +875,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &list_j5pb.Field_Value{
-										Value: "deleted",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "deleted",
+										},
 									},
 								},
 							},
@@ -888,8 +920,10 @@ func TestDynamicFiltering(t *testing.T) {
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
 									Name: "event.type",
-									Type: &list_j5pb.Field_Value{
-										Value: "damaged",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: "damaged",
+										},
 									},
 								},
 							},

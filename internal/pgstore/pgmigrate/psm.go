@@ -7,7 +7,6 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
-	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -219,12 +218,6 @@ const (
 	jsonbType       = ColumnType("jsonb")
 )
 
-var columnTypeMap = map[schema_j5pb.KeyFormat]ColumnType{
-	schema_j5pb.KeyFormat_UUID:        uuidType,
-	schema_j5pb.KeyFormat_NATURAL_KEY: textType,
-	schema_j5pb.KeyFormat_UNSPECIFIED: textType,
-}
-
 func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	stateTable := CreateTable(spec.State.TableName)
@@ -235,9 +228,9 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 	eventForeignKey := eventTable.ForeignKey("state", spec.State.TableName)
 	for _, key := range spec.KeyColumns {
 
-		format, ok := columnTypeMap[key.Format]
-		if !ok {
-			return nil, nil, fmt.Errorf("unsupported key format %v", key.Format)
+		format := textType
+		if key.Format.GetUuid() != nil {
+			format = uuidType
 		}
 
 		if key.Primary {

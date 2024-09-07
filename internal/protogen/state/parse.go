@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
@@ -61,11 +62,9 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 	var keyOptions *ext_j5pb.PSMOptions
 	var keyMessage *protogen.Message
 
-	unusedFields := make([]*protogen.Field, 0, message.Desc.Fields().Len())
-
 	for _, field := range message.Fields {
 		if field.Message == nil {
-			unusedFields = append(unusedFields, field)
+			ww.unusedFields = append(ww.unusedFields, field)
 			continue
 		}
 
@@ -87,8 +86,8 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 			continue
 		}
 
-		stateObjectAnnotation, ok := proto.GetExtension(field.Message.Desc.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
-		if ok && stateObjectAnnotation != nil {
+		stateObjectAnnotation := proto.GetExtension(field.Message.Desc.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
+		if stateObjectAnnotation != nil && strings.HasSuffix(string(field.Message.Desc.Name()), "Keys") {
 			if keyOptions != nil {
 				return fmt.Errorf("message has multiple PSM Key fields %s and %s", field.Desc.FullName(), ww.keyField.Desc.FullName())
 			}
@@ -98,7 +97,7 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 			continue
 		}
 
-		ww.unusedFields = append(unusedFields, field)
+		ww.unusedFields = append(ww.unusedFields, field)
 
 	}
 
@@ -185,7 +184,9 @@ func (stateSet *StateEntityGenerateSet) addStateMessage(ww walkingMessage) error
 		metadataField: ww.metadataField,
 	}
 
+	fieldNames := make([]string, 0, len(ww.unusedFields))
 	for _, field := range ww.unusedFields {
+		fieldNames = append(fieldNames, string(field.Desc.Name()))
 		switch field.Desc.Name() {
 		case "status":
 			entity.statusField = field
@@ -201,11 +202,12 @@ func (stateSet *StateEntityGenerateSet) addStateMessage(ww walkingMessage) error
 			return fmt.Errorf("field %s in %s unknown for protostate State entity", field.Desc.Name(), ww.message.Desc.Name())
 		}
 	}
+
 	if entity.statusField == nil {
 		return fmt.Errorf("missing status enum field")
 	}
 	if entity.dataField == nil {
-		return fmt.Errorf("missing data field")
+		return fmt.Errorf("missing data field, have %s", strings.Join(fieldNames, ", "))
 	}
 	if entity.dataField.Desc.Kind() != protoreflect.MessageKind {
 		return fmt.Errorf("data field must be a message")
@@ -221,7 +223,11 @@ func (stateSet *StateEntityGenerateSet) addEventMessage(ww walkingMessage) error
 	}
 
 	if len(ww.unusedFields) != 1 {
-		return fmt.Errorf("should have exactly three fields, (metadata, keys, event) but has %d", len(ww.message.Fields))
+		fieldNames := make([]string, 0, len(ww.unusedFields))
+		for _, field := range ww.unusedFields {
+			fieldNames = append(fieldNames, string(field.Desc.Name()))
+		}
+		return fmt.Errorf("should have exactly three fields, (metadata, keys, event) but has (%s)", strings.Join(fieldNames, ", "))
 	}
 	entity := &stateEntityEvent{
 		message:        ww.message,
