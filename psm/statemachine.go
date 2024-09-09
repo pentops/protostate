@@ -75,6 +75,8 @@ type StateMachine[
 
 	keyValueFunc func(K) (map[string]string, error)
 
+	initialStateFunc func(context.Context, sqrlx.Transaction, S) error
+
 	tableMap *TableMap
 
 	validator *protovalidate.Validator
@@ -107,9 +109,10 @@ func NewStateMachine[
 	}
 
 	return &StateMachine[K, S, ST, SD, E, IE]{
-		keyValueFunc: cb.keyValues,
-		tableMap:     cb.tableMap,
-		SystemActor:  cb.systemActor,
+		keyValueFunc:     cb.keyValues,
+		initialStateFunc: cb.initialStateFunc,
+		tableMap:         cb.tableMap,
+		SystemActor:      cb.systemActor,
 	}, nil
 }
 
@@ -243,6 +246,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 
 		if len(allKeys.missingRequired) > 0 {
 			return state, fmt.Errorf("missing required key(s) %v in initial event", allKeys.missingRequired)
+		}
+
+		if sm.initialStateFunc != nil {
+			if err := sm.initialStateFunc(ctx, tx, state); err != nil {
+				return state, fmt.Errorf("initial state: %w", err)
+			}
 		}
 
 		// OK, leave empty state alone

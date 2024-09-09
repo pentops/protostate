@@ -213,6 +213,7 @@ func writeIndexes(ctx context.Context, conn sqrlx.Connection, specs []searchSpec
 const (
 	uuidType        = ColumnType("uuid")
 	textType        = ColumnType("text")
+	id62Type        = ColumnType("char(22)")
 	intType         = ColumnType("int")
 	timestamptzType = ColumnType("timestamptz")
 	jsonbType       = ColumnType("jsonb")
@@ -231,6 +232,8 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 		format := textType
 		if key.Format.GetUuid() != nil {
 			format = uuidType
+		} else if key.Format.GetId62() != nil {
+			format = id62Type
 		}
 
 		if key.Primary {

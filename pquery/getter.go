@@ -242,10 +242,6 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			return err
 		}
 
-		if len(tenant) == 0 {
-			return fmt.Errorf("claim must have a tenant")
-		}
-
 		claimFilter := map[string]interface{}{}
 		for k, v := range tenant {
 			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v

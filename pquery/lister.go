@@ -455,10 +455,6 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			return nil, err
 		}
 
-		if len(tenant) == 0 {
-			return nil, fmt.Errorf("claim must have a tenant")
-		}
-
 		claimFilter := map[string]interface{}{}
 		for k, v := range tenant {
 			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
