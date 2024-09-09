@@ -1,5 +1,11 @@
 package psm
 
+import (
+	"context"
+
+	"github.com/pentops/sqrlx.go/sqrlx"
+)
+
 // StateMachineConfig allows the generated code to build a default
 // machine, but expose options to the user to override the defaults
 type StateMachineConfig[
@@ -12,9 +18,9 @@ type StateMachineConfig[
 ] struct {
 	systemActor SystemActor
 
-	// KeyFields derives the key values from the Key entity. Should return
-	// UUID Strings, and omit entries for NULL values
 	keyValues func(K) (map[string]string, error)
+
+	initialStateFunc func(context.Context, sqrlx.Transaction, S) error
 
 	tableMap *TableMap
 
@@ -37,8 +43,18 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) TableName(tableName string) 
 	return smc
 }
 
+// KeyFields derives the key values from the Key entity. Should return ID Strings, and omit entries for NULL values
 func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) DeriveKeyValues(cbFunc func(K) (map[string]string, error)) *StateMachineConfig[K, S, ST, SD, E, IE] {
 	smc.keyValues = cbFunc
+	return smc
+}
+
+// InitialStateFunc is called when the state machine is created, and the state
+// is not found in the database. You can use it to load data into the state from
+// existing database objects, but be sure that the data is either immutable, or
+// there is an event to update it when it changes.
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) InitialStateFunc(cbFunc func(context.Context, sqrlx.Transaction, S) error) *StateMachineConfig[K, S, ST, SD, E, IE] {
+	smc.initialStateFunc = cbFunc
 	return smc
 }
 

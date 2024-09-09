@@ -10,7 +10,7 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20240823195451-08ebbdc5a426
-	github.com/pentops/j5 v0.0.0-20240907193043-c1c10e441498
+	github.com/pentops/j5 v0.0.0-20240909061159-a8593b7b0a7d
 	github.com/pentops/log.go v0.0.0-20240806161938-2742d05b4c24
 	github.com/pentops/o5-messaging v0.0.0-20240810013929-db56de35f3ed
 	github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542
@@ -45,3 +45,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/pentops/j5 => /Users/daemonl/pentops/j5
