@@ -37,7 +37,7 @@ message BarState {
 }
 
 message BarStateData {
-  string tenant_id = 3 [
+  optional string tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
     (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
