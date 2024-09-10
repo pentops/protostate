@@ -723,6 +723,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 
 	log.Info(ctx, "Event Handled")
 
+	err = sm.validator.Validate(state)
+	if err != nil {
+		return nil, fmt.Errorf("validate state after transition: %w", err)
+	}
+
 	if err := sm.store(ctx, tx, state, event); err != nil {
 		return nil, err
 	}
