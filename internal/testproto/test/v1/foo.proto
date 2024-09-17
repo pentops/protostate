@@ -20,13 +20,11 @@ message FooKeys {
 
   optional string tenant_id = 2 [
     (buf.validate.field).string.uuid = true,
-    (j5.ext.v1.key).tenant_key = "tenant",
     (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 
   string meta_tenant_id = 3 [
     (buf.validate.field).string.uuid = true,
-    (j5.ext.v1.key).tenant_key = "meta_tenant",
     (j5.list.v1.field).string.foreign_key.uuid.filtering.filterable = true
   ];
 }

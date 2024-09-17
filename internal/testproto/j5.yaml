@@ -6,8 +6,4 @@ options:
   subPackages:
     - name: "service"
 
-dependencies:
-  - registry:
-      owner: pentops
-      name: j5
 

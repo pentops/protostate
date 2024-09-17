@@ -36,6 +36,7 @@ plugins:
 
   - name: go-psm
     type: PLUGIN_PROTO
-    cmd: bash
-    args: [./internal/testproto/protoc-gen-go-psm.sh]
+    local:
+      cmd: bash
+      args: [./internal/testproto/protoc-gen-go-psm.sh]
 
