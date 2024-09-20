@@ -455,15 +455,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			return nil, err
 		}
 
-		if len(tenant) == 0 {
-			return nil, fmt.Errorf("auth required and auth filter returned no values")
-		}
-
 		claimFilter := map[string]interface{}{}
 		for k, v := range tenant {
 			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
 		}
-		selectQuery.Where(claimFilter)
+
+		// If the service returns no results, treat it as open auth
+		if len(claimFilter) > 0 {
+			selectQuery.Where(claimFilter)
+		}
 	}
 
 	pageSize, err := ll.getPageSize(req)
