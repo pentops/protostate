@@ -55,7 +55,7 @@ type Column struct {
 	Name string
 
 	// The point within the root element which is stored in the column. An empty
-	// path means this stores the root elemet,
+	// path means this stores the root element,
 	MountPoint *pgstore.Path
 }
 
@@ -450,18 +450,16 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			))
 		}
 
-		tenant, err := ll.auth.AuthFilter(ctx)
+		authFilter, err := ll.auth.AuthFilter(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		claimFilter := map[string]interface{}{}
-		for k, v := range tenant {
-			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
-		}
-
-		// If the service returns no results, treat it as open auth
-		if len(claimFilter) > 0 {
+		if len(authFilter) > 0 {
+			claimFilter := map[string]interface{}{}
+			for k, v := range authFilter {
+				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
+			}
 			selectQuery.Where(claimFilter)
 		}
 	}
