@@ -118,7 +118,7 @@ type Getter[
 }
 
 type getJoin struct {
-	dataColunn    string
+	dataColumn    string
 	tableName     string
 	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
 	on            JoinFields
@@ -174,7 +174,7 @@ func NewGetter[
 
 		sc.join = &getJoin{
 			tableName:     spec.Join.TableName,
-			dataColunn:    spec.Join.DataColumn,
+			dataColumn:    spec.Join.DataColumn,
 			fieldInParent: joinField,
 			on:            spec.Join.On,
 		}
@@ -237,24 +237,25 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			))
 		}
 
-		tenant, err := gc.auth.AuthFilter(ctx)
+		authFilter, err := gc.auth.AuthFilter(ctx)
 		if err != nil {
 			return err
 		}
 
-		claimFilter := map[string]interface{}{}
-		for k, v := range tenant {
-			claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
+		if len(authFilter) > 0 {
+			claimFilter := map[string]interface{}{}
+			for k, v := range authFilter {
+				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
+			}
+			selectQuery.Where(claimFilter)
 		}
-		selectQuery.Where(claimFilter)
-
 	}
 
 	if gc.join != nil {
 		joinAlias := as.Next(gc.join.tableName)
 
 		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColunn)).
+			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColumn)).
 			LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
 				gc.join.tableName,
