@@ -16,7 +16,7 @@ type StateMachineConfig[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	systemActor SystemActor
+	//systemActor SystemActor
 
 	keyValues func(K) (map[string]string, error)
 
@@ -27,8 +27,9 @@ type StateMachineConfig[
 	tableName *string
 }
 
-func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor SystemActor) *StateMachineConfig[K, S, ST, SD, E, IE] {
-	smc.systemActor = systemActor
+// DEPRECATED: This does nothing.
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor any) *StateMachineConfig[K, S, ST, SD, E, IE] {
+	//smc.systemActor = systemActor
 	return smc
 }
 

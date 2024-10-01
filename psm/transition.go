@@ -92,7 +92,7 @@ func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionMutations(
 			return err
 		}
 	}
-	log.WithField(ctx, "mutationCount", hs.mutations).Debug("mutations complete")
+	log.WithField(ctx, "mutationCount", hs.mutations).Debug("transition mutations complete")
 	return nil
 }
 

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
-	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
@@ -54,12 +53,7 @@ func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 }
 
 func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
-	actorID := uuid.NewString()
-	systemActor, err := psm.NewSystemActor(actorID)
-	if err != nil {
-		return nil, err
-	}
-	sm, err := test_pb.FooPSMBuilder().SystemActor(systemActor).BuildStateMachine()
+	sm, err := test_pb.FooPSMBuilder().BuildStateMachine()
 	if err != nil {
 		return nil, err
 	}

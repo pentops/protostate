@@ -28,6 +28,7 @@ type Transactor interface {
 	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
 }
 
+/*
 type SimpleSystemActor struct {
 	ID    uuid.UUID
 	Actor protoreflect.Value
@@ -43,13 +44,6 @@ func NewSystemActor(id string) (SimpleSystemActor, error) {
 	}, nil
 }
 
-func MustSystemActor(id string) SimpleSystemActor {
-	actor, err := NewSystemActor(id)
-	if err != nil {
-		panic(err)
-	}
-	return actor
-}
 
 func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) string {
 	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
@@ -57,6 +51,11 @@ func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) st
 
 type SystemActor interface {
 	NewEventID(fromEventUUID string, eventKey string) string
+}*/
+
+// DEPRECATED: This does nothing.
+func MustSystemActor(id string) struct{} {
+	return struct{}{}
 }
 
 // StateMachine is a database wrapper around the eventer. Using sane defaults
@@ -69,7 +68,7 @@ type StateMachine[
 	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	SystemActor SystemActor
+	//SystemActor SystemActor
 
 	transitionSet[K, S, ST, SD, E, IE]
 
@@ -112,7 +111,7 @@ func NewStateMachine[
 		keyValueFunc:     cb.keyValues,
 		initialStateFunc: cb.initialStateFunc,
 		tableMap:         cb.tableMap,
-		SystemActor:      cb.systemActor,
+		//SystemActor:      cb.systemActor,
 	}, nil
 }
 
@@ -553,15 +552,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 	}
 
 	if outerEvent.EventID == "" {
-		if causeEvent := outerEvent.Cause.GetPsmEvent(); causeEvent != nil {
-			// Can derive an ID
-			if sm.SystemActor == nil {
-				return *new(S), fmt.Errorf("no system actor defined, cannot derive events, and no ID set")
-			}
-			outerEvent.EventID = sm.SystemActor.NewEventID(causeEvent.EventId, outerEvent.Event.PSMEventKey())
-		} else {
-			return *new(S), fmt.Errorf("EventSpec.EventID must be set unless the cause is a PSM Event")
-		}
+		outerEvent.EventID = uuid.NewString()
 	}
 
 	if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent.EventID, outerEvent.Event); err != nil {
@@ -691,6 +682,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	ctx = log.WithFields(ctx, map[string]interface{}{
 		"eventType":    typeKey,
 		"stateMachine": state.PSMKeys().PSMFullName(),
+		"eventId":      event.PSMMetadata().EventId,
 		"transition": map[string]interface{}{
 			"from":  statusBefore.ShortString(),
 			"event": typeKey,
@@ -720,8 +712,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	if state.GetStatus() == 0 {
 		return nil, fmt.Errorf("state machine transitioned to zero status")
 	}
-
-	log.Info(ctx, "Event Handled")
 
 	err = sm.validator.Validate(state)
 	if err != nil {
@@ -772,12 +762,14 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		return nil, err
 	}
 
+	log.Info(ctx, "Event Complete")
+
 	for _, chainedEvent := range chain {
-		prepaired, err := sm.prepareEvent(state, chainedEvent)
+		prepared, err := sm.prepareEvent(state, chainedEvent)
 		if err != nil {
 			return nil, fmt.Errorf("prepare event: %w", err)
 		}
-		_, err = sm.runEvent(ctx, tx, state, prepaired, false)
+		_, err = sm.runEvent(ctx, tx, state, prepared, false)
 		if err != nil {
 			return nil, fmt.Errorf("chained event: %s: %w", chainedEvent.Event.PSMEventKey(), err)
 		}
@@ -832,14 +824,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Cont
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (evt *EventSpec[K, S, ST, SD, E, IE], err error) {
-	if sm.SystemActor == nil {
-		err = fmt.Errorf("no system actor defined, cannot derive events")
-		return
-	}
 
-	eventKey := chained.PSMEventKey()
 	causeMetadata := cause.PSMMetadata()
-	eventID := sm.SystemActor.NewEventID(causeMetadata.EventId, eventKey)
+	eventID := uuid.NewString()
 	psmKeys := cause.PSMKeys()
 
 	eventOut := &EventSpec[K, S, ST, SD, E, IE]{

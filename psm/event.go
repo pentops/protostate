@@ -19,17 +19,17 @@ type EventSpec[
 	// Keys must be set, to identify the state machine.
 	Keys K
 
-	// EventID must be set for incomming events.
+	// EventID is optional and will be set by the state machine if empty
 	EventID string
 
-	// The inner PSM Event type. Must be set for incomming events.
+	// The inner PSM Event type. Must be set for incoming events.
 	Event IE
 
-	// The cause of the event, Cause or Action must be set for incomming events.
+	// The cause of the event, Cause or Action must be set for incoming events.
 	Cause *psm_j5pb.Cause
 
 	// The authenticated action cause for the event. Cause or Action must be set
-	// for incomming events.
+	// for incoming events.
 	Action *auth_j5pb.Action
 
 	// Optional, defaults to the system time (if Zero())
