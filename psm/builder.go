@@ -28,7 +28,10 @@ type StateMachineConfig[
 }
 
 // DEPRECATED: This does nothing.
-func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor any) *StateMachineConfig[K, S, ST, SD, E, IE] {
+type SystemActor interface{}
+
+// DEPRECATED: This does nothing.
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor SystemActor) *StateMachineConfig[K, S, ST, SD, E, IE] {
 	//smc.systemActor = systemActor
 	return smc
 }
