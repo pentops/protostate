@@ -743,7 +743,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	for _, se := range baton.sideEffects {
 		err = sm.validator.Validate(se)
 		if err != nil {
-			return nil, fmt.Errorf("validate side effect: %w", err)
+			return nil, fmt.Errorf("validate side effect: %s %w", se.ProtoReflect().Descriptor().FullName(), err)
 		}
 
 		err = outbox.Send(ctx, tx, se)
