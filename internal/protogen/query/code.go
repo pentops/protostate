@@ -9,6 +9,8 @@ import (
 var (
 	protoPackage        = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	stateMachinePackage = protogen.GoImportPath("github.com/pentops/protostate/psm")
+	sqrlxPkg            = protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx")
+	contextPkg          = protogen.GoImportPath("context")
 )
 
 func quoteString(s string) string {
@@ -23,12 +25,18 @@ type ListFilterField struct {
 
 type PSMQuerySet struct {
 	GoServiceName string
-	GetREQ        protogen.GoIdent
-	GetRES        protogen.GoIdent
-	ListREQ       protogen.GoIdent
-	ListRES       protogen.GoIdent
-	ListEventsREQ *protogen.GoIdent
-	ListEventsRES *protogen.GoIdent
+
+	GetMethod protogen.Method
+	GetREQ    protogen.GoIdent
+	GetRES    protogen.GoIdent
+
+	ListMethod protogen.Method
+	ListREQ    protogen.GoIdent
+	ListRES    protogen.GoIdent
+
+	ListEventsMethod *protogen.Method
+	ListEventsREQ    *protogen.GoIdent
+	ListEventsRES    *protogen.GoIdent
 
 	ListRequestFilter       []ListFilterField
 	ListEventsRequestFilter []ListFilterField
@@ -38,6 +46,14 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 	g.P("// State Query Service for %s", qs.GoServiceName)
 	g.P("// QuerySet is the query set for the ", qs.GoServiceName, " service.")
 	g.P()
+	qs.writeQuerySet(g)
+	g.P()
+	qs.writeQuerySpec(g)
+	g.P()
+	qs.writeDefaultService(g)
+}
+
+func (qs PSMQuerySet) writeQuerySet(g *protogen.GeneratedFile) {
 	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySet", "StateQuerySet")
 	g.P("func New", qs.GoServiceName, "PSMQuerySet(")
 	g.P("smSpec ", stateMachinePackage.Ident("QuerySpec"), "[")
@@ -49,7 +65,9 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 	qs.writeGenericTypeSet(g)
 	g.P("](smSpec, options)")
 	g.P("}")
-	g.P()
+}
+
+func (qs PSMQuerySet) writeQuerySpec(g *protogen.GeneratedFile) {
 	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySpec", "QuerySpec")
 	g.P()
 	g.P("func Default", qs.GoServiceName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("QueryTableSpec"), ") ", qs.GoServiceName, "PSMQuerySpec {")
@@ -61,7 +79,53 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 	qs.listFilter(g, *qs.ListEventsREQ, "ListEventsRequestFilter", qs.ListEventsRequestFilter)
 	g.P("  }")
 	g.P("}")
+}
+
+func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
+
+	serviceName := qs.GoServiceName + "QueryServiceImpl"
+	g.P("type ", serviceName, " struct {")
+	g.P("db ", sqrlxPkg.Ident("Transactor"))
+	g.P("querySet *", qs.GoServiceName, "PSMQuerySet")
+	g.P("Unsafe", qs.GoServiceName, "QueryServiceServer")
+	g.P("}")
 	g.P()
+	g.P("func New", serviceName, "(db ", sqrlxPkg.Ident("Transactor"), ", querySet *", qs.GoServiceName, "PSMQuerySet) *", serviceName, " {")
+	g.P("  return &", serviceName, "{")
+	g.P("    db: db,")
+	g.P("    querySet: querySet,")
+	g.P("  }")
+	g.P("}")
+	g.P()
+	g.P("func (s *", serviceName, ") ", qs.GetMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", qs.GetREQ.GoName, ") (*", qs.GetRES.GoName, ", error) {")
+	g.P("  resObject := &", qs.GetRES.GoName, "{}")
+	g.P("  err := s.querySet.Get(ctx, s.db, req, resObject)")
+	g.P("  if err != nil {")
+	g.P("    return nil, err")
+	g.P("  }")
+	g.P("  return resObject, nil")
+	g.P("}")
+	g.P()
+	g.P("func (s *", serviceName, ") ", qs.ListMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", qs.ListREQ.GoName, ") (*", qs.ListRES.GoName, ", error) {")
+	g.P("  resObject := &", qs.ListRES.GoName, "{}")
+	g.P("  err := s.querySet.List(ctx, s.db, req, resObject)")
+	g.P("  if err != nil {")
+	g.P("    return nil, err")
+	g.P("  }")
+	g.P("  return resObject, nil")
+	g.P("}")
+	if qs.ListEventsMethod == nil {
+		return
+	}
+	g.P()
+	g.P("func (s *", serviceName, ") ", qs.ListEventsMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", *qs.ListEventsREQ, ") (*", *qs.ListEventsRES, ", error) {")
+	g.P("  resObject := &", *qs.ListEventsRES, "{}")
+	g.P("  err := s.querySet.ListEvents(ctx, s.db, req, resObject)")
+	g.P("  if err != nil {")
+	g.P("    return nil, err")
+	g.P("  }")
+	g.P("  return resObject, nil")
+	g.P("}")
 }
 
 func (qs PSMQuerySet) writeGenericTypeSet(g *protogen.GeneratedFile) {

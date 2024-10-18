@@ -122,7 +122,7 @@ func (qs QueryServiceGenerateSet) validate() error {
 	}
 
 	if qs.listMethod == nil {
-		return fmt.Errorf("PSM Qurey '%s' does not have a list method", qs.fullName)
+		return fmt.Errorf("PSM Query '%s' does not have a list method", qs.fullName)
 	}
 
 	return nil
@@ -173,6 +173,8 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		GetRES:        qs.getMethod.Output.GoIdent,
 		ListREQ:       qs.listMethod.Input.GoIdent,
 		ListRES:       qs.listMethod.Output.GoIdent,
+		ListMethod:    *qs.listMethod,
+		GetMethod:     *qs.getMethod,
 	}
 
 	for _, field := range listReflectionSet.RequestFilterFields {
@@ -191,6 +193,7 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 
 	ww.ListEventsREQ = &qs.listEventsMethod.Input.GoIdent
 	ww.ListEventsRES = &qs.listEventsMethod.Output.GoIdent
+	ww.ListEventsMethod = qs.listEventsMethod
 	for _, field := range listEventsReflectionSet.RequestFilterFields {
 		genField := mapGenField(qs.listEventsMethod.Input, field)
 		ww.ListEventsRequestFilter = append(ww.ListEventsRequestFilter, ListFilterField{
