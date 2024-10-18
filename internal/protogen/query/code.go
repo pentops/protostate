@@ -24,7 +24,8 @@ type ListFilterField struct {
 }
 
 type PSMQuerySet struct {
-	GoServiceName string
+	GoName  string
+	Service *protogen.Service
 
 	GetMethod protogen.Method
 	GetREQ    protogen.GoIdent
@@ -43,8 +44,8 @@ type PSMQuerySet struct {
 }
 
 func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
-	g.P("// State Query Service for %s", qs.GoServiceName)
-	g.P("// QuerySet is the query set for the ", qs.GoServiceName, " service.")
+	g.P("// State Query Service for %s", qs.GoName)
+	g.P("// QuerySet is the query set for the ", qs.GoName, " service.")
 	g.P()
 	qs.writeQuerySet(g)
 	g.P()
@@ -54,13 +55,13 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 }
 
 func (qs PSMQuerySet) writeQuerySet(g *protogen.GeneratedFile) {
-	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySet", "StateQuerySet")
-	g.P("func New", qs.GoServiceName, "PSMQuerySet(")
+	qs.genericTypeAlias(g, qs.GoName+"PSMQuerySet", "StateQuerySet")
+	g.P("func New", qs.GoName, "PSMQuerySet(")
 	g.P("smSpec ", stateMachinePackage.Ident("QuerySpec"), "[")
 	qs.writeGenericTypeSet(g)
 	g.P("],")
 	g.P("options ", stateMachinePackage.Ident("StateQueryOptions"), ",")
-	g.P(") (*", qs.GoServiceName, "PSMQuerySet, error) {")
+	g.P(") (*", qs.GoName, "PSMQuerySet, error) {")
 	g.P("return ", stateMachinePackage.Ident("BuildStateQuerySet"), "[")
 	qs.writeGenericTypeSet(g)
 	g.P("](smSpec, options)")
@@ -68,9 +69,9 @@ func (qs PSMQuerySet) writeQuerySet(g *protogen.GeneratedFile) {
 }
 
 func (qs PSMQuerySet) writeQuerySpec(g *protogen.GeneratedFile) {
-	qs.genericTypeAlias(g, qs.GoServiceName+"PSMQuerySpec", "QuerySpec")
+	qs.genericTypeAlias(g, qs.GoName+"PSMQuerySpec", "QuerySpec")
 	g.P()
-	g.P("func Default", qs.GoServiceName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("QueryTableSpec"), ") ", qs.GoServiceName, "PSMQuerySpec {")
+	g.P("func Default", qs.GoName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("QueryTableSpec"), ") ", qs.GoName, "PSMQuerySpec {")
 	g.P("  return ", stateMachinePackage.Ident("QuerySpec"), "[")
 	qs.writeGenericTypeSet(g)
 	g.P("  ]{")
@@ -83,14 +84,16 @@ func (qs PSMQuerySet) writeQuerySpec(g *protogen.GeneratedFile) {
 
 func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
 
-	serviceName := qs.GoServiceName + "QueryServiceImpl"
+	serviceName := qs.GoName + "QueryServiceImpl"
 	g.P("type ", serviceName, " struct {")
 	g.P("db ", sqrlxPkg.Ident("Transactor"))
-	g.P("querySet *", qs.GoServiceName, "PSMQuerySet")
-	g.P("Unsafe", qs.GoServiceName, "QueryServiceServer")
+	g.P("querySet *", qs.GoName, "PSMQuerySet")
+	g.P("Unsafe", qs.Service.GoName, "Server")
 	g.P("}")
 	g.P()
-	g.P("func New", serviceName, "(db ", sqrlxPkg.Ident("Transactor"), ", querySet *", qs.GoServiceName, "PSMQuerySet) *", serviceName, " {")
+	g.P("var _ ", qs.Service.GoName, "Server = &", serviceName, "{}")
+	g.P()
+	g.P("func New", serviceName, "(db ", sqrlxPkg.Ident("Transactor"), ", querySet *", qs.GoName, "PSMQuerySet) *", serviceName, " {")
 	g.P("  return &", serviceName, "{")
 	g.P("    db: db,")
 	g.P("    querySet: querySet,")

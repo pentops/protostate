@@ -31,7 +31,7 @@ func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 			continue
 		}
 
-		methodSet := NewQueryServiceGenerateSet(stateQuery.Entity, service.Desc.FullName())
+		methodSet := NewQueryServiceGenerateSet(stateQuery.Entity, service)
 
 		for _, method := range service.Methods {
 			methodOpt := proto.GetExtension(method.Desc.Options(), ext_j5pb.E_Method).(*ext_j5pb.MethodOptions)
@@ -74,17 +74,22 @@ type QueryServiceGenerateSet struct {
 
 	// name of the state machine
 	name string
+
 	// for errors / debugging, includes the proto source name
 	fullName string
+
+	service *protogen.Service
 
 	getMethod        *protogen.Method
 	listMethod       *protogen.Method
 	listEventsMethod *protogen.Method
 }
 
-func NewQueryServiceGenerateSet(name string, serviceFullName protoreflect.FullName) *QueryServiceGenerateSet {
+func NewQueryServiceGenerateSet(name string, service *protogen.Service) *QueryServiceGenerateSet {
+	serviceFullName := service.Desc.FullName()
 	return &QueryServiceGenerateSet{
 		name:     name,
+		service:  service,
 		fullName: fmt.Sprintf("%s/%s", serviceFullName, name),
 	}
 }
@@ -168,13 +173,14 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	goServiceName := strcase.ToCamel(qs.name)
 
 	ww := &PSMQuerySet{
-		GoServiceName: goServiceName,
-		GetREQ:        qs.getMethod.Input.GoIdent,
-		GetRES:        qs.getMethod.Output.GoIdent,
-		ListREQ:       qs.listMethod.Input.GoIdent,
-		ListRES:       qs.listMethod.Output.GoIdent,
-		ListMethod:    *qs.listMethod,
-		GetMethod:     *qs.getMethod,
+		GoName:     goServiceName,
+		Service:    qs.service,
+		GetREQ:     qs.getMethod.Input.GoIdent,
+		GetRES:     qs.getMethod.Output.GoIdent,
+		ListREQ:    qs.listMethod.Input.GoIdent,
+		ListRES:    qs.listMethod.Output.GoIdent,
+		ListMethod: *qs.listMethod,
+		GetMethod:  *qs.getMethod,
 	}
 
 	for _, field := range listReflectionSet.RequestFilterFields {
