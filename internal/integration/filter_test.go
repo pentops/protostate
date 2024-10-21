@@ -529,6 +529,38 @@ func TestDynamicFiltering(t *testing.T) {
 		})
 	})
 
+	t.Run("Flattened filterable fields", func(t *testing.T) {
+		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
+			req := &test_spb.ListFoosRequest{
+				Page: &list_j5pb.PageRequest{
+					PageSize: proto.Int64(5),
+				},
+				Query: &list_j5pb.QueryRequest{
+					Filters: []*list_j5pb.Filter{
+						{
+							Type: &list_j5pb.Filter_Field{
+								Field: &list_j5pb.Field{
+									Name: "tenantId",
+									Type: &list_j5pb.FieldType{
+										Type: &list_j5pb.FieldType_Value{
+											Value: tenants[0],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			res := &test_spb.ListFoosResponse{}
+
+			err = queryer.List(ctx, db, req, res)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
 	t.Run("Non filterable fields", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.ListFoosRequest{

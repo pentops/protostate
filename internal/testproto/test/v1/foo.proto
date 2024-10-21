@@ -32,7 +32,10 @@ message FooKeys {
 message FooState {
   j5.state.v1.StateMetadata metadata = 1 [(buf.validate.field).required = true];
 
-  FooKeys keys = 2 [(buf.validate.field).required = true];
+  FooKeys keys = 2 [
+    (buf.validate.field).required = true,
+    (j5.ext.v1.field).message.flatten = true
+  ];
 
   FooStatus status = 3 [(j5.list.v1.field).enum.filtering = {
     filterable: true
