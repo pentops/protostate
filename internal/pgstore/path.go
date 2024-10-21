@@ -2,6 +2,9 @@ package pgstore
 
 import (
 	"fmt"
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"strings"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -289,6 +292,30 @@ func NewProtoPath(message protoreflect.MessageDescriptor, fieldPath ProtoPathSpe
 	return pathSpec, nil
 }
 
+func findField(message protoreflect.MessageDescriptor, fieldPath string) protoreflect.FieldDescriptor {
+	fields := message.Fields()
+	if field := fields.ByJSONName(fieldPath); field != nil {
+		return field
+	}
+
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Get(i)
+		// Check for flattened fields
+		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), ext_j5pb.E_Field).(*ext_j5pb.FieldOptions)
+		if !ok {
+			continue
+		}
+
+		if fieldOpts != nil && fieldOpts.GetMessage().Flatten {
+			if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
+				return flattenedField
+			}
+		}
+	}
+
+	return nil
+}
+
 // Like ProtoPathSpec but uses JSON field names
 type JSONPathSpec []string
 
@@ -321,7 +348,7 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 		node := pathNode{
 			name: protoreflect.Name(pathElem),
 		}
-		field := walkMessage.Fields().ByJSONName(pathElem)
+		field := findField(walkMessage, pathElem)
 		if field == nil {
 
 			// Very Special Edge Case: Oneof wrapper types allow the client to
