@@ -3,7 +3,9 @@
 package test_spb
 
 import (
+	context "context"
 	psm "github.com/pentops/protostate/psm"
+	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 )
 
 // State Query Service for %sFoo
@@ -71,4 +73,46 @@ func DefaultFooPSMQuerySpec(tableSpec psm.QueryTableSpec) FooPSMQuerySpec {
 			return filter, nil
 		},
 	}
+}
+
+type FooQueryServiceImpl struct {
+	db       sqrlx.Transactor
+	querySet *FooPSMQuerySet
+	UnsafeFooQueryServiceServer
+}
+
+var _ FooQueryServiceServer = &FooQueryServiceImpl{}
+
+func NewFooQueryServiceImpl(db sqrlx.Transactor, querySet *FooPSMQuerySet) *FooQueryServiceImpl {
+	return &FooQueryServiceImpl{
+		db:       db,
+		querySet: querySet,
+	}
+}
+
+func (s *FooQueryServiceImpl) GetFoo(ctx context.Context, req *GetFooRequest) (*GetFooResponse, error) {
+	resObject := &GetFooResponse{}
+	err := s.querySet.Get(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
+}
+
+func (s *FooQueryServiceImpl) ListFoos(ctx context.Context, req *ListFoosRequest) (*ListFoosResponse, error) {
+	resObject := &ListFoosResponse{}
+	err := s.querySet.List(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
+}
+
+func (s *FooQueryServiceImpl) ListFooEvents(ctx context.Context, req *ListFooEventsRequest) (*ListFooEventsResponse, error) {
+	resObject := &ListFooEventsResponse{}
+	err := s.querySet.ListEvents(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
 }

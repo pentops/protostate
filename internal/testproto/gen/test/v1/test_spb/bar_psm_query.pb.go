@@ -3,7 +3,9 @@
 package test_spb
 
 import (
+	context "context"
 	psm "github.com/pentops/protostate/psm"
+	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 )
 
 // State Query Service for %sBar
@@ -71,4 +73,46 @@ func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 			return filter, nil
 		},
 	}
+}
+
+type BarQueryServiceImpl struct {
+	db       sqrlx.Transactor
+	querySet *BarPSMQuerySet
+	UnsafeBarServiceServer
+}
+
+var _ BarServiceServer = &BarQueryServiceImpl{}
+
+func NewBarQueryServiceImpl(db sqrlx.Transactor, querySet *BarPSMQuerySet) *BarQueryServiceImpl {
+	return &BarQueryServiceImpl{
+		db:       db,
+		querySet: querySet,
+	}
+}
+
+func (s *BarQueryServiceImpl) GetBar(ctx context.Context, req *GetBarRequest) (*GetBarResponse, error) {
+	resObject := &GetBarResponse{}
+	err := s.querySet.Get(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
+}
+
+func (s *BarQueryServiceImpl) ListBars(ctx context.Context, req *ListBarsRequest) (*ListBarsResponse, error) {
+	resObject := &ListBarsResponse{}
+	err := s.querySet.List(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
+}
+
+func (s *BarQueryServiceImpl) ListBarEvents(ctx context.Context, req *ListBarEventsRequest) (*ListBarEventsResponse, error) {
+	resObject := &ListBarEventsResponse{}
+	err := s.querySet.ListEvents(ctx, s.db, req, resObject)
+	if err != nil {
+		return nil, err
+	}
+	return resObject, nil
 }
