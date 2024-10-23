@@ -228,7 +228,6 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	eventForeignKey := eventTable.ForeignKey("state", spec.State.TableName)
 	for _, key := range spec.KeyColumns {
-
 		format := textType
 		if key.Format.GetUuid() != nil {
 			format = uuidType

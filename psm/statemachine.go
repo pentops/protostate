@@ -17,7 +17,6 @@ import (
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -276,7 +275,7 @@ type keyValues struct {
 	// entity.
 	// This allows controllers and workers to specify only the primary key on
 	// non-create events and save a database lookup
-	missingRequired []protoreflect.Name
+	missingRequired []string
 }
 
 type keyValue struct {
@@ -299,16 +298,16 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) (*keyValue
 		}
 	}
 	values := make([]keyValue, 0, len(sm.tableMap.KeyColumns))
-	missingRequired := make([]protoreflect.Name, 0, len(sm.tableMap.KeyColumns))
+	missingRequired := make([]string, 0, len(sm.tableMap.KeyColumns))
 
 	for _, def := range sm.tableMap.KeyColumns {
 		gotValue, ok := rawValues[def.ColumnName]
 		if !ok || gotValue == "" {
 			if def.Primary {
-				return nil, fmt.Errorf("KeyValues() for %s did not return a value for required key field %s", keysMessage.PSMFullName(), def.ProtoName)
+				return nil, fmt.Errorf("KeyValues() for %s did not return a value for required key field %s", keysMessage.PSMFullName(), def.ColumnName)
 			}
 			if def.Required {
-				missingRequired = append(missingRequired, def.ProtoName)
+				missingRequired = append(missingRequired, def.ColumnName)
 			}
 			if ok { // set but empty
 				delete(rawValues, def.ColumnName)

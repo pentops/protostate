@@ -119,7 +119,8 @@ func BuildStateQuerySet[
 	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
 
 	unmappedRequestFields := map[protoreflect.Name]protoreflect.FieldDescriptor{}
-	for i := 0; i < requestReflect.Fields().Len(); i++ {
+	reqFields := requestReflect.Fields()
+	for i := 0; i < reqFields.Len(); i++ {
 		field := requestReflect.Fields().Get(i)
 		unmappedRequestFields[field.Name()] = field
 	}
@@ -143,8 +144,8 @@ func BuildStateQuerySet[
 
 	if len(unmappedRequestFields) > 0 {
 		fieldNames := make([]string, 0, len(unmappedRequestFields))
-		for k := range unmappedRequestFields {
-			fieldNames = append(fieldNames, string(k))
+		for key := range unmappedRequestFields {
+			fieldNames = append(fieldNames, string(key))
 		}
 		return nil, fmt.Errorf("unmapped fields in Get request: %v", fieldNames)
 	}

@@ -27,6 +27,8 @@ github.com/envoyproxy/protoc-gen-validate v1.1.0 h1:tntQDh69XqOCOZsDz0lVJQez/2L6
 github.com/envoyproxy/protoc-gen-validate v1.1.0/go.mod h1:sXRDRVmzEbkM7CVcM06s9shE/m23dg3wzjl0UWqJ2q4=
 github.com/fatih/color v1.17.0 h1:GlRw1BRJxkpqUCBKzKOw098ed57fEsKeNjpTe3cSjK4=
 github.com/fatih/color v1.17.0/go.mod h1:YZ7TlrGPkiz6ku9fK3TLD/pl3CpsiFyu8N92HLgmosI=
+github.com/fatih/color v1.18.0 h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=
+github.com/fatih/color v1.18.0/go.mod h1:4FelSpRwEGDpQ12mAdzqdOukCy4u8WUtOY6lkT/6HfU=
 github.com/go-kit/log v0.1.0/go.mod h1:zbhenjAZHb184qTLMA9ZjW7ThYL0H2mk7Q6pNt4vbaY=
 github.com/go-logfmt/logfmt v0.5.0/go.mod h1:wCYkCAKZfumFQihp8CzCvQ3paCTfi41vtzG1KdI/P7A=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
@@ -73,10 +75,14 @@ github.com/pentops/flowtest v0.0.0-20241005200401-85365de288f3 h1:uaBiam9L2iIewc
 github.com/pentops/flowtest v0.0.0-20241005200401-85365de288f3/go.mod h1:vNp8crAKcH0f/sZU9frkmQLUeDsTIgMqV14kQtkAqC0=
 github.com/pentops/j5 v0.0.0-20241012210806-5048599e7161 h1:dOm3rA0tbSmdMPnbjD7HEoWUUSuqpSK//DhEa8IPFFk=
 github.com/pentops/j5 v0.0.0-20241012210806-5048599e7161/go.mod h1:+DXEHJ1pFc/ddS+YDZEGVmntTStKp+jHqEbd26S5/jk=
+github.com/pentops/j5 v0.0.0-20241022210403-7bf86c63d6e6 h1:wXY9/LefTmxYX5qOvlo4c59cykTZKmXaekBYqvLA8RQ=
+github.com/pentops/j5 v0.0.0-20241022210403-7bf86c63d6e6/go.mod h1:NR62+pdiUYNndQwp90IjYZO9NVVPGm1RH167Zejrds4=
 github.com/pentops/log.go v0.0.14 h1:SmAINCMCmOvx0YVyqmC6AmborXcJ1Koc5KlSc1PdXXc=
 github.com/pentops/log.go v0.0.14/go.mod h1:925Eobg9xBopcmy9rxefY5s+yp0rRFD+wm8xlFnlSQg=
 github.com/pentops/o5-messaging v0.0.0-20240925203152-81b197123419 h1:vDGjOjzbpmu2309GxSxHHIxwunCBfgzCHWLn8PealgA=
 github.com/pentops/o5-messaging v0.0.0-20240925203152-81b197123419/go.mod h1:AWRFW50+2q4/IFOP8YWuYcsJ6bkqiEQr6czVua7YfmQ=
+github.com/pentops/o5-messaging v0.0.0-20241022213149-9d093fed7feb h1:wg3RRFsyBG5Qt3pAA5cDXHJEI4zDS3g3XD3MllaplI4=
+github.com/pentops/o5-messaging v0.0.0-20241022213149-9d093fed7feb/go.mod h1:XOjThicF1Li+zni0liLhWTwYoHqgS8n9AlIKcctf8zI=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542 h1:fYu4o1pc99WCCbMSk3WLdLplHbUpqtceTnhKmqfAeEE=
 github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542/go.mod h1:BgX0+UvohWaq7Vr3McsBWt8FpzerKaNRsmG2uH7L1FE=
 github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4 h1:zBn6k4ZRoQngAU5rrlwDKCULUJW/xg2OP0uGGHlP3F8=
@@ -177,8 +183,12 @@ google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55/go.mod h1:DMBHOl98
 google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215/go.mod h1:55QSHmfGQM9UVYDPBsyGGes0y52j32PQ3BqQfXhyH3c=
 google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9 h1:T6rh4haD3GVYsgEfWExoCZA2o2FmbNyKpTuAxbEFPTg=
 google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9/go.mod h1:wp2WsuBYj6j8wUdo3ToZsdxxixbvQNAHqVJrTgi5E5M=
+google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38 h1:2oV8dfuIkM1Ti7DwXc0BJfnwr9csz4TDXI9EmiI+Rbw=
+google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38/go.mod h1:vuAjtvlwkDKF6L1GQ0SokiRLCGFfeBUXWr/aFFkHACc=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9 h1:QCqS/PdaHTSWGvupk2F/ehwHtGc0/GYkT+3GAcR1CCc=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9/go.mod h1:GX3210XPVPUjJbTUbvwI8f2IpZDMZuPJWDzDuebbviI=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20241021214115-324edc3d5d38 h1:zciRKQ4kBpFgpfC5QQCVtnnNAcLIqweL7plyZRQHVpI=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20241021214115-324edc3d5d38/go.mod h1:GX3210XPVPUjJbTUbvwI8f2IpZDMZuPJWDzDuebbviI=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.23.0/go.mod h1:Y5yQAOtifL1yxbo5wqy6BxZv8vAUGQwXBOALyacEbxg=
 google.golang.org/grpc v1.25.1/go.mod h1:c3i+UQWmh7LiEpx4sFZnkU36qjEYZ0imhYfXVyQciAY=

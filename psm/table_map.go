@@ -5,10 +5,10 @@ import (
 	"strings"
 	"unicode"
 
-	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
-	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -62,7 +62,7 @@ type FieldSpec struct {
 type EventTableSpec struct {
 	TableName string
 
-	// The entire event mesage as JSONB
+	// The entire event message as JSONB
 	Root *FieldSpec
 
 	// a UUID holding the primary key of the event
@@ -72,7 +72,7 @@ type EventTableSpec struct {
 	// timestamptz The time of the event
 	Timestamp *FieldSpec
 
-	// int, The descrete integer for the event in the state machine
+	// int, The discrete integer for the event in the state machine
 	Sequence *FieldSpec
 
 	// jsonb, holds the state after the event
@@ -88,10 +88,12 @@ type StateTableSpec struct {
 
 type KeyColumn struct {
 	ColumnName string
+	ProtoField protoreflect.FieldNumber
 	ProtoName  protoreflect.Name
-	Primary    bool
-	Required   bool
-	Unique     bool
+
+	Primary  bool
+	Required bool
+	Unique   bool
 
 	Format *schema_j5pb.KeyFormat
 
@@ -126,6 +128,8 @@ func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescript
 		EventType: eventMessage,
 	}, nil
 }
+
+var globalSchemaCache = j5schema.NewSchemaCache()
 
 func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap, error) {
 	stateObjectAnnotation, ok := proto.GetExtension(keyMessage.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
@@ -165,86 +169,56 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 		},
 	}
 
-	fields := keyMessage.Fields()
-	tm.KeyColumns = make([]KeyColumn, fields.Len())
-	for idx := 0; idx < fields.Len(); idx++ {
-		field := fields.Get(idx)
+	schema, err := globalSchemaCache.Schema(keyMessage)
+	if err != nil {
+		return nil, nil
+	}
+	objSchema, ok := schema.(*j5schema.ObjectSchema)
+	if !ok {
+		return nil, fmt.Errorf("expected object schema, got %T", schema)
+	}
+	keyFields := keyMessage.Fields()
+	for _, field := range objSchema.Properties {
+		if len(field.ProtoField) != 1 {
+			return nil, fmt.Errorf("key field %s: expected one proto field, got %d", field.FullName(), len(field.ProtoField))
+		}
+		desc := keyFields.ByNumber(field.ProtoField[0])
 
-		keyColumn, err := keyFieldColumn(field)
+		keyColumn, err := keyFieldColumn(field, desc)
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %w", field.FullName(), err)
 		}
 
-		tm.KeyColumns[idx] = *keyColumn
+		tm.KeyColumns = append(tm.KeyColumns, *keyColumn)
 	}
 
 	return tm, nil
 }
 
-// TODO: This is a crazy amount of code for what it does. It's copied (and
-// modified) from J5 code, creating a string field from the various 'hints'
-// which coud be present. A: PSM should be based on J5, not proto... but not
-// right now, but B: it should use the J5 schema builder anyway. Maybe once it
-// is stable and has a single type annotation.
-func keyFieldColumn(field protoreflect.FieldDescriptor) (*KeyColumn, error) {
+func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescriptor) (*KeyColumn, error) {
 
-	if field.Kind() != protoreflect.StringKind {
-		return nil, fmt.Errorf("key fields must be strings, %s is %s", field.Name(), field.Kind().String())
+	key := field.Schema.ToJ5Field().GetKey()
+	if key == nil {
+		return nil, fmt.Errorf("key field %s: expected key, got %T", field.FullName(), field.Schema.ToJ5Field().Type)
 	}
-
-	annotation := proto.GetExtension(field.Options(), ext_j5pb.E_Key).(*ext_j5pb.PSMKeyFieldOptions)
-	if annotation == nil {
-		annotation = &ext_j5pb.PSMKeyFieldOptions{}
-	}
-
-	format, err := stringFieldFormat(field)
-	if err != nil {
-		return nil, fmt.Errorf("field %s: %w", field.FullName(), err)
+	isPrimary := false
+	if key.Entity != nil {
+		switch key.Entity.Type.(type) {
+		case *schema_j5pb.EntityKey_PrimaryKey:
+			isPrimary = true
+		}
 	}
 
 	kc := &KeyColumn{
-		ColumnName: string(field.Name()), // Use proto names as column names.
-		ProtoName:  field.Name(),
-		Primary:    annotation.PrimaryKey,
-		Required:   annotation.PrimaryKey || !field.HasOptionalKeyword(),
-		Format:     format,
+		ColumnName: strcase.ToSnake(field.JSONName),
+		ProtoField: desc.Number(),
+		ProtoName:  desc.Name(),
+		Primary:    isPrimary,
+		Required:   isPrimary || field.Required,
+		Format:     key.Format,
 	}
 
 	return kc, nil
-}
-
-func stringFieldFormat(field protoreflect.FieldDescriptor) (*schema_j5pb.KeyFormat, error) {
-
-	validateConstraint := proto.GetExtension(field.Options(), validate.E_Field).(*validate.FieldConstraints)
-
-	if validateConstraint != nil && validateConstraint.Type != nil {
-		stringConstraint, ok := validateConstraint.Type.(*validate.FieldConstraints_String_)
-		if !ok {
-			return nil, fmt.Errorf("wrong constraint type for string: %T", validateConstraint.Type)
-		}
-
-		constraint := stringConstraint.String_
-		switch wkt := constraint.WellKnown.(type) {
-		case *validate.StringRules_Uuid:
-			if wkt.Uuid {
-				return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Uuid{Uuid: &schema_j5pb.KeyFormat_UUID{}}}, nil
-			}
-
-		}
-	}
-
-	listConstraint := proto.GetExtension(field.Options(), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
-	listRules := listConstraint.GetString_()
-	if fk := listRules.GetForeignKey(); fk != nil {
-		switch fk.Type.(type) {
-		case *list_j5pb.ForeignKeyRules_UniqueString:
-			return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Informal_{Informal: &schema_j5pb.KeyFormat_Informal{}}}, nil
-		case *list_j5pb.ForeignKeyRules_Uuid:
-			return &schema_j5pb.KeyFormat{Type: &schema_j5pb.KeyFormat_Uuid{Uuid: &schema_j5pb.KeyFormat_UUID{}}}, nil
-		}
-	}
-
-	return nil, nil
 }
 
 func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*TableMap, error) {
