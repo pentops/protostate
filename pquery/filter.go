@@ -538,6 +538,8 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 					switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
 					case *list_j5pb.ForeignKeyRules_UniqueString:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
+					case *list_j5pb.ForeignKeyRules_Id62:
+						filterable = filterOpts.GetString_().GetForeignKey().GetId62().Filtering.Filterable
 					case *list_j5pb.ForeignKeyRules_Uuid:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
 					}
