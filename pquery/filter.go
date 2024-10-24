@@ -212,6 +212,13 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 					}
 				}
 
+			case *list_j5pb.ForeignKeyRules_Id62:
+				if fieldOps.Id62.Filtering != nil && fieldOps.Id62.Filtering.Filterable {
+					for _, val := range fieldOps.Id62.Filtering.DefaultFilters {
+						vals = append(vals, val)
+					}
+				}
+
 			case *list_j5pb.ForeignKeyRules_Uuid:
 				if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
 					for _, val := range fieldOps.Uuid.Filtering.DefaultFilters {
