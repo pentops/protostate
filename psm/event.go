@@ -36,7 +36,7 @@ type EventSpec[
 	Timestamp time.Time
 }
 
-func (es EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
+func (es *EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
 
 	if !es.Keys.PSMIsSet() {
 		return fmt.Errorf("EventSpec.Keys is required")
