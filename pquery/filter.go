@@ -212,6 +212,13 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 					}
 				}
 
+			case *list_j5pb.ForeignKeyRules_Id62:
+				if fieldOps.Id62.Filtering != nil && fieldOps.Id62.Filtering.Filterable {
+					for _, val := range fieldOps.Id62.Filtering.DefaultFilters {
+						vals = append(vals, val)
+					}
+				}
+
 			case *list_j5pb.ForeignKeyRules_Uuid:
 				if fieldOps.Uuid.Filtering != nil && fieldOps.Uuid.Filtering.Filterable {
 					for _, val := range fieldOps.Uuid.Filtering.DefaultFilters {
@@ -531,6 +538,8 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 					switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
 					case *list_j5pb.ForeignKeyRules_UniqueString:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
+					case *list_j5pb.ForeignKeyRules_Id62:
+						filterable = filterOpts.GetString_().GetForeignKey().GetId62().Filtering.Filterable
 					case *list_j5pb.ForeignKeyRules_Uuid:
 						filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
 					}
