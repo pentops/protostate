@@ -380,8 +380,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			return nil, status.Errorf(codes.InvalidArgument, "query validation: %s", err)
 		}
 
-		if len(reqQuery.GetSorts()) > 0 {
-			dynSorts, err := ll.buildDynamicSortSpec(reqQuery.GetSorts())
+		querySorts := reqQuery.GetSorts()
+		if len(querySorts) > 0 {
+			dynSorts, err := ll.buildDynamicSortSpec(querySorts)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build sorts: %s", err)
 			}
@@ -389,8 +390,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			sortFields = dynSorts
 		}
 
-		if len(reqQuery.GetFilters()) > 0 {
-			dynFilters, err := ll.buildDynamicFilter(tableAlias, reqQuery.GetFilters())
+		queryFilters := reqQuery.GetFilters()
+		if len(queryFilters) > 0 {
+			dynFilters, err := ll.buildDynamicFilter(tableAlias, queryFilters)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build filters: %s", err)
 			}
@@ -398,8 +400,9 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			filterFields = append(filterFields, dynFilters...)
 		}
 
-		if len(reqQuery.GetSearches()) > 0 {
-			searchFilters, err := ll.buildDynamicSearches(tableAlias, reqQuery.GetSearches())
+		querySearches := reqQuery.GetSearches()
+		if len(querySearches) > 0 {
+			searchFilters, err := ll.buildDynamicSearches(tableAlias, querySearches)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build searches: %s", err)
 			}

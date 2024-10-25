@@ -1,7 +1,6 @@
 package pquery
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/pentops/flowtest/prototest"
@@ -158,7 +157,6 @@ func TestValidateSearchAnnotations(t *testing.T) {
 		// together, and so the search key can be duplicated.
 		bazDesc := descFiles.MessageByName(t, "test.Baz")
 		err = validateSearchesAnnotations(bazDesc.Fields())
-		fmt.Println(err)
 		assert.Error(t, err)
 	})
 

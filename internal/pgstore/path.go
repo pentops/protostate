@@ -292,10 +292,13 @@ func NewProtoPath(message protoreflect.MessageDescriptor, fieldPath ProtoPathSpe
 	return pathSpec, nil
 }
 
-func findField(message protoreflect.MessageDescriptor, fieldPath string) protoreflect.FieldDescriptor {
+func findField(message protoreflect.MessageDescriptor, fieldPath string) []pathNode {
 	fields := message.Fields()
 	if field := fields.ByJSONName(fieldPath); field != nil {
-		return field
+		return []pathNode{{
+			name:  protoreflect.Name(fieldPath),
+			field: field,
+		}}
 	}
 
 	for i := 0; i < fields.Len(); i++ {
@@ -308,7 +311,16 @@ func findField(message protoreflect.MessageDescriptor, fieldPath string) protore
 
 		if fieldOpts != nil && fieldOpts.GetMessage().Flatten {
 			if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
-				return flattenedField
+				return []pathNode{
+					{
+						name:  field.Name(),
+						field: field,
+					},
+					{
+						name:  protoreflect.Name(fieldPath),
+						field: flattenedField,
+					},
+				}
 			}
 		}
 	}
@@ -341,16 +353,12 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 	walkMessage := message
 	var pathElem string
 	walkPath := fieldPath
+	var nodes []pathNode
 
 	for {
-
 		pathElem, walkPath = walkPath[0], walkPath[1:]
-		node := pathNode{
-			name: protoreflect.Name(pathElem),
-		}
-		field := findField(walkMessage, pathElem)
-		if field == nil {
-
+		nodes = findField(walkMessage, pathElem)
+		if nodes == nil {
 			// Very Special Edge Case: Oneof wrapper types allow the client to
 			// filter based on the type of the oneof. So the oneof can be at the
 			// end of the path, and the field can be the oneof wrapper type.
@@ -358,8 +366,11 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 			if len(walkPath) == 0 && pathElem == "type" {
 				oneof := walkMessage.Oneofs().ByName(protoreflect.Name("type"))
 				if oneof != nil {
-					node.oneof = oneof
-					pathSpec.path = append(pathSpec.path, node)
+					nodes = []pathNode{{
+						name:  protoreflect.Name(pathElem),
+						oneof: oneof,
+					}}
+					pathSpec.path = append(pathSpec.path, nodes...)
 					pathSpec.leafOneof = oneof
 					break
 				}
@@ -368,24 +379,23 @@ func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec)
 			return nil, fmt.Errorf("JSON field '%s' not found in message %s", pathElem, walkMessage.FullName())
 		}
 
-		node.field = field
-
-		if field.IsMap() {
-			return nil, fmt.Errorf("unimplemented: map fields in path spec")
+		for _, node := range nodes {
+			if node.field.IsMap() {
+				return nil, fmt.Errorf("unimplemented: map fields in path spec")
+			}
 		}
 
-		pathSpec.path = append(pathSpec.path, node)
+		pathSpec.path = append(pathSpec.path, nodes...)
 		if len(walkPath) == 0 {
-			pathSpec.leafField = node.field
+			pathSpec.leafField = nodes[len(nodes)-1].field
 			break
 		}
 
-		if field.Kind() != protoreflect.MessageKind {
+		if nodes[len(nodes)-1].field.Kind() != protoreflect.MessageKind {
 			return nil, fmt.Errorf("field %s is not a message, but path elements remain", pathElem)
 		}
 
-		walkMessage = field.Message()
-
+		walkMessage = nodes[len(nodes)-1].field.Message()
 	}
 
 	return pathSpec, nil

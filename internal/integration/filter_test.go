@@ -558,6 +558,16 @@ func TestDynamicFiltering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			if len(res.Foos) == 0 {
+				t.Fatalf("expected to receive results filtered by tenantId, but got none")
+			}
+
+			for _, foo := range res.Foos {
+				if *foo.Keys.TenantId != tenants[0] {
+					t.Fatalf("expected tenantId %s, got %s", tenants[0], *foo.Keys.TenantId)
+				}
+			}
 		})
 	})
 
@@ -884,7 +894,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 		})
 
-		ss.Step("List Page (delted)", func(ctx context.Context, t flowtest.Asserter) {
+		ss.Step("List Page (deleted)", func(ctx context.Context, t flowtest.Asserter) {
 			id := ids[tenants[0]][0]
 
 			event := newFooUpdatedEvent(id, tenants[0], func(u *test_pb.FooEventType_Updated) {
