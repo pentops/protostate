@@ -437,7 +437,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEventDeduplicate(ctx context.
 	var eventData, stateData []byte
 	err := tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
 
-	if errors.Is(sql.ErrNoRows, err) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
@@ -603,7 +603,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.C
 
 	var eventData, stateData []byte
 	err := tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
-	if errors.Is(sql.ErrNoRows, err) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return s, false, nil
 	}
 	if err != nil {
@@ -637,7 +637,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) eventsMustBeUnique(ctx context.Cont
 
 		var data []byte
 		err := tx.SelectRow(ctx, selectQuery).Scan(&data)
-		if errors.Is(sql.ErrNoRows, err) {
+		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
 		if err != nil {
