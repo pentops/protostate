@@ -9,10 +9,10 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20241005200401-85365de288f3
-	github.com/pentops/j5 v0.0.0-20241022210403-7bf86c63d6e6
-	github.com/pentops/log.go v0.0.14
-	github.com/pentops/o5-messaging v0.0.0-20241022213149-9d093fed7feb
+	github.com/pentops/flowtest v0.0.0-20241110231021-42663ac00b63
+	github.com/pentops/j5 v0.0.0-20241117232948-e10dfbc1cc8c
+	github.com/pentops/log.go v0.0.0-20241106053730-7ac2afa77d54
+	github.com/pentops/o5-messaging v0.0.0-20241116011756-68b2fdd8a093
 	github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542
 	github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4
 	github.com/pressly/goose v2.7.0+incompatible
