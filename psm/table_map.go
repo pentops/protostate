@@ -91,9 +91,10 @@ type KeyColumn struct {
 	ProtoField protoreflect.FieldNumber
 	ProtoName  protoreflect.Name
 
-	Primary  bool
-	Required bool
-	Unique   bool
+	Primary            bool
+	Required           bool
+	ExplicitlyOptional bool // makes strings pointers
+	Unique             bool
 
 	Format *schema_j5pb.KeyFormat
 
@@ -210,12 +211,13 @@ func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescr
 	}
 
 	kc := &KeyColumn{
-		ColumnName: strcase.ToSnake(field.JSONName),
-		ProtoField: desc.Number(),
-		ProtoName:  desc.Name(),
-		Primary:    isPrimary,
-		Required:   isPrimary || field.Required,
-		Format:     key.Format,
+		ColumnName:         strcase.ToSnake(field.JSONName),
+		ProtoField:         desc.Number(),
+		ProtoName:          desc.Name(),
+		Primary:            isPrimary,
+		Required:           isPrimary || field.Required,
+		ExplicitlyOptional: field.ExplicitlyOptional,
+		Format:             key.Format,
 	}
 
 	return kc, nil

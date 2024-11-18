@@ -144,9 +144,15 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 			continue
 		}
 		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
-		g.P("if msg.", field.GoName, " != nil {")
-		g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *msg.", field.GoName)
-		g.P("}")
+		if columnSpec.ExplicitlyOptional {
+			g.P("if msg.", field.GoName, " != nil {")
+			g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *msg.", field.GoName)
+			g.P("}")
+		} else {
+			g.P("if msg.", field.GoName, " != \"\" {")
+			g.P("  keyset[\"", columnSpec.ColumnName, "\"] = msg.", field.GoName)
+			g.P("}")
+		}
 	}
 	g.P("  return keyset, nil")
 	g.P("}")
