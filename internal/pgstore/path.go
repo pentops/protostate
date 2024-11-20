@@ -2,12 +2,12 @@ package pgstore
 
 import (
 	"fmt"
-	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/descriptorpb"
 	"strings"
 
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 type Table interface {
@@ -309,17 +309,21 @@ func findField(message protoreflect.MessageDescriptor, fieldPath string) []pathN
 			continue
 		}
 
-		if fieldOpts != nil && fieldOpts.GetMessage().Flatten {
-			if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
-				return []pathNode{
-					{
-						name:  field.Name(),
-						field: field,
-					},
-					{
-						name:  protoreflect.Name(fieldPath),
-						field: flattenedField,
-					},
+		if fieldOpts != nil {
+			// TODO: remove the use of Message once everything has been moved over to Object
+			if (fieldOpts.GetMessage() != nil && fieldOpts.GetMessage().Flatten) ||
+				(fieldOpts.GetObject() != nil && fieldOpts.GetObject().Flatten) {
+				if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
+					return []pathNode{
+						{
+							name:  field.Name(),
+							field: field,
+						},
+						{
+							name:  protoreflect.Name(fieldPath),
+							field: flattenedField,
+						},
+					}
 				}
 			}
 		}
