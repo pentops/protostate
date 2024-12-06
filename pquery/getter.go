@@ -117,12 +117,50 @@ type Getter[
 
 	validator *protovalidate.Validator
 
-	join *getJoin
+	joins []*getJoin
 }
 
 type getJoin struct {
 	ArrayJoinSpec
 	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+}
+
+func (join *getJoin) apply(query *sq.SelectBuilder, rootAlias, joinAlias string) {
+	query.Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, join.DataColumn)).
+		LeftJoin(fmt.Sprintf(
+			"%s AS %s ON %s",
+			join.TableName,
+			joinAlias,
+			join.On.SQL(rootAlias, joinAlias),
+		))
+}
+
+func (join *getJoin) scanDest() interface{} {
+	v := pq.StringArray{}
+	return &v
+}
+
+func (join *getJoin) unmarshal(rawData interface{}, resReflect protoreflect.Message) error {
+	data, ok := rawData.(*pq.StringArray)
+
+	if !ok {
+		return fmt.Errorf("expected []string, got %T", rawData)
+	}
+
+	elementList := resReflect.Mutable(join.fieldInParent).List()
+	for _, eventBytes := range *data {
+		if eventBytes == "" {
+			continue
+		}
+
+		rowMessage := elementList.NewElement().Message()
+		if err := protojson.Unmarshal([]byte(eventBytes), rowMessage.Interface()); err != nil {
+			return fmt.Errorf("joined unmarshal: %w", err)
+		}
+		elementList.Append(protoreflect.ValueOf(rowMessage))
+	}
+
+	return nil
 }
 
 func NewGetter[
@@ -183,10 +221,10 @@ func NewGetter[
 			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.ArrayJoin.FieldInParent)
 		}
 
-		sc.join = &getJoin{
+		sc.joins = append(sc.joins, &getJoin{
 			ArrayJoinSpec: *spec.ArrayJoin,
 			fieldInParent: joinField,
-		}
+		})
 	}
 
 	var err error
@@ -264,21 +302,18 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		}
 	}
 
-	if gc.join != nil {
-		joinAlias := as.Next(gc.join.TableName)
+	for _, join := range gc.joins {
+		joinAlias := as.Next(join.TableName)
+		join.apply(selectQuery, rootAlias, joinAlias)
 
-		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.DataColumn)).
-			LeftJoin(fmt.Sprintf(
-				"%s AS %s ON %s",
-				gc.join.TableName,
-				joinAlias,
-				gc.join.On.SQL(rootAlias, joinAlias),
-			))
 	}
 
 	var foundJSON []byte
-	var joinedJSON pq.StringArray
+	cols := make([]interface{}, 0)
+	cols = append(cols, &foundJSON)
+	for _, join := range gc.joins {
+		cols = append(cols, join.scanDest())
+	}
 
 	if gc.queryLogger != nil {
 		gc.queryLogger(selectQuery)
@@ -291,12 +326,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}, func(ctx context.Context, tx sqrlx.Transaction) error {
 		row := tx.SelectRow(ctx, selectQuery)
 
-		var err error
-		if gc.join != nil {
-			err = row.Scan(&foundJSON, &joinedJSON)
-		} else {
-			err = row.Scan(&foundJSON)
-		}
+		err := row.Scan(cols...)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				var pkDescription string
@@ -333,20 +363,11 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 	resReflect.Set(gc.stateField, stateMsg)
 
-	if gc.join != nil {
-		elementList := resReflect.Mutable(gc.join.fieldInParent).List()
-		for _, eventBytes := range joinedJSON {
-			if eventBytes == "" {
-				continue
-			}
-
-			rowMessage := elementList.NewElement().Message()
-			if err := protojson.Unmarshal([]byte(eventBytes), rowMessage.Interface()); err != nil {
-				return fmt.Errorf("joined unmarshal: %w", err)
-			}
-			elementList.Append(protoreflect.ValueOf(rowMessage))
+	for i, join := range gc.joins {
+		iData := cols[i+1]
+		if err := join.unmarshal(iData, resReflect); err != nil {
+			return err
 		}
-
 	}
 
 	return nil
