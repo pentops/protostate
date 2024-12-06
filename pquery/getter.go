@@ -244,8 +244,7 @@ type selectBuilder struct {
 	*sq.SelectBuilder
 	aliasSet  *aliasSet
 	rootAlias string
-
-	scanDest []ColumnDest
+	columns   []ColumnDest
 }
 
 func newSelectBuilder(rootTable string) *selectBuilder {
@@ -261,18 +260,9 @@ func newSelectBuilder(rootTable string) *selectBuilder {
 	}
 }
 
-type ColumnDest interface {
-	NewRow() ScanDest
-}
-
-type ScanDest interface {
-	ScanTo() interface{}
-	Unmarshal(protoreflect.Message) error
-}
-
 func (sb *selectBuilder) Column(into ColumnDest, stmt string, args ...interface{}) {
 	sb.SelectBuilder.Column(stmt, args...)
-	sb.scanDest = append(sb.scanDest, into)
+	sb.columns = append(sb.columns, into)
 }
 
 func (sb *selectBuilder) LeftJoin(join string, rest ...interface{}) {
@@ -344,8 +334,8 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 
 	joins := make([]ScanDest, 0, len(gc.columns))
-	rowCols := make([]interface{}, 0, len(sb.scanDest))
-	for _, inQuery := range sb.scanDest {
+	rowCols := make([]interface{}, 0, len(sb.columns))
+	for _, inQuery := range sb.columns {
 		colRow := inQuery.NewRow()
 		joins = append(joins, colRow)
 		rowCols = append(rowCols, colRow.ScanTo())
