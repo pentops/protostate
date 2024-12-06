@@ -34,13 +34,16 @@ type GetSpec[
 	TableName  string
 	DataColumn string
 	Auth       AuthProvider
-	AuthJoin   []*LeftJoin
+	AuthJoin   []*KeyJoin
 
 	PrimaryKey func(REQ) (map[string]interface{}, error)
 
 	StateResponseField protoreflect.Name
 
-	Join *GetJoinSpec
+	ArrayJoin *ArrayJoinSpec
+
+	// ResponseDescriptor must describe the RES message, defaults to new(RES).ProtoReflect().Descriptor()
+	ResponseDescriptor protoreflect.MessageDescriptor
 }
 
 // JoinConstraint defines a
@@ -77,14 +80,14 @@ func (jc JoinFields) SQL(rootAlias string, joinAlias string) string {
 	return strings.Join(conditions, " AND ")
 }
 
-type GetJoinSpec struct {
+type ArrayJoinSpec struct {
 	TableName     string
 	DataColumn    string
 	On            JoinFields
 	FieldInParent protoreflect.Name
 }
 
-func (gc GetJoinSpec) validate() error {
+func (gc ArrayJoinSpec) validate() error {
 	if gc.TableName == "" {
 		return fmt.Errorf("missing TableName")
 	}
@@ -108,7 +111,7 @@ type Getter[
 	tableName  string
 	primaryKey func(REQ) (map[string]interface{}, error)
 	auth       AuthProvider
-	authJoin   []*LeftJoin
+	authJoin   []*KeyJoin
 
 	queryLogger QueryLogger
 
@@ -118,18 +121,19 @@ type Getter[
 }
 
 type getJoin struct {
-	dataColumn    string
-	tableName     string
+	ArrayJoinSpec
 	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
-	on            JoinFields
 }
 
 func NewGetter[
 	REQ GetRequest,
 	RES GetResponse,
 ](spec GetSpec[REQ, RES]) (*Getter[REQ, RES], error) {
-	descriptors := newMethodDescriptor[REQ, RES]()
-	resDesc := descriptors.response
+	resDesc := spec.ResponseDescriptor
+	if resDesc == nil {
+		descriptors := newMethodDescriptor[REQ, RES]()
+		resDesc = descriptors.response
+	}
 
 	sc := &Getter[REQ, RES]{
 		dataColumn: spec.DataColumn,
@@ -148,35 +152,40 @@ func NewGetter[
 	sc.stateField = resDesc.Fields().ByName(spec.StateResponseField)
 	if sc.stateField == nil {
 		if defaultState {
-			return nil, fmt.Errorf("no 'state' field in proto message - did you mean to override StateResponseField?")
+			return nil, fmt.Errorf("no 'state' field in proto message, StateResponseField is left blank")
 		}
 		return nil, fmt.Errorf("no '%s' field in proto message", spec.StateResponseField)
 	}
 
-	if spec.PrimaryKey == nil {
-		return nil, fmt.Errorf("missing PrimaryKey func")
+	if spec.DataColumn == "" {
+		return nil, fmt.Errorf("GetSpec missing DataColumn")
 	}
 
-	if spec.Join != nil {
+	if spec.PrimaryKey == nil {
+		return nil, fmt.Errorf("GetSpec missing PrimaryKey function")
+	}
 
-		if err := spec.Join.validate(); err != nil {
+	if spec.TableName == "" {
+		return nil, fmt.Errorf("GetSpec missing TableName")
+	}
+
+	if spec.ArrayJoin != nil {
+		if err := spec.ArrayJoin.validate(); err != nil {
 			return nil, fmt.Errorf("invalid join spec: %w", err)
 		}
 
-		joinField := resDesc.Fields().ByName(protoreflect.Name(spec.Join.FieldInParent))
+		joinField := resDesc.Fields().ByName(protoreflect.Name(spec.ArrayJoin.FieldInParent))
 		if joinField == nil {
-			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
+			return nil, fmt.Errorf("field %s not found in response message", spec.ArrayJoin.FieldInParent)
 		}
 
 		if !joinField.IsList() {
-			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.Join.FieldInParent)
+			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.ArrayJoin.FieldInParent)
 		}
 
 		sc.join = &getJoin{
-			tableName:     spec.Join.TableName,
-			dataColumn:    spec.Join.DataColumn,
+			ArrayJoinSpec: *spec.ArrayJoin,
 			fieldInParent: joinField,
-			on:            spec.Join.On,
 		}
 	}
 
@@ -207,6 +216,10 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	primaryKeyFields, err := gc.primaryKey(reqMsg)
 	if err != nil {
 		return err
+	}
+
+	if len(primaryKeyFields) == 0 {
+		return fmt.Errorf("PrimaryKey() returned no fields")
 	}
 
 	rootFilter, err := dbconvert.FieldsToEqMap(rootAlias, primaryKeyFields)
@@ -252,15 +265,15 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}
 
 	if gc.join != nil {
-		joinAlias := as.Next(gc.join.tableName)
+		joinAlias := as.Next(gc.join.TableName)
 
 		selectQuery.
-			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.dataColumn)).
+			Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, gc.join.DataColumn)).
 			LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
-				gc.join.tableName,
+				gc.join.TableName,
 				joinAlias,
-				gc.join.on.SQL(rootAlias, joinAlias),
+				gc.join.On.SQL(rootAlias, joinAlias),
 			))
 	}
 

@@ -43,7 +43,7 @@ type TableSpec struct {
 	TableName string
 
 	Auth     AuthProvider
-	AuthJoin []*LeftJoin
+	AuthJoin []*KeyJoin
 
 	DataColumn string // TODO: Replace with array Columns []Column
 
@@ -215,7 +215,7 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	queryLogger QueryLogger
 
 	auth     AuthProvider
-	authJoin []*LeftJoin
+	authJoin []*KeyJoin
 
 	requestFilter func(REQ) (map[string]interface{}, error)
 
