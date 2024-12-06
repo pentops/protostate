@@ -9,7 +9,6 @@ import (
 
 	"github.com/bufbuild/protovalidate-go"
 	sq "github.com/elgris/sqrl"
-	"github.com/lib/pq"
 	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
@@ -101,13 +100,34 @@ func (gc ArrayJoinSpec) validate() error {
 	return nil
 }
 
+// jsonFieldRow is a jsonb SQL field mapped to a proto field.
+type jsonFieldRow struct {
+	field protoreflect.FieldDescriptor
+	data  []byte
+}
+
+func (jc *jsonFieldRow) ScanTo() interface{} {
+	return &jc.data
+}
+
+func (jc *jsonFieldRow) Unmarshal(resReflect protoreflect.Message) error {
+
+	if jc.data == nil {
+		return status.Error(codes.NotFound, "not found")
+	}
+
+	stateMsg := resReflect.NewField(jc.field)
+	if err := protojson.Unmarshal(jc.data, stateMsg.Message().Interface()); err != nil {
+		return err
+	}
+	resReflect.Set(jc.field, stateMsg)
+	return nil
+}
+
 type Getter[
 	REQ GetRequest,
 	RES proto.Message,
 ] struct {
-	stateField protoreflect.FieldDescriptor
-
-	dataColumn string
 	tableName  string
 	primaryKey func(REQ) (map[string]interface{}, error)
 	auth       AuthProvider
@@ -117,50 +137,29 @@ type Getter[
 
 	validator *protovalidate.Validator
 
-	joins []*getJoin
+	columns []ColumnSpec
 }
 
-type getJoin struct {
-	ArrayJoinSpec
-	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+type jsonColumn struct {
+	sqlColumn string
+	field     protoreflect.FieldDescriptor
 }
 
-func (join *getJoin) apply(query *sq.SelectBuilder, rootAlias, joinAlias string) {
-	query.Column(fmt.Sprintf("ARRAY_AGG(%s.%s)", joinAlias, join.DataColumn)).
-		LeftJoin(fmt.Sprintf(
-			"%s AS %s ON %s",
-			join.TableName,
-			joinAlias,
-			join.On.SQL(rootAlias, joinAlias),
-		))
-}
-
-func (join *getJoin) scanDest() interface{} {
-	v := pq.StringArray{}
-	return &v
-}
-
-func (join *getJoin) unmarshal(rawData interface{}, resReflect protoreflect.Message) error {
-	data, ok := rawData.(*pq.StringArray)
-
-	if !ok {
-		return fmt.Errorf("expected []string, got %T", rawData)
+func newJsonColumn(sqlColumn string, protoField protoreflect.FieldDescriptor) jsonColumn {
+	return jsonColumn{
+		sqlColumn: sqlColumn,
+		field:     protoField,
 	}
+}
 
-	elementList := resReflect.Mutable(join.fieldInParent).List()
-	for _, eventBytes := range *data {
-		if eventBytes == "" {
-			continue
-		}
+func (jc jsonColumn) ApplyQuery(tableAlias string, sb SelectBuilder) {
+	sb.Column(jc, fmt.Sprintf("%s.%s", tableAlias, jc.sqlColumn))
+}
 
-		rowMessage := elementList.NewElement().Message()
-		if err := protojson.Unmarshal([]byte(eventBytes), rowMessage.Interface()); err != nil {
-			return fmt.Errorf("joined unmarshal: %w", err)
-		}
-		elementList.Append(protoreflect.ValueOf(rowMessage))
+func (jc jsonColumn) NewRow() ScanDest {
+	return &jsonFieldRow{
+		field: jc.field,
 	}
-
-	return nil
 }
 
 func NewGetter[
@@ -174,7 +173,6 @@ func NewGetter[
 	}
 
 	sc := &Getter[REQ, RES]{
-		dataColumn: spec.DataColumn,
 		tableName:  spec.TableName,
 		primaryKey: spec.PrimaryKey,
 		auth:       spec.Auth,
@@ -187,13 +185,15 @@ func NewGetter[
 		defaultState = true
 		spec.StateResponseField = protoreflect.Name("state")
 	}
-	sc.stateField = resDesc.Fields().ByName(spec.StateResponseField)
-	if sc.stateField == nil {
+
+	stateField := resDesc.Fields().ByName(spec.StateResponseField)
+	if stateField == nil {
 		if defaultState {
 			return nil, fmt.Errorf("no 'state' field in proto message, StateResponseField is left blank")
 		}
 		return nil, fmt.Errorf("no '%s' field in proto message", spec.StateResponseField)
 	}
+	sc.columns = append(sc.columns, newJsonColumn(spec.DataColumn, stateField))
 
 	if spec.DataColumn == "" {
 		return nil, fmt.Errorf("GetSpec missing DataColumn")
@@ -221,7 +221,7 @@ func NewGetter[
 			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.ArrayJoin.FieldInParent)
 		}
 
-		sc.joins = append(sc.joins, &getJoin{
+		sc.columns = append(sc.columns, &jsonArrayColumn{
 			ArrayJoinSpec: *spec.ArrayJoin,
 			fieldInParent: joinField,
 		})
@@ -240,10 +240,52 @@ func (gc *Getter[REQ, RES]) SetQueryLogger(logger QueryLogger) {
 	gc.queryLogger = logger
 }
 
+type selectBuilder struct {
+	*sq.SelectBuilder
+	aliasSet  *aliasSet
+	rootAlias string
+
+	scanDest []ColumnDest
+}
+
+func newSelectBuilder(rootTable string) *selectBuilder {
+	as := newAliasSet()
+	rootAlias := as.Next(rootTable)
+	sb := sq.Select().
+		From(fmt.Sprintf("%s AS %s", rootTable, rootAlias))
+
+	return &selectBuilder{
+		SelectBuilder: sb,
+		aliasSet:      as,
+		rootAlias:     rootAlias,
+	}
+}
+
+type ColumnDest interface {
+	NewRow() ScanDest
+}
+
+type ScanDest interface {
+	ScanTo() interface{}
+	Unmarshal(protoreflect.Message) error
+}
+
+func (sb *selectBuilder) Column(into ColumnDest, stmt string, args ...interface{}) {
+	sb.SelectBuilder.Column(stmt, args...)
+	sb.scanDest = append(sb.scanDest, into)
+}
+
+func (sb *selectBuilder) LeftJoin(join string, rest ...interface{}) {
+	sb.SelectBuilder.LeftJoin(join, rest...)
+}
+
+func (sb *selectBuilder) TableAlias(tableName string) string {
+	return sb.aliasSet.Next(tableName)
+}
+
 func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
 
-	as := newAliasSet()
-	rootAlias := as.Next(gc.tableName)
+	sb := newSelectBuilder(gc.tableName)
 
 	resReflect := resMsg.ProtoReflect()
 
@@ -260,27 +302,22 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		return fmt.Errorf("PrimaryKey() returned no fields")
 	}
 
-	rootFilter, err := dbconvert.FieldsToEqMap(rootAlias, primaryKeyFields)
+	rootFilter, err := dbconvert.FieldsToEqMap(sb.rootAlias, primaryKeyFields)
 	if err != nil {
 		return err
 	}
-
-	selectQuery := sq.
-		Select().
-		Column(fmt.Sprintf("%s.%s", rootAlias, gc.dataColumn)).
-		From(fmt.Sprintf("%s AS %s", gc.tableName, rootAlias)).
-		Where(rootFilter)
+	sb.Where(rootFilter)
 
 	for pkField := range rootFilter {
-		selectQuery.GroupBy(pkField)
+		sb.GroupBy(pkField)
 	}
 
 	if gc.auth != nil {
-		authAlias := rootAlias
+		authAlias := sb.rootAlias
 		for _, join := range gc.authJoin {
 			priorAlias := authAlias
-			authAlias = as.Next(join.TableName)
-			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+			authAlias = sb.TableAlias(join.TableName)
+			sb.LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
 				join.TableName,
 				authAlias,
@@ -298,25 +335,24 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			for k, v := range authFilter {
 				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
 			}
-			selectQuery.Where(claimFilter)
+			sb.Where(claimFilter)
 		}
 	}
 
-	for _, join := range gc.joins {
-		joinAlias := as.Next(join.TableName)
-		join.apply(selectQuery, rootAlias, joinAlias)
-
+	for _, join := range gc.columns {
+		join.ApplyQuery(sb.rootAlias, sb)
 	}
 
-	var foundJSON []byte
-	cols := make([]interface{}, 0)
-	cols = append(cols, &foundJSON)
-	for _, join := range gc.joins {
-		cols = append(cols, join.scanDest())
+	joins := make([]ScanDest, 0, len(gc.columns))
+	rowCols := make([]interface{}, 0, len(sb.scanDest))
+	for _, inQuery := range sb.scanDest {
+		colRow := inQuery.NewRow()
+		joins = append(joins, colRow)
+		rowCols = append(rowCols, colRow.ScanTo())
 	}
 
 	if gc.queryLogger != nil {
-		gc.queryLogger(selectQuery)
+		gc.queryLogger(sb.SelectBuilder)
 	}
 
 	if err := db.Transact(ctx, &sqrlx.TxOptions{
@@ -324,9 +360,9 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		Retryable: true,
 		Isolation: sql.LevelReadCommitted,
 	}, func(ctx context.Context, tx sqrlx.Transaction) error {
-		row := tx.SelectRow(ctx, selectQuery)
+		row := tx.SelectRow(ctx, sb.SelectBuilder)
 
-		err := row.Scan(cols...)
+		err := row.Scan(rowCols...)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				var pkDescription string
@@ -349,23 +385,12 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 
 		return nil
 	}); err != nil {
-		query, _, _ := selectQuery.ToSql()
+		query, _, _ := sb.ToSql()
 		return fmt.Errorf("%s: %w", query, err)
 	}
 
-	if foundJSON == nil {
-		return status.Error(codes.NotFound, "not found")
-	}
-
-	stateMsg := resReflect.NewField(gc.stateField)
-	if err := protojson.Unmarshal(foundJSON, stateMsg.Message().Interface()); err != nil {
-		return err
-	}
-	resReflect.Set(gc.stateField, stateMsg)
-
-	for i, join := range gc.joins {
-		iData := cols[i+1]
-		if err := join.unmarshal(iData, resReflect); err != nil {
+	for _, join := range joins {
+		if err := join.Unmarshal(resReflect); err != nil {
 			return err
 		}
 	}

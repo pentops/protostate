@@ -51,14 +51,6 @@ type TableSpec struct {
 	FallbackSortColumns []pgstore.ProtoFieldSpec
 }
 
-type Column struct {
-	Name string
-
-	// The point within the root element which is stored in the column. An empty
-	// path means this stores the root element,
-	MountPoint *pgstore.Path
-}
-
 type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	TableSpec
 	RequestFilter func(REQ) (map[string]interface{}, error)

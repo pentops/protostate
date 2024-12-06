@@ -35,6 +35,12 @@ func TestGetter(t *testing.T) {
 				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
 				TypeName: proto.String(".test.Foo"),
 				Number:   proto.Int32(1),
+			}, {
+				Name:     proto.String("bars"),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: proto.String(".test.Bar"),
+				Number:   proto.Int32(2),
+				Label:    descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
 			}},
 		}, {
 			Name: proto.String("Foo"),
@@ -47,12 +53,27 @@ func TestGetter(t *testing.T) {
 				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
 				Number: proto.Int32(2),
 			}},
+		}, {
+			Name: proto.String("Bar"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:   proto.String("bar_id"),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Number: proto.Int32(1),
+			}, {
+				Name:   proto.String("foo_id"),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Number: proto.Int32(2),
+			}, {
+				Name:   proto.String("name"),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Number: proto.Int32(3),
+			}},
 		}},
 	}
 
 	file, err := protodesc.NewFile(fileDescriptor, protoregistry.GlobalFiles)
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatalf("Compiling test proto: %s", err.Error())
 	}
 
 	reqDesc := file.Messages().ByName("TestRequest")
@@ -74,12 +95,23 @@ func TestGetter(t *testing.T) {
 				"foo_id": req.GetField(t, "foo_id").String(),
 			}, nil
 		},
+
+		ArrayJoin: &ArrayJoinSpec{
+			TableName:     "bar",
+			FieldInParent: "bars",
+			DataColumn:    "state",
+			On: []JoinField{{
+				JoinColumn: "foo_id",
+				RootColumn: "foo_id",
+			}},
+		},
 	}
 
 	gg, err := NewGetter(spec)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	gg.SetQueryLogger(testLog(t))
 
 	ctx := context.Background()
 	conn := pgtest.GetTestDB(t, pgtest.WithSchemaName("pquery"))
@@ -91,6 +123,12 @@ func TestGetter(t *testing.T) {
 		`INSERT INTO foo (foo_id, state) VALUES 
 		( 'id0', '{"foo_id": "id0", "name": "foo0"}'),
 		( 'id1', '{"foo_id": "id1", "name": "foo1"}')
+		`,
+
+		`CREATE TABLE bar (bar_id text PRIMARY KEY, foo_id text REFERENCES foo(foo_id), state jsonb)`,
+		`INSERT INTO bar (bar_id, foo_id, state) VALUES
+		( 'bar0', 'id0', '{"bar_id": "bar0", "foo_id": "id0", "name": "bar0"}'),
+		( 'bar1', 'id0', '{"bar_id": "bar1", "foo_id": "id1", "name": "bar1"}')
 		`,
 	)
 
@@ -105,10 +143,27 @@ func TestGetter(t *testing.T) {
 
 	resMsg.AssertField(t, "state.foo_id", protoreflect.ValueOf("id0"))
 	resMsg.AssertField(t, "state.name", protoreflect.ValueOf("foo0"))
+
+	bars := resMsg.GetField(t, "bars").List()
+	if bars.Len() != 2 {
+		t.Fatalf("expected 2 bars, got %d", bars.Len())
+	}
+
 }
 
 func newDynamicMessage(md protoreflect.MessageDescriptor) *tDynamicMessage {
 	return &tDynamicMessage{dynamicpb.NewMessage(md)}
+}
+
+func testLog(t *testing.T) QueryLogger {
+	return func(qq sqrlx.Sqlizer) {
+		stmt, args, err := qq.ToSql()
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		t.Logf("Query: %s, args: %v", stmt, args)
+
+	}
 }
 
 type tDynamicMessage struct {
@@ -125,10 +180,17 @@ func (dm *tDynamicMessage) GetField(t *testing.T, name string) protoreflect.Valu
 			t.Errorf("field %s is not valid", p)
 		}
 		msg = field.Message()
+		if msg == nil {
+			t.Fatalf("field %s: msg is nil", p)
+		}
 	}
-	field := msg.Get(msg.Descriptor().Fields().ByName(protoreflect.Name(last)))
+	fieldDef := msg.Descriptor().Fields().ByName(protoreflect.Name(last))
+	if fieldDef == nil {
+		t.Fatalf("field %s: no such field", name)
+	}
+	field := msg.Get(fieldDef)
 	if !field.IsValid() {
-		t.Errorf("field %s is not valid", last)
+		t.Errorf("field %s is not valid", name)
 	}
 	return field
 }
