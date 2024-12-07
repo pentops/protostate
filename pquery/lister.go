@@ -12,7 +12,6 @@ import (
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"github.com/bufbuild/protovalidate-go"
-	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
@@ -21,7 +20,6 @@ import (
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -246,6 +244,10 @@ func (ll *Lister[REQ, RES]) SetQueryLogger(logger QueryLogger) {
 	ll.queryLogger = logger
 }
 
+type listRow struct {
+	columns []ScanDest
+}
+
 func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
 	if err := ll.validator.Validate(reqMsg); err != nil {
 		return fmt.Errorf("validating request %s: %w", reqMsg.ProtoReflect().Descriptor().FullName(), err)
@@ -259,7 +261,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		return fmt.Errorf("get page size: %w", err)
 	}
 
-	selectQuery, err := ll.BuildQuery(ctx, req, res)
+	sb, err := ll.BuildQuery(ctx, req, res)
 	if err != nil {
 		return fmt.Errorf("build query: %w", err)
 	}
@@ -270,45 +272,50 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		Isolation: sql.LevelReadCommitted,
 	}
 
-	var jsonRows = make([][]byte, 0, pageSize)
+	listRows := make([]listRow, 0, pageSize)
+
 	err = db.Transact(ctx, txOpts, func(ctx context.Context, tx sqrlx.Transaction) error {
-		rows, err := tx.Query(ctx, selectQuery)
+		rows, err := tx.Query(ctx, sb.SelectBuilder)
 		if err != nil {
 			return fmt.Errorf("run select: %w", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			var json []byte
-			if err := rows.Scan(&json); err != nil {
+
+			fields, scanCols := sb.NewRow()
+			row := listRow{columns: fields}
+			listRows = append(listRows, row)
+
+			if err := rows.Scan(scanCols...); err != nil {
 				return fmt.Errorf("row scan: %w", err)
 			}
 
-			jsonRows = append(jsonRows, json)
 		}
 
 		return rows.Err()
 	})
 	if err != nil {
-		stmt, _, _ := selectQuery.ToSql()
+		stmt, _, _ := sb.SelectBuilder.ToSql()
 		log.WithField(ctx, "query", stmt).Error("list query")
 		return fmt.Errorf("list query: %w", err)
 	}
 
 	if ll.queryLogger != nil {
-		ll.queryLogger(selectQuery)
+		ll.queryLogger(sb.SelectBuilder)
 	}
 
 	list := res.Mutable(ll.arrayField).List()
 	res.Set(ll.arrayField, protoreflect.ValueOf(list))
 
 	var nextToken string
-	for idx, rowBytes := range jsonRows {
+	for idx, rowBytes := range listRows {
 		rowMessage := list.NewElement().Message()
 
-		err := protojson.Unmarshal(rowBytes, rowMessage.Interface())
-		if err != nil {
-			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+		for i, col := range rowBytes.columns {
+			if err := col.Unmarshal(rowMessage); err != nil {
+				return fmt.Errorf("unmarshal column %d: %w", i, err)
+			}
 		}
 
 		if idx >= int(pageSize) {
@@ -339,12 +346,11 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	return nil
 }
 
-func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sqrl.SelectBuilder, error) {
-	as := newAliasSet()
-	tableAlias := as.Next(ll.tableName)
+func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*selectBuilder, error) {
 
-	selectQuery := sq.Select(fmt.Sprintf("%s.%s", tableAlias, ll.dataColumn)).
-		From(fmt.Sprintf("%s AS %s", ll.tableName, tableAlias))
+	sb := newSelectBuilder(ll.tableName)
+	root := newJsonColumn(ll.dataColumn, nil)
+	root.ApplyQuery(sb.rootAlias, sb)
 
 	sortFields := ll.defaultSortFields
 	sortFields = append(sortFields, ll.tieBreakerFields...)
@@ -358,11 +364,11 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		and := sq.And{}
 		for k := range filter {
-			and = append(and, sq.Expr(fmt.Sprintf("%s.%s = ?", tableAlias, k), filter[k]))
+			and = append(and, sq.Expr(fmt.Sprintf("%s.%s = ?", sb.rootAlias, k), filter[k]))
 		}
 
 		if len(and) > 0 {
-			selectQuery.Where(and)
+			sb.Where(and)
 		}
 	}
 
@@ -384,7 +390,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		queryFilters := reqQuery.GetFilters()
 		if len(queryFilters) > 0 {
-			dynFilters, err := ll.buildDynamicFilter(tableAlias, queryFilters)
+			dynFilters, err := ll.buildDynamicFilter(sb.rootAlias, queryFilters)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build filters: %s", err)
 			}
@@ -394,7 +400,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		querySearches := reqQuery.GetSearches()
 		if len(querySearches) > 0 {
-			searchFilters, err := ll.buildDynamicSearches(tableAlias, querySearches)
+			searchFilters, err := ll.buildDynamicSearches(sb.rootAlias, querySearches)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build searches: %s", err)
 			}
@@ -404,7 +410,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	}
 
 	for i := range filterFields {
-		selectQuery.Where(filterFields[i])
+		sb.Where(filterFields[i])
 	}
 
 	// apply default filters if no filters have been requested
@@ -413,14 +419,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		for _, spec := range ll.defaultFilterFields {
 			or := sq.Or{}
 			for _, val := range spec.filterVals {
-				or = append(or, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", tableAlias, ll.dataColumn, spec.Path.JSONPathQuery()), pg.JSONB(val)))
+				or = append(or, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", sb.rootAlias, ll.dataColumn, spec.Path.JSONPathQuery()), pg.JSONB(val)))
 			}
 
 			and = append(and, or)
 		}
 
 		if len(and) > 0 {
-			selectQuery.Where(and)
+			sb.Where(and)
 		}
 	}
 
@@ -429,15 +435,15 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		if sortField.desc {
 			direction = "DESC"
 		}
-		selectQuery.OrderBy(fmt.Sprintf("%s %s", sortField.Selector(tableAlias), direction))
+		sb.OrderBy(fmt.Sprintf("%s %s", sortField.Selector(sb.rootAlias), direction))
 	}
 
 	if ll.auth != nil {
-		authAlias := tableAlias
+		authAlias := sb.rootAlias
 		for _, join := range ll.authJoin {
 			priorAlias := authAlias
-			authAlias = as.Next(join.TableName)
-			selectQuery = selectQuery.LeftJoin(fmt.Sprintf(
+			authAlias = sb.TableAlias(join.TableName)
+			sb.LeftJoin(fmt.Sprintf(
 				"%s AS %s ON %s",
 				join.TableName,
 				authAlias,
@@ -455,7 +461,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 			for k, v := range authFilter {
 				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
 			}
-			selectQuery.Where(claimFilter)
+			sb.Where(claimFilter)
 		}
 	}
 
@@ -464,7 +470,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		return nil, err
 	}
 
-	selectQuery.Limit(pageSize + 1)
+	sb.Limit(pageSize + 1)
 
 	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*list_j5pb.PageRequest)
 	if ok && reqPage != nil && reqPage.GetToken() != "" {
@@ -484,7 +490,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		rhsPlaceholders := make([]string, 0, len(sortFields))
 
 		for _, sortField := range sortFields {
-			rowSelecter := sortField.Selector(tableAlias)
+			rowSelecter := sortField.Selector(sb.rootAlias)
 			valuePlaceholder := "?"
 
 			fieldVal, err := sortField.Path.GetValue(rowMessage)
@@ -592,14 +598,14 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		// does not actually matter in which order the string field is sorted...
 		// or don't because indexes.
 
-		selectQuery = selectQuery.Where(
+		sb.Where(
 			fmt.Sprintf("(%s) >= (%s)",
 				strings.Join(lhsFields, ","),
 				strings.Join(rhsPlaceholders, ","),
 			), rhsValues...)
 	}
 
-	return selectQuery, nil
+	return sb, nil
 }
 
 func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {

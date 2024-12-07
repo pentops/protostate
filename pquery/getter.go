@@ -8,12 +8,10 @@ import (
 	"strings"
 
 	"github.com/bufbuild/protovalidate-go"
-	sq "github.com/elgris/sqrl"
 	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -100,30 +98,6 @@ func (gc ArrayJoinSpec) validate() error {
 	return nil
 }
 
-// jsonFieldRow is a jsonb SQL field mapped to a proto field.
-type jsonFieldRow struct {
-	field protoreflect.FieldDescriptor
-	data  []byte
-}
-
-func (jc *jsonFieldRow) ScanTo() interface{} {
-	return &jc.data
-}
-
-func (jc *jsonFieldRow) Unmarshal(resReflect protoreflect.Message) error {
-
-	if jc.data == nil {
-		return status.Error(codes.NotFound, "not found")
-	}
-
-	stateMsg := resReflect.NewField(jc.field)
-	if err := protojson.Unmarshal(jc.data, stateMsg.Message().Interface()); err != nil {
-		return err
-	}
-	resReflect.Set(jc.field, stateMsg)
-	return nil
-}
-
 type Getter[
 	REQ GetRequest,
 	RES proto.Message,
@@ -138,28 +112,6 @@ type Getter[
 	validator *protovalidate.Validator
 
 	columns []ColumnSpec
-}
-
-type jsonColumn struct {
-	sqlColumn string
-	field     protoreflect.FieldDescriptor
-}
-
-func newJsonColumn(sqlColumn string, protoField protoreflect.FieldDescriptor) jsonColumn {
-	return jsonColumn{
-		sqlColumn: sqlColumn,
-		field:     protoField,
-	}
-}
-
-func (jc jsonColumn) ApplyQuery(tableAlias string, sb SelectBuilder) {
-	sb.Column(jc, fmt.Sprintf("%s.%s", tableAlias, jc.sqlColumn))
-}
-
-func (jc jsonColumn) NewRow() ScanDest {
-	return &jsonFieldRow{
-		field: jc.field,
-	}
 }
 
 func NewGetter[
@@ -240,39 +192,6 @@ func (gc *Getter[REQ, RES]) SetQueryLogger(logger QueryLogger) {
 	gc.queryLogger = logger
 }
 
-type selectBuilder struct {
-	*sq.SelectBuilder
-	aliasSet  *aliasSet
-	rootAlias string
-	columns   []ColumnDest
-}
-
-func newSelectBuilder(rootTable string) *selectBuilder {
-	as := newAliasSet()
-	rootAlias := as.Next(rootTable)
-	sb := sq.Select().
-		From(fmt.Sprintf("%s AS %s", rootTable, rootAlias))
-
-	return &selectBuilder{
-		SelectBuilder: sb,
-		aliasSet:      as,
-		rootAlias:     rootAlias,
-	}
-}
-
-func (sb *selectBuilder) Column(into ColumnDest, stmt string, args ...interface{}) {
-	sb.SelectBuilder.Column(stmt, args...)
-	sb.columns = append(sb.columns, into)
-}
-
-func (sb *selectBuilder) LeftJoin(join string, rest ...interface{}) {
-	sb.SelectBuilder.LeftJoin(join, rest...)
-}
-
-func (sb *selectBuilder) TableAlias(tableName string) string {
-	return sb.aliasSet.Next(tableName)
-}
-
 func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
 
 	sb := newSelectBuilder(gc.tableName)
@@ -333,13 +252,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		join.ApplyQuery(sb.rootAlias, sb)
 	}
 
-	joins := make([]ScanDest, 0, len(gc.columns))
-	rowCols := make([]interface{}, 0, len(sb.columns))
-	for _, inQuery := range sb.columns {
-		colRow := inQuery.NewRow()
-		joins = append(joins, colRow)
-		rowCols = append(rowCols, colRow.ScanTo())
-	}
+	fields, scanCols := sb.NewRow()
 
 	if gc.queryLogger != nil {
 		gc.queryLogger(sb.SelectBuilder)
@@ -352,7 +265,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 	}, func(ctx context.Context, tx sqrlx.Transaction) error {
 		row := tx.SelectRow(ctx, sb.SelectBuilder)
 
-		err := row.Scan(rowCols...)
+		err := row.Scan(scanCols...)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				var pkDescription string
@@ -379,8 +292,8 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		return fmt.Errorf("%s: %w", query, err)
 	}
 
-	for _, join := range joins {
-		if err := join.Unmarshal(resReflect); err != nil {
+	for _, field := range fields {
+		if err := field.Unmarshal(resReflect); err != nil {
 			return err
 		}
 	}
