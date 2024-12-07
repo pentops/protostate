@@ -349,7 +349,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*selectBuilder, error) {
 
 	sb := newSelectBuilder(ll.tableName)
-	root := newJsonColumn(ll.dataColumn, nil)
+	root := newJsonColumn(ll.dataColumn)
 	root.ApplyQuery(sb.rootAlias, sb)
 
 	sortFields := ll.defaultSortFields

@@ -76,13 +76,13 @@ type ColumnSpec interface {
 
 type jsonColumn struct {
 	sqlColumn string
-	field     protoreflect.FieldDescriptor
+	protoPath []protoreflect.FieldDescriptor
 }
 
-func newJsonColumn(sqlColumn string, protoField protoreflect.FieldDescriptor) jsonColumn {
+func newJsonColumn(sqlColumn string, protoPath ...protoreflect.FieldDescriptor) jsonColumn {
 	return jsonColumn{
 		sqlColumn: sqlColumn,
-		field:     protoField,
+		protoPath: protoPath,
 	}
 }
 
@@ -92,14 +92,14 @@ func (jc jsonColumn) ApplyQuery(tableAlias string, sb SelectBuilder) {
 
 func (jc jsonColumn) NewRow() ScanDest {
 	return &jsonFieldRow{
-		field: jc.field,
+		protoPath: jc.protoPath,
 	}
 }
 
 // jsonFieldRow is a jsonb SQL field mapped to a proto field.
 type jsonFieldRow struct {
-	field protoreflect.FieldDescriptor
-	data  []byte
+	protoPath []protoreflect.FieldDescriptor
+	data      []byte
 }
 
 func (jc *jsonFieldRow) ScanTo() interface{} {
@@ -113,9 +113,10 @@ func (jc *jsonFieldRow) Unmarshal(resReflect protoreflect.Message) error {
 	}
 
 	msg := resReflect
-	if jc.field != nil {
-		msg = resReflect.Mutable(jc.field).Message()
-		resReflect.Set(jc.field, protoreflect.ValueOf(msg))
+	for _, field := range jc.protoPath {
+		child := resReflect.Mutable(field).Message()
+		msg.Set(field, protoreflect.ValueOf(child))
+		msg = child
 	}
 
 	if err := protojson.Unmarshal(jc.data, msg.Interface()); err != nil {
