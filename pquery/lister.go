@@ -72,10 +72,7 @@ type ListReflectionSet struct {
 
 	tsvColumnMap map[string]string
 
-	// TODO: This should be an array/map of columns to data types, allowing
-	// multiple JSONB values, as well as cached field values direcrly on the
-	// table
-	dataColumn string
+	columns []ColumnSpec
 }
 
 func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, table TableSpec) (*ListReflectionSet, error) {
@@ -86,9 +83,12 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	var err error
 	ll := ListReflectionSet{
 		defaultPageSize: uint64(20),
-		dataColumn:      table.DataColumn,
 	}
 	fields := res.Fields()
+
+	dataColumn := table.DataColumn
+	rootColumn := newJsonColumn(dataColumn)
+	ll.columns = append(ll.columns, rootColumn)
 
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
@@ -127,12 +127,12 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.Message().FullName(), err)
 	}
 
-	ll.defaultSortFields, err = buildDefaultSorts(ll.dataColumn, ll.arrayField.Message())
+	ll.defaultSortFields, err = buildDefaultSorts(dataColumn, ll.arrayField.Message())
 	if err != nil {
 		return nil, fmt.Errorf("default sorts: %w", err)
 	}
 
-	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, req, ll.arrayField.Message(), table.FallbackSortColumns)
+	ll.tieBreakerFields, err = buildTieBreakerFields(dataColumn, req, ll.arrayField.Message(), table.FallbackSortColumns)
 	if err != nil {
 		return nil, fmt.Errorf("tie breaker fields: %w", err)
 	}
@@ -141,7 +141,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
 	}
 
-	f, err := buildDefaultFilters(ll.dataColumn, ll.arrayField.Message())
+	f, err := buildDefaultFilters(dataColumn, ll.arrayField.Message())
 	if err != nil {
 		return nil, fmt.Errorf("default filters: %w", err)
 	}
@@ -210,6 +210,8 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	requestFilter func(REQ) (map[string]interface{}, error)
 
 	validator *protovalidate.Validator
+
+	rootStateColumn string
 }
 
 func NewLister[
@@ -217,9 +219,10 @@ func NewLister[
 	RES ListResponse,
 ](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
 	ll := &Lister[REQ, RES]{
-		tableName: spec.TableName,
-		auth:      spec.Auth,
-		authJoin:  spec.AuthJoin,
+		tableName:       spec.TableName,
+		auth:            spec.Auth,
+		authJoin:        spec.AuthJoin,
+		rootStateColumn: spec.DataColumn,
 	}
 
 	descriptors := newMethodDescriptor[REQ, RES]()
@@ -349,8 +352,9 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*selectBuilder, error) {
 
 	sb := newSelectBuilder(ll.tableName)
-	root := newJsonColumn(ll.dataColumn)
-	root.ApplyQuery(sb.rootAlias, sb)
+	for _, colSpec := range ll.columns {
+		colSpec.ApplyQuery(sb.rootAlias, sb)
+	}
 
 	sortFields := ll.defaultSortFields
 	sortFields = append(sortFields, ll.tieBreakerFields...)
@@ -380,7 +384,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		querySorts := reqQuery.GetSorts()
 		if len(querySorts) > 0 {
-			dynSorts, err := ll.buildDynamicSortSpec(querySorts)
+			dynSorts, err := buildDynamicSortSpec(ll.arrayField.Message(), ll.rootStateColumn, querySorts)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build sorts: %s", err)
 			}
@@ -390,7 +394,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 		queryFilters := reqQuery.GetFilters()
 		if len(queryFilters) > 0 {
-			dynFilters, err := ll.buildDynamicFilter(sb.rootAlias, queryFilters)
+			dynFilters, err := buildDynamicFilter(ll.arrayField.Message(), sb.rootAlias, ll.rootStateColumn, queryFilters)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "build filters: %s", err)
 			}
@@ -419,7 +423,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		for _, spec := range ll.defaultFilterFields {
 			or := sq.Or{}
 			for _, val := range spec.filterVals {
-				or = append(or, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", sb.rootAlias, ll.dataColumn, spec.Path.JSONPathQuery()), pg.JSONB(val)))
+				or = append(or, sq.Expr(fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?", sb.rootAlias, spec.RootColumn, spec.Path.JSONPathQuery()), pg.JSONB(val)))
 			}
 
 			and = append(and, or)

@@ -288,32 +288,34 @@ func buildDefaultFilters(columnName string, message protoreflect.MessageDescript
 	return filters, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*list_j5pb.Filter) ([]sq.Sqlizer, error) {
+func buildDynamicFilter(filterMessage protoreflect.MessageDescriptor, tableAlias string, dataColumn string, filters []*list_j5pb.Filter) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range filters {
 		switch filters[i].GetType().(type) {
 		case *list_j5pb.Filter_Field:
 			pathSpec := pgstore.ParseJSONPathSpec(filters[i].GetField().GetName())
-			spec, err := pgstore.NewJSONPath(ll.arrayField.Message(), pathSpec)
+			spec, err := pgstore.NewJSONPath(filterMessage, pathSpec)
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 			}
 
+			// TODO: get RootColumn from the shortest matching list column
+
 			biggerSpec := &pgstore.NestedField{
 				Path:       *spec,
-				RootColumn: ll.dataColumn,
+				RootColumn: dataColumn,
 			}
 
 			var o sq.Sqlizer
 			switch leaf := spec.Leaf().(type) {
 			case protoreflect.OneofDescriptor:
-				o, err = ll.buildDynamicFilterOneof(tableAlias, biggerSpec, filters[i])
+				o, err = buildDynamicFilterOneof(tableAlias, biggerSpec, filters[i])
 				if err != nil {
 					return nil, fmt.Errorf("dynamic filter: build oneof: %w", err)
 				}
 			case protoreflect.FieldDescriptor:
-				o, err = ll.buildDynamicFilterField(tableAlias, biggerSpec, filters[i])
+				o, err = buildDynamicFilterField(tableAlias, biggerSpec, filters[i])
 				if err != nil {
 					return nil, fmt.Errorf("dynamic filter: build field: %w", err)
 				}
@@ -323,7 +325,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*lis
 
 			out = append(out, o)
 		case *list_j5pb.Filter_And:
-			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetAnd().GetFilters())
+			f, err := buildDynamicFilter(filterMessage, tableAlias, dataColumn, filters[i].GetAnd().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: and: %w", err)
 			}
@@ -332,7 +334,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*lis
 
 			out = append(out, and)
 		case *list_j5pb.Filter_Or:
-			f, err := ll.buildDynamicFilter(tableAlias, filters[i].GetOr().GetFilters())
+			f, err := buildDynamicFilter(filterMessage, tableAlias, dataColumn, filters[i].GetOr().GetFilters())
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: or: %w", err)
 			}
@@ -346,7 +348,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*lis
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
+func buildDynamicFilterField(tableAlias string, spec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	if filter.GetField() == nil {
@@ -396,7 +398,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
+func buildDynamicFilterOneof(tableAlias string, ospec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	if filter.GetField() == nil {
