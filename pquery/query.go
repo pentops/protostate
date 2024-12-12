@@ -34,10 +34,10 @@ func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]string, er
 	return f(ctx)
 }
 
-// LeftJoin is a specification for joining in the form
-// <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
-// Main is defined in the outer struct holding this LeftJoin
-type LeftJoin struct {
+// KeyJoin is a join on a primary (or unique) key in the RHS table.
+// LEFT JOIN <TableName> ON <TableName>.<JoinKeyColumn> = <Main>.<MainKeyColumn>
+// Main is defined in the outer struct holding this KeyJoin
+type KeyJoin struct {
 	TableName string
 	On        JoinFields
 }

@@ -89,7 +89,7 @@ func (gc *StateQuerySet[
 
 type StateQueryOptions struct {
 	Auth       pquery.AuthProvider
-	AuthJoin   *pquery.LeftJoin
+	AuthJoin   *pquery.KeyJoin
 	SkipEvents bool
 }
 
@@ -156,7 +156,7 @@ func BuildStateQuerySet[
 	}
 
 	if options.AuthJoin != nil {
-		getSpec.AuthJoin = []*pquery.LeftJoin{options.AuthJoin}
+		getSpec.AuthJoin = []*pquery.KeyJoin{options.AuthJoin}
 	}
 
 	if options.Auth != nil {
@@ -196,7 +196,7 @@ func BuildStateQuerySet[
 		if smSpec.Event.Root == nil {
 			return nil, fmt.Errorf("missing EventDataColumn in state spec for %s", smSpec.State.TableName)
 		}
-		getSpec.Join = &pquery.GetJoinSpec{
+		getSpec.ArrayJoin = &pquery.ArrayJoinSpec{
 			TableName:     smSpec.Event.TableName,
 			DataColumn:    smSpec.Event.Root.ColumnName,
 			FieldInParent: eventsInGet,
