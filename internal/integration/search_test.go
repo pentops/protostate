@@ -64,7 +64,7 @@ func TestDynamicSearching(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	setupFooListableData(t, ss, sm, tenants, 30)
+	setupFooListableData(ss, sm, tenants, 30)
 
 	t.Run("Simple Search Field", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {

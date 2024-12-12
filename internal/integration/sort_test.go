@@ -40,7 +40,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 	tenantID2 := uuid.NewString()
 
 	tenants := []string{tenantID1, tenantID2}
-	setupFooListableData(t, ss, sm, tenants, 10)
+	setupFooListableData(ss, sm, tenants, 10)
 
 	tkn := &token{
 		claim: &auth_j5pb.Claim{
@@ -166,7 +166,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString(), uuid.NewString()}
-	setupFooListableData(t, ss, sm, tenants, 30)
+	setupFooListableData(ss, sm, tenants, 30)
 
 	tkn := &token{
 		claim: &auth_j5pb.Claim{
@@ -289,7 +289,7 @@ func TestDynamicSorting(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	setupFooListableData(t, ss, sm, tenants, 30)
+	setupFooListableData(ss, sm, tenants, 30)
 
 	t.Run("Top Level Field", func(t *testing.T) {
 		nextToken := ""
