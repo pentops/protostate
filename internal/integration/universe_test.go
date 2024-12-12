@@ -29,15 +29,14 @@ func NewUniverse(t *testing.T) (*flowtest.Stepper[*testing.T], *Universe) {
 
 	stepper.Setup(func(ctx context.Context, t flowtest.Asserter) error {
 		log.DefaultLogger = log.NewCallbackLogger(stepper.LevelLog)
-		setupUniverse(ctx, t, uu)
+		setupUniverse(t, uu)
 		return nil
 	})
 
 	return stepper, uu
 }
 
-func setupUniverse(ctx context.Context, t flowtest.Asserter, uu *Universe) {
-
+func setupUniverse(t flowtest.Asserter, uu *Universe) {
 	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {

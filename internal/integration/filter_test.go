@@ -40,7 +40,7 @@ func TestDefaultFiltering(t *testing.T) {
 	}
 
 	tenants := []string{uuid.NewString()}
-	tenantIDs := setupFooListableData(t, ss, sm, tenants, 10)
+	tenantIDs := setupFooListableData(ss, sm, tenants, 10)
 
 	ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
 		for _, id := range tenantIDs[tenants[0]][:2] {
@@ -124,7 +124,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	tenantID2 := uuid.NewString()
 
 	tenants := []string{tenantID1, tenantID2}
-	setupFooListableData(t, ss, sm, tenants, 10)
+	setupFooListableData(ss, sm, tenants, 10)
 
 	tkn := &token{
 		claim: &auth_j5pb.Claim{
@@ -213,7 +213,7 @@ func TestDynamicFiltering(t *testing.T) {
 	queryer.SetQueryLogger(testLogger(t))
 
 	tenants := []string{uuid.NewString()}
-	ids := setupFooListableData(t, ss, sm, tenants, 60)
+	ids := setupFooListableData(ss, sm, tenants, 60)
 
 	t.Run("Single Range Filter", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {

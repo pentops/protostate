@@ -71,7 +71,7 @@ func getRawEvent(db *sqrlx.Wrapper, id string) (string, error) {
 	return string(data), nil
 }
 
-func setupFooListableData(t *testing.T, ss *flowtest.Stepper[*testing.T], sm *test_pb.FooPSMDB, tenants []string, count int) map[string][]string {
+func setupFooListableData(ss *flowtest.Stepper[*testing.T], sm *test_pb.FooPSMDB, tenants []string, count int) map[string][]string {
 	ids := make(map[string][]string, len(tenants))
 
 	for ti := range tenants {
