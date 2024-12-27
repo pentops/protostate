@@ -162,19 +162,19 @@ func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor
 	return defaultSortFields, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sortSpec, error) {
+func buildDynamicSortSpec(rootMessage protoreflect.MessageDescriptor, rootColumn string, sorts []*list_j5pb.Sort) ([]sortSpec, error) {
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
 		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
-		spec, err := pgstore.NewJSONPath(ll.arrayField.Message(), pathSpec)
+		spec, err := pgstore.NewJSONPath(rootMessage, pathSpec)
 		if err != nil {
 			return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 		}
 
 		biggerSpec := &pgstore.NestedField{
 			Path:       *spec,
-			RootColumn: ll.dataColumn,
+			RootColumn: rootColumn,
 		}
 
 		results = append(results, sortSpec{

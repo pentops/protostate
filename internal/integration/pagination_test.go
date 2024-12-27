@@ -106,7 +106,7 @@ func TestPagination(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		printQuery(t, query)
+		printQuery(t, query.SelectBuilder)
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
@@ -240,7 +240,7 @@ func TestEventPagination(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		printQuery(t, query)
+		printQuery(t, query.SelectBuilder)
 
 		err = queryer.ListEvents(ctx, db, req, res)
 		if err != nil {
