@@ -562,6 +562,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
 		return nil, err
 	}
 
+	log.Debug(ctx, "Transition Complete")
+
 	return transition, nil
 
 }
