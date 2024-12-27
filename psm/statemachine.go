@@ -477,6 +477,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, t
 			return err
 		}
 
+		sm.nextStateEvent(state, event.PSMMetadata())
+
 		err = sm.followEvent(ctx, tx, state, event)
 		if err != nil {
 			return fmt.Errorf("run event %s (%s): %w", event.PSMMetadata().EventId, event.UnwrapPSMEvent().PSMEventKey(), err)
@@ -489,52 +491,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, t
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
 
-	unwrapped := event.UnwrapPSMEvent()
-
-	typeKey := unwrapped.PSMEventKey()
-	statusBefore := state.GetStatus()
-
-	ctx = log.WithFields(ctx, map[string]interface{}{
-		"eventType":    typeKey,
-		"stateMachine": state.PSMKeys().PSMFullName(),
-		"transition": map[string]interface{}{
-			"from":  statusBefore.ShortString(),
-			"event": typeKey,
-		},
-	})
-
-	transition, err := sm.findTransitions(statusBefore, typeKey)
+	transition, err := sm.runEventMutation(ctx, tx, state, event)
 	if err != nil {
-		return nil
-	}
-
-	log.Debug(ctx, "Begin Event")
-
-	if err := transition.runTransitionMutations(ctx, state, event); err != nil {
-		log.WithError(ctx, err).Error("Running Transition")
-		return fmt.Errorf("run transition: %w", err)
-	}
-
-	ctx = log.WithFields(ctx, map[string]interface{}{
-		"transition": map[string]string{
-			"from":  statusBefore.ShortString(),
-			"to":    state.GetStatus().ShortString(),
-			"event": typeKey,
-		},
-	})
-
-	if state.GetStatus() == 0 {
-		return fmt.Errorf("state machine transitioned to zero status")
-	}
-
-	err = sm.validator.Validate(state)
-	if err != nil {
-		return fmt.Errorf("validate state after transition: %w", err)
-	}
-
-	log.Info(ctx, "Event Handled")
-
-	if err := sm.store(ctx, tx, state, event); err != nil {
 		return err
 	}
 
@@ -547,6 +505,65 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 	}
 
 	return nil
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
+	ctx context.Context,
+	tx sqrlx.Transaction,
+	state S,
+	event E,
+) (*transitionSpec[K, S, ST, SD, E, IE], error) {
+
+	unwrapped := event.UnwrapPSMEvent()
+
+	typeKey := unwrapped.PSMEventKey()
+	statusBefore := state.GetStatus()
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"eventType":    typeKey,
+		"stateMachine": state.PSMKeys().PSMFullName(),
+		"eventId":      event.PSMMetadata().EventId,
+		"transition": map[string]interface{}{
+			"from":  statusBefore.ShortString(),
+			"event": typeKey,
+		},
+	})
+
+	transition, err := sm.findTransitions(statusBefore, typeKey)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug(ctx, "Begin Event")
+
+	if err := transition.runTransitionMutations(ctx, state, event); err != nil {
+		log.WithError(ctx, err).Error("Running Transition")
+		return nil, fmt.Errorf("run transition: %w", err)
+	}
+
+	ctx = log.WithFields(ctx, map[string]interface{}{
+		"transition": map[string]string{
+			"from":  statusBefore.ShortString(),
+			"to":    state.GetStatus().ShortString(),
+			"event": typeKey,
+		},
+	})
+
+	if state.GetStatus() == 0 {
+		return nil, fmt.Errorf("state machine transitioned to zero status")
+	}
+
+	err = sm.validator.Validate(state)
+	if err != nil {
+		return nil, fmt.Errorf("validate state after transition: %w", err)
+	}
+
+	if err := sm.store(ctx, tx, state, event); err != nil {
+		return nil, err
+	}
+
+	return transition, nil
+
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
@@ -678,51 +695,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		return nil, fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
 	}
 
-	unwrapped := event.UnwrapPSMEvent()
-
-	typeKey := unwrapped.PSMEventKey()
-	statusBefore := state.GetStatus()
-
-	ctx = log.WithFields(ctx, map[string]interface{}{
-		"eventType":    typeKey,
-		"stateMachine": state.PSMKeys().PSMFullName(),
-		"eventId":      event.PSMMetadata().EventId,
-		"transition": map[string]interface{}{
-			"from":  statusBefore.ShortString(),
-			"event": typeKey,
-		},
-	})
-
-	transition, err := sm.findTransitions(statusBefore, typeKey)
+	transition, err := sm.runEventMutation(ctx, tx, state, event)
 	if err != nil {
-		return nil, err
-	}
-
-	log.Debug(ctx, "Begin Event")
-
-	if err := transition.runTransitionMutations(ctx, state, event); err != nil {
-		log.WithError(ctx, err).Error("Running Transition")
-		return nil, fmt.Errorf("run transition: %w", err)
-	}
-
-	ctx = log.WithFields(ctx, map[string]interface{}{
-		"transition": map[string]string{
-			"from":  statusBefore.ShortString(),
-			"to":    state.GetStatus().ShortString(),
-			"event": typeKey,
-		},
-	})
-
-	if state.GetStatus() == 0 {
-		return nil, fmt.Errorf("state machine transitioned to zero status")
-	}
-
-	err = sm.validator.Validate(state)
-	if err != nil {
-		return nil, fmt.Errorf("validate state after transition: %w", err)
-	}
-
-	if err := sm.store(ctx, tx, state, event); err != nil {
 		return nil, err
 	}
 
@@ -801,6 +775,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSp
 	eventMeta.Timestamp = timestamppb.Now()
 	eventMeta.Cause = spec.Cause
 
+	sm.nextStateEvent(state, eventMeta)
+
+	return
+
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) nextStateEvent(state S, eventMeta *psm_j5pb.EventMetadata) {
 	stateMeta := state.PSMMetadata()
 
 	eventMeta.Sequence = 0
@@ -813,7 +794,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSp
 		stateMeta.LastSequence = eventMeta.Sequence
 		stateMeta.UpdatedAt = eventMeta.Timestamp
 	}
-	return
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Context, tx sqrlx.Transaction, cause *psm_j5pb.Cause, keys K, innerEvent IE) error { // nolint: unused // Used when the state machine is implementing LinkDestination
