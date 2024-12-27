@@ -527,6 +527,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 		return fmt.Errorf("state machine transitioned to zero status")
 	}
 
+	err = sm.validator.Validate(state)
+	if err != nil {
+		return fmt.Errorf("validate state after transition: %w", err)
+	}
+
 	log.Info(ctx, "Event Handled")
 
 	if err := sm.store(ctx, tx, state, event); err != nil {
