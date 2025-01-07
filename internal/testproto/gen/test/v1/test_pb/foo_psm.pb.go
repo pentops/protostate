@@ -384,3 +384,33 @@ func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Foo
 		FooPSMEvent,   // implements psm.IInnerEvent
 	](cb)
 }
+func FooPSMEventPublishHook(cb func(context.Context, psm.Publisher, *FooState, *FooEvent) error) psm.EventPublishHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+	*FooEvent,     // implements psm.IEvent
+	FooPSMEvent,   // implements psm.IInnerEvent
+] {
+	return psm.EventPublishHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+		*FooEvent,     // implements psm.IEvent
+		FooPSMEvent,   // implements psm.IInnerEvent
+	](cb)
+}
+func FooPSMUpsertPublishHook(cb func(context.Context, psm.Publisher, *FooState) error) psm.UpsertPublishHook[
+	*FooKeys,      // implements psm.IKeyset
+	*FooState,     // implements psm.IState
+	FooStatus,     // implements psm.IStatusEnum
+	*FooStateData, // implements psm.IStateData
+] {
+	return psm.UpsertPublishHook[
+		*FooKeys,      // implements psm.IKeyset
+		*FooState,     // implements psm.IState
+		FooStatus,     // implements psm.IStatusEnum
+		*FooStateData, // implements psm.IStateData
+	](cb)
+}

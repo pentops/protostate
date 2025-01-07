@@ -379,3 +379,33 @@ func BarPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Bar
 		BarPSMEvent,   // implements psm.IInnerEvent
 	](cb)
 }
+func BarPSMEventPublishHook(cb func(context.Context, psm.Publisher, *BarState, *BarEvent) error) psm.EventPublishHook[
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+	*BarEvent,     // implements psm.IEvent
+	BarPSMEvent,   // implements psm.IInnerEvent
+] {
+	return psm.EventPublishHook[
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+		*BarEvent,     // implements psm.IEvent
+		BarPSMEvent,   // implements psm.IInnerEvent
+	](cb)
+}
+func BarPSMUpsertPublishHook(cb func(context.Context, psm.Publisher, *BarState) error) psm.UpsertPublishHook[
+	*BarKeys,      // implements psm.IKeyset
+	*BarState,     // implements psm.IState
+	BarStatus,     // implements psm.IStatusEnum
+	*BarStateData, // implements psm.IStateData
+] {
+	return psm.UpsertPublishHook[
+		*BarKeys,      // implements psm.IKeyset
+		*BarState,     // implements psm.IState
+		BarStatus,     // implements psm.IStatusEnum
+		*BarStateData, // implements psm.IStateData
+	](cb)
+}

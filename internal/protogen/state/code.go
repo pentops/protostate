@@ -75,12 +75,16 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 
 // prints the generic type parameters K, S, ST, SD, E, IE
 func (ss PSMEntity) writeBaseTypes(g *protogen.GeneratedFile) {
+	ss.writeBaseTypesNoEvent(g)
+	g.P("*", ss.event.message.GoIdent.GoName, ", // implements psm.IEvent")
+	g.P(ss.eventName, ", // implements psm.IInnerEvent")
+}
+
+func (ss PSMEntity) writeBaseTypesNoEvent(g *protogen.GeneratedFile) {
 	g.P("*", ss.keyMessage.GoIdent.GoName, ", // implements psm.IKeyset")
 	g.P("*", ss.state.message.GoIdent.GoName, ", // implements psm.IState")
 	g.P(ss.state.statusField.Enum.GoIdent.GoName, ", // implements psm.IStatusEnum")
 	g.P("*", ss.state.dataField.Message.GoIdent.GoName, ", // implements psm.IStateData")
-	g.P("*", ss.event.message.GoIdent.GoName, ", // implements psm.IEvent")
-	g.P(ss.eventName, ", // implements psm.IInnerEvent")
 }
 
 func (ss PSMEntity) writeBaseTypesWithSE(g *protogen.GeneratedFile) {
@@ -393,7 +397,6 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 		"*", ss.state.message.GoIdent, ",",
 		"*", ss.event.message.GoIdent,
 		") error) ", smGeneralEventDataHookFunc, "[")
-
 	ss.writeBaseTypes(g)
 	g.P("] {")
 	g.P("return ", smGeneralEventDataHookFunc, "[")
@@ -401,6 +404,32 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	g.P("](cb)")
 	g.P("}")
 
+	// FooPSMEventPublishHook
+	g.P("func ", ss.machineName, "EventPublishHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		smImportPath.Ident("Publisher"), ", ",
+		"*", ss.state.message.GoIdent, ", ",
+		"*", ss.event.message.GoIdent, ") error) ", smImportPath.Ident("EventPublishHook"), "[")
+	ss.writeBaseTypes(g)
+	g.P("] {")
+	g.P("return ", smImportPath.Ident("EventPublishHook"), "[")
+	ss.writeBaseTypes(g)
+	g.P("](cb)")
+	g.P("}")
+
+	// FooPSMUpsertPublishHook
+	g.P("func ", ss.machineName, "UpsertPublishHook",
+		"(cb func(",
+		protogen.GoImportPath("context").Ident("Context"), ", ",
+		smImportPath.Ident("Publisher"), ", ",
+		"*", ss.state.message.GoIdent, ") error) ", smImportPath.Ident("UpsertPublishHook"), "[")
+	ss.writeBaseTypesNoEvent(g)
+	g.P("] {")
+	g.P("return ", smImportPath.Ident("UpsertPublishHook"), "[")
+	ss.writeBaseTypesNoEvent(g)
+	g.P("](cb)")
+	g.P("}")
 }
 
 func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
