@@ -101,6 +101,10 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 
 	}
 
+	if ww.metadataField == nil {
+		return nil // This message is not a state machine.
+	}
+
 	if keyOptions == nil {
 		if ww.isStateMessage {
 			return fmt.Errorf("message %s does not have a PSM Key field, but has %s", message.Desc.Name(), stateMetadataProtoName)
@@ -109,10 +113,6 @@ func (se *sourceSet) checkMessage(message *protogen.Message) error {
 			return fmt.Errorf("message %s does not have a PSM Key field, but has %s", message.Desc.Name(), eventMetadataProtoName)
 		}
 		return nil // This message is not a state machine.
-	}
-
-	if ww.metadataField == nil {
-		return fmt.Errorf("message %s does not have a metadata field but, but imports the PSM Key Message (%s)", message.Desc.Name(), keyMessage.Desc.FullName())
 	}
 
 	stateSet, ok := se.stateMachines[keyOptions.EntityName]
