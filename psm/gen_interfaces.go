@@ -119,6 +119,10 @@ type HookBaton[
 	AsCause() *psm_j5pb.Cause
 }
 
+type Publisher interface {
+	Publish(o5msg.Message)
+}
+
 type transitionMutationWrapper[
 	K IKeyset,
 	S IState[K, ST, SD],
@@ -330,6 +334,29 @@ type GeneralEventDataHook[
 func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) GeneralEventDataHook(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
 	return f(ctx, tx, state, event)
 }
+
+// EventPublishHook runs for each transition, at least once before committing a
+// database transaction after multiple transitions are complete. It should
+// publish a derived version of the event using the publisher.
+type EventPublishHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] func(context.Context, Publisher, S, E) error
+
+// UpsertPublishHook runs at least once after a set of transitions for an
+// entity, it should be used to publish an 'upsert' message of the current
+// state. The last call to for a set of transitions will be the final state. Use
+// the state metadata's last modified for upsert time.
+type UpsertPublishHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+] func(context.Context, Publisher, S) error
 
 type LinkHook[
 	K IKeyset, // Source Machine Keyset

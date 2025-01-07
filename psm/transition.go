@@ -168,6 +168,9 @@ type transitionSet[
 	stateData []generalStateDataWrapper[K, S, ST, SD, E, IE]
 	eventData []generalEventDataHookWrapper[K, S, ST, SD, E, IE]
 
+	eventPublishers  []EventPublishHook[K, S, ST, SD, E, IE]
+	upsertPublishers []UpsertPublishHook[K, S, ST, SD]
+
 	transitions []*transitionSpec[K, S, ST, SD, E, IE]
 }
 
@@ -181,6 +184,14 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDat
 
 func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
 	hs.eventData = append(hs.eventData, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishEvent(hook EventPublishHook[K, S, ST, SD, E, IE]) {
+	hs.eventPublishers = append(hs.eventPublishers, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishUpsert(hook UpsertPublishHook[K, S, ST, SD]) {
+	hs.upsertPublishers = append(hs.upsertPublishers, hook)
 }
 
 func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalFollowerHooks(
@@ -207,6 +218,21 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalFollowerHooks(
 	return nil
 }
 
+type batonWrapper[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] struct {
+	baton HookBaton[K, S, ST, SD, E, IE]
+}
+
+func (bw *batonWrapper[K, S, ST, SD, E, IE]) Publish(msg o5msg.Message) {
+	bw.baton.SideEffect(msg)
+}
+
 func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
@@ -230,6 +256,24 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) runGlobalTransitionHooks(
 
 	for _, hook := range hs.eventData {
 		err := hook.GeneralEventDataHook(ctx, tx, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
+	pubBaton := &batonWrapper[K, S, ST, SD, E, IE]{
+		baton: baton,
+	}
+
+	for _, hook := range hs.eventPublishers {
+		err := hook(ctx, pubBaton, state, event)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, hook := range hs.upsertPublishers {
+		err := hook(ctx, pubBaton, state)
 		if err != nil {
 			return err
 		}
