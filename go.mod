@@ -1,6 +1,8 @@
 module github.com/pentops/protostate
 
-go 1.22.4
+go 1.23.2
+
+toolchain go1.23.4
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.0-20241127180247-a33202765966.1
@@ -11,10 +13,10 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20241110231021-42663ac00b63
-	github.com/pentops/j5 v0.0.0-20241211232443-9c8294d87ac9
+	github.com/pentops/j5 v0.0.0-20250102182307-38d2136632f9
 	github.com/pentops/log.go v0.0.0-20241106053730-7ac2afa77d54
-	github.com/pentops/o5-messaging v0.0.0-20241116011756-68b2fdd8a093
-	github.com/pentops/pgtest.go v0.0.0-20240806042712-cca5bdfe6542
+	github.com/pentops/o5-messaging v0.0.0-20241225175229-572d50427290
+	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b
 	github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.10.0
@@ -28,7 +30,7 @@ require (
 require (
 	cel.dev/expr v0.19.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/bufbuild/protocompile v0.14.0 // indirect
+	github.com/bufbuild/protocompile v0.14.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -40,6 +42,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/net v0.33.0 // indirect

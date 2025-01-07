@@ -61,11 +61,13 @@ func (msg *FooKeys) PSMFullName() string {
 }
 func (msg *FooKeys) PSMKeyValues() (map[string]string, error) {
 	keyset := map[string]string{
-		"foo_id":         msg.FooId,
-		"meta_tenant_id": msg.MetaTenantId,
+		"foo_id": msg.FooId,
 	}
 	if msg.TenantId != nil {
 		keyset["tenant_id"] = *msg.TenantId
+	}
+	if msg.MetaTenantId != "" {
+		keyset["meta_tenant_id"] = msg.MetaTenantId
 	}
 	return keyset, nil
 }
