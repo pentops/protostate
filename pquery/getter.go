@@ -285,28 +285,30 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 			err = row.Scan(&foundJSON)
 		}
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				var pkDescription string
-				if len(primaryKeyFields) == 1 {
-					for _, v := range primaryKeyFields {
-						pkDescription = fmt.Sprintf("%v", v)
-					}
-				} else {
-					all := make([]string, 0, len(primaryKeyFields))
-					for k, v := range primaryKeyFields {
-						all = append(all, fmt.Sprintf("%s=%v", k, v))
-					}
-					pkDescription = strings.Join(all, ", ")
-				}
-
-				return status.Errorf(codes.NotFound, "entity %s not found", pkDescription)
-			}
 			return err
 		}
 
 		return nil
 	}); err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			var pkDescription string
+			if len(primaryKeyFields) == 1 {
+				for _, v := range primaryKeyFields {
+					pkDescription = fmt.Sprintf("%v", v)
+				}
+			} else {
+				all := make([]string, 0, len(primaryKeyFields))
+				for k, v := range primaryKeyFields {
+					all = append(all, fmt.Sprintf("%s=%v", k, v))
+				}
+				pkDescription = strings.Join(all, ", ")
+			}
+
+			return status.Errorf(codes.NotFound, "entity %s not found", pkDescription)
+		}
 		query, _, _ := selectQuery.ToSql()
+
 		return fmt.Errorf("%s: %w", query, err)
 	}
 
