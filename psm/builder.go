@@ -20,7 +20,7 @@ type StateMachineConfig[
 
 	keyValues func(K) (map[string]string, error)
 
-	initialStateFunc func(context.Context, sqrlx.Transaction, S) error
+	initialStateFunc func(context.Context, sqrlx.Transaction, K) (IE, error)
 
 	tableMap *TableMap
 
@@ -54,10 +54,12 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) DeriveKeyValues(cbFunc func(
 }
 
 // InitialStateFunc is called when the state machine is created, and the state
-// is not found in the database. You can use it to load data into the state from
-// existing database objects, but be sure that the data is either immutable, or
-// there is an event to update it when it changes.
-func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) InitialStateFunc(cbFunc func(context.Context, sqrlx.Transaction, S) error) *StateMachineConfig[K, S, ST, SD, E, IE] {
+// is not found in the database. It must return an 'initialization' event which
+// will run prior to the event being processed.
+// The DB transaction is available to read data from, for example, upsert data,
+// but be sure that the data is either immutable, or there is an event to update
+// it when it changes.
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) InitialStateFunc(cbFunc func(context.Context, sqrlx.Transaction, K) (IE, error)) *StateMachineConfig[K, S, ST, SD, E, IE] {
 	smc.initialStateFunc = cbFunc
 	return smc
 }

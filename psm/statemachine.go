@@ -27,31 +27,6 @@ type Transactor interface {
 	Transact(context.Context, *sqrlx.TxOptions, sqrlx.Callback) error
 }
 
-/*
-type SimpleSystemActor struct {
-	ID    uuid.UUID
-	Actor protoreflect.Value
-}
-
-func NewSystemActor(id string) (SimpleSystemActor, error) {
-	idUUID, err := uuid.Parse(id)
-	if err != nil {
-		return SimpleSystemActor{}, fmt.Errorf("parsing id: %w", err)
-	}
-	return SimpleSystemActor{
-		ID: idUUID,
-	}, nil
-}
-
-
-func (sa SimpleSystemActor) NewEventID(fromEventUUID string, eventKey string) string {
-	return uuid.NewMD5(sa.ID, []byte(fromEventUUID+eventKey)).String()
-}
-
-type SystemActor interface {
-	NewEventID(fromEventUUID string, eventKey string) string
-}*/
-
 // DEPRECATED: This does nothing.
 func MustSystemActor(id string) struct{} {
 	return struct{}{}
@@ -67,13 +42,11 @@ type StateMachine[
 	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
 	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
-	//SystemActor SystemActor
-
 	transitionSet[K, S, ST, SD, E, IE]
 
 	keyValueFunc func(K) (map[string]string, error)
 
-	initialStateFunc func(context.Context, sqrlx.Transaction, S) error
+	initialStateFunc func(context.Context, sqrlx.Transaction, K) (IE, error)
 
 	tableMap *TableMap
 
@@ -244,12 +217,6 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 
 		if len(allKeys.missingRequired) > 0 {
 			return state, fmt.Errorf("missing required key(s) %v in initial event", allKeys.missingRequired)
-		}
-
-		if sm.initialStateFunc != nil {
-			if err := sm.initialStateFunc(ctx, tx, state); err != nil {
-				return state, fmt.Errorf("initial state: %w", err)
-			}
 		}
 
 		// OK, leave empty state alone
@@ -477,6 +444,14 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, t
 			return err
 		}
 
+		if state.GetStatus() == 0 {
+			newState, err := sm.runInitialEvent(ctx, tx, state)
+			if err != nil {
+				return err
+			}
+			state = newState
+		}
+
 		sm.nextStateEvent(state, event.PSMMetadata())
 
 		err = sm.followEvent(ctx, tx, state, event)
@@ -555,7 +530,10 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
 
 	err = sm.validator.Validate(state)
 	if err != nil {
-		return nil, fmt.Errorf("validate state after transition: %w", err)
+		return nil, fmt.Errorf("validate state after transition from %s on %s: %w",
+			statusBefore.ShortString(),
+			event.UnwrapPSMEvent().ProtoReflect().Descriptor().FullName(),
+			err)
 	}
 
 	if err := sm.store(ctx, tx, state, event); err != nil {
@@ -565,6 +543,42 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
 	log.Debug(ctx, "Transition Complete")
 
 	return transition, nil
+
+}
+
+func (sm *StateMachine[K, S, ST, SD, E, IE]) runInitialEvent(ctx context.Context, tx sqrlx.Transaction, state S) (S, error) {
+	if sm.initialStateFunc == nil {
+		return state, nil
+	}
+
+	keys := state.PSMKeys()
+	innerEvent, err := sm.initialStateFunc(ctx, tx, keys)
+	if err != nil {
+		return state, fmt.Errorf("initial state func: %w", err)
+	}
+
+	eventSpec := &EventSpec[K, S, ST, SD, E, IE]{
+		Keys:    keys,
+		EventID: uuid.NewString(),
+		Event:   innerEvent,
+		Cause: &psm_j5pb.Cause{
+			Type: &psm_j5pb.Cause_Init{
+				Init: &psm_j5pb.InitCause{},
+			},
+		},
+	}
+
+	prepared, err := sm.prepareEvent(state, eventSpec)
+	if err != nil {
+		return state, fmt.Errorf("prepare event: %w", err)
+	}
+
+	// RunEvent modifies state in place
+	returnState, err := sm.runEvent(ctx, tx, state, prepared, captureFinalState) // return the state after the first transition
+	if err != nil {
+		return state, fmt.Errorf("input event %s: %w", eventSpec.Event.PSMEventKey(), err)
+	}
+	return *returnState, nil
 
 }
 
@@ -589,7 +603,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		return state, err
 	}
 
-	if state.GetStatus() != 0 {
+	if state.GetStatus() == 0 {
+		newState, err := sm.runInitialEvent(ctx, tx, state)
+		if err != nil {
+			return state, err
+		}
+		state = newState
+	} else {
 		// If this is not the first event, the event keys can be derived from the
 		// state keys, so the non-primary keys of the event need not be set for every
 		// event.
@@ -606,7 +626,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 	}
 
 	// RunEvent modifies state in place
-	returnState, err := sm.runEvent(ctx, tx, state, prepared, true) // return the state after the first transition
+	returnState, err := sm.runEvent(ctx, tx, state, prepared, captureInitialState) // return the state after the first transition
 
 	if err != nil {
 		return state, fmt.Errorf("input event %s: %w", outerEvent.Event.PSMEventKey(), err)
@@ -685,12 +705,20 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) validateEvent(event E) error {
 	return sm.validator.Validate(event)
 }
 
+type captureStateType int
+
+const (
+	captureInitialState captureStateType = iota
+	captureFinalState
+	captureNoState
+)
+
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	ctx context.Context,
 	tx sqrlx.Transaction,
 	state S,
 	event E,
-	captureState bool,
+	captureState captureStateType,
 ) (*S, error) {
 
 	if err := sm.validateEvent(event); err != nil {
@@ -703,9 +731,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	}
 
 	var returnState *S
-	if captureState {
+	switch captureState {
+	case captureInitialState:
 		rsVal := proto.Clone(state).(S)
 		returnState = &rsVal
+	case captureFinalState:
+		returnState = &state
 	}
 
 	baton := &hookBaton[K, S, ST, SD, E, IE]{
@@ -750,14 +781,23 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 
 	log.Info(ctx, "Event Complete")
 
+	var captureIntermediate = captureNoState
+	if captureState == captureFinalState {
+		captureIntermediate = captureFinalState
+	}
+
 	for _, chainedEvent := range chain {
 		prepared, err := sm.prepareEvent(state, chainedEvent)
 		if err != nil {
 			return nil, fmt.Errorf("prepare event: %w", err)
 		}
-		_, err = sm.runEvent(ctx, tx, state, prepared, false)
+
+		stateAfterRun, err := sm.runEvent(ctx, tx, state, prepared, captureIntermediate)
 		if err != nil {
 			return nil, fmt.Errorf("chained event: %s: %w", chainedEvent.Event.PSMEventKey(), err)
+		}
+		if captureState == captureFinalState {
+			returnState = stateAfterRun
 		}
 	}
 

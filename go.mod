@@ -13,11 +13,11 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20241110231021-42663ac00b63
-	github.com/pentops/j5 v0.0.0-20250102182307-38d2136632f9
-	github.com/pentops/log.go v0.0.0-20241106053730-7ac2afa77d54
-	github.com/pentops/o5-messaging v0.0.0-20241225175229-572d50427290
+	github.com/pentops/j5 v0.0.0-20250117174648-d60106d1f8bb
+	github.com/pentops/log.go v0.0.14
+	github.com/pentops/o5-messaging v0.0.0-20250117174607-e678e3d6220f
 	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b
-	github.com/pentops/sqrlx.go v0.0.0-20240806064322-33adc0ac5bd4
+	github.com/pentops/sqrlx.go v0.0.0-20250107233303-36a524e154c7
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20241223144023-3abc09e42ca8
