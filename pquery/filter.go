@@ -503,49 +503,102 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 		if filterOpts != nil {
 			switch leaf.Kind() {
 			case protoreflect.DoubleKind:
-				filterable = filterOpts.GetDouble().GetFiltering().Filterable
+				if filterOpts.GetDouble().Filtering != nil {
+					filterable = filterOpts.GetDouble().GetFiltering().Filterable
+				}
+
 			case protoreflect.Fixed32Kind:
-				filterable = filterOpts.GetFixed32().GetFiltering().Filterable
+				if filterOpts.GetFixed32().Filtering != nil {
+					filterable = filterOpts.GetFixed32().GetFiltering().Filterable
+				}
+
 			case protoreflect.Fixed64Kind:
-				filterable = filterOpts.GetFixed64().GetFiltering().Filterable
+				if filterOpts.GetFixed64().Filtering != nil {
+					filterable = filterOpts.GetFixed64().GetFiltering().Filterable
+				}
+
 			case protoreflect.FloatKind:
-				filterable = filterOpts.GetFloat().GetFiltering().Filterable
+				if filterOpts.GetFloat().Filtering != nil {
+					filterable = filterOpts.GetFloat().GetFiltering().Filterable
+				}
 			case protoreflect.Int32Kind:
-				filterable = filterOpts.GetInt32().GetFiltering().Filterable
+				if filterOpts.GetInt32().Filtering != nil {
+					filterable = filterOpts.GetInt32().GetFiltering().Filterable
+				}
+
 			case protoreflect.Int64Kind:
-				filterable = filterOpts.GetInt64().GetFiltering().Filterable
+				if filterOpts.GetInt64().Filtering != nil {
+					filterable = filterOpts.GetInt64().GetFiltering().Filterable
+				}
+
 			case protoreflect.Sfixed32Kind:
-				filterable = filterOpts.GetSfixed32().GetFiltering().Filterable
+				if filterOpts.GetSfixed32().Filtering != nil {
+					filterable = filterOpts.GetSfixed32().GetFiltering().Filterable
+				}
+
 			case protoreflect.Sfixed64Kind:
-				filterable = filterOpts.GetSfixed64().GetFiltering().Filterable
+				if filterOpts.GetSfixed64().Filtering != nil {
+					filterable = filterOpts.GetSfixed64().GetFiltering().Filterable
+				}
+
 			case protoreflect.Sint32Kind:
-				filterable = filterOpts.GetSint32().GetFiltering().Filterable
+				if filterOpts.GetSint32().Filtering != nil {
+					filterable = filterOpts.GetSint32().GetFiltering().Filterable
+				}
+
 			case protoreflect.Sint64Kind:
-				filterable = filterOpts.GetSint64().GetFiltering().Filterable
+				if filterOpts.GetSint64().Filtering != nil {
+					filterable = filterOpts.GetSint64().GetFiltering().Filterable
+				}
+
 			case protoreflect.Uint32Kind:
-				filterable = filterOpts.GetUint32().GetFiltering().Filterable
+				if filterOpts.GetUint32().Filtering != nil {
+					filterable = filterOpts.GetUint32().GetFiltering().Filterable
+				}
+
 			case protoreflect.Uint64Kind:
-				filterable = filterOpts.GetUint64().GetFiltering().Filterable
+				if filterOpts.GetUint64().Filtering != nil {
+					filterable = filterOpts.GetUint64().GetFiltering().Filterable
+				}
+
 			case protoreflect.BoolKind:
-				filterable = filterOpts.GetBool().GetFiltering().Filterable
+				if filterOpts.GetBool().Filtering != nil {
+					filterable = filterOpts.GetBool().GetFiltering().Filterable
+				}
+
 			case protoreflect.EnumKind:
-				filterable = filterOpts.GetEnum().GetFiltering().Filterable
+				if filterOpts.GetEnum().Filtering != nil {
+					filterable = filterOpts.GetEnum().GetFiltering().Filterable
+				}
+
 			case protoreflect.StringKind:
 				switch filterOpts.GetString_().WellKnown.(type) {
 				case *list_j5pb.StringRules_Date:
-					filterable = filterOpts.GetString_().GetDate().Filtering.Filterable
+					if filterOpts.GetString_().GetDate().Filtering != nil {
+						filterable = filterOpts.GetString_().GetDate().Filtering.Filterable
+					}
+
 				case *list_j5pb.StringRules_ForeignKey:
 					switch filterOpts.GetString_().GetForeignKey().GetType().(type) {
 					case *list_j5pb.ForeignKeyRules_UniqueString:
-						filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
+						if filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering != nil {
+							filterable = filterOpts.GetString_().GetForeignKey().GetUniqueString().Filtering.Filterable
+						}
+
 					case *list_j5pb.ForeignKeyRules_Id62:
-						filterable = filterOpts.GetString_().GetForeignKey().GetId62().Filtering.Filterable
+						if filterOpts.GetString_().GetForeignKey().GetId62().Filtering != nil {
+							filterable = filterOpts.GetString_().GetForeignKey().GetId62().Filtering.Filterable
+						}
+
 					case *list_j5pb.ForeignKeyRules_Uuid:
-						filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
+						if filterOpts.GetString_().GetForeignKey().GetUuid().Filtering != nil {
+							filterable = filterOpts.GetString_().GetForeignKey().GetUuid().Filtering.Filterable
+						}
+
 					}
 				}
 			case protoreflect.MessageKind:
-				if leaf.Message().FullName() == "google.protobuf.Timestamp" {
+				if leaf.Message().FullName() == "google.protobuf.Timestamp" && filterOpts.GetTimestamp().Filtering != nil {
 					filterable = filterOpts.GetTimestamp().GetFiltering().Filterable
 				}
 			}
