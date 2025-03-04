@@ -112,7 +112,7 @@ type Getter[
 
 	queryLogger QueryLogger
 
-	validator *protovalidate.Validator
+	validator protovalidate.Validator
 
 	join *getJoin
 }
