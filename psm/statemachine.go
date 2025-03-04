@@ -50,7 +50,7 @@ type StateMachine[
 
 	tableMap *TableMap
 
-	validator *protovalidate.Validator
+	validator protovalidate.Validator
 }
 
 func NewStateMachine[

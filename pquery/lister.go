@@ -219,7 +219,7 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 
 	requestFilter func(REQ) (map[string]interface{}, error)
 
-	validator *protovalidate.Validator
+	validator protovalidate.Validator
 }
 
 func NewLister[
