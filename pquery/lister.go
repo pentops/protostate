@@ -47,8 +47,29 @@ type TableSpec struct {
 
 	DataColumn string // TODO: Replace with array Columns []Column
 
-	// List of postgres column names to sort by if no other unique sort is found.
-	FallbackSortColumns []pgstore.ProtoFieldSpec
+	// List of fields to sort by if no other unique sort is found.
+	FallbackSortColumns []ProtoField
+}
+
+// ProtoField represents a field within a protobuf message within a table.
+type ProtoField struct {
+	columnName   string
+	pathInColumn pgstore.ProtoPathSpec
+}
+
+func NewProtoField(columnName string, protoPath string) ProtoField {
+	pp := pgstore.ParseProtoPathSpec(protoPath)
+	return ProtoField{
+		columnName:   columnName,
+		pathInColumn: pp,
+	}
+}
+
+func NewRootField(columnName string) ProtoField {
+	return ProtoField{
+		columnName: columnName,
+		// Empty path means the root element
+	}
 }
 
 type Column struct {

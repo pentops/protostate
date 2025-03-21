@@ -171,9 +171,9 @@ func TestBuildListReflection(t *testing.T) {
 		`,
 	}.toString(),
 		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
-			table.FallbackSortColumns = []pgstore.ProtoFieldSpec{{
-				ColumnName: table.DataColumn,
-				Path:       pgstore.ProtoPathSpec{"id"},
+			table.FallbackSortColumns = []ProtoField{{
+				columnName:   table.DataColumn,
+				pathInColumn: pgstore.ProtoPathSpec{"id"},
 			}}
 		},
 		func(t *testing.T, lr *ListReflectionSet) {
