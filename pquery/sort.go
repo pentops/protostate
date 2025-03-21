@@ -19,7 +19,7 @@ func (ss sortSpec) errorName() string {
 	return ss.NestedField.Path.JSONPathQuery()
 }
 
-func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []pgstore.ProtoFieldSpec) ([]sortSpec, error) {
+func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []ProtoField) ([]sortSpec, error) {
 	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), list_j5pb.E_ListRequest).(*list_j5pb.ListRequestMessage)
 	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
@@ -48,17 +48,23 @@ func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor
 	tieBreakerFields := make([]sortSpec, 0, len(fallback))
 	for _, tieBreaker := range fallback {
 
-		if tieBreaker.ColumnName != dataColumn {
-			if len(tieBreaker.Path) > 0 {
-				return nil, fmt.Errorf("tiebreaker is a jsonb-sub-field of an unknown column '%s', with path %#v", tieBreaker.ColumnName, tieBreaker.Path)
+		if tieBreaker.columnName != dataColumn {
+			if len(tieBreaker.pathInColumn) > 0 {
+				return nil, fmt.Errorf("tiebreaker is a jsonb-sub-field of an unknown column '%s', with path %#v", tieBreaker.columnName, tieBreaker.pathInColumn)
 			}
+			tieBreakerFields = append(tieBreakerFields, sortSpec{
+				NestedField: &pgstore.NestedField{
+					RootColumn: tieBreaker.columnName,
+				},
+				desc: false,
+			})
 
-		} else if len(tieBreaker.Path) == 0 {
-			return nil, fmt.Errorf("tiebreaker is the root column %s, but no path was provided", tieBreaker.ColumnName)
+		} else if len(tieBreaker.pathInColumn) == 0 {
+			return nil, fmt.Errorf("tiebreaker is the root column %s, but no path was provided", tieBreaker.columnName)
 		} else {
-			path, err := pgstore.NewProtoPath(arrayField, tieBreaker.Path)
+			path, err := pgstore.NewProtoPath(arrayField, tieBreaker.pathInColumn)
 			if err != nil {
-				return nil, fmt.Errorf("field %s in fallback sort tiebreaker for %s: %w", tieBreaker.ColumnName, req.FullName(), err)
+				return nil, fmt.Errorf("field %s in fallback sort tiebreaker for %s: %w", tieBreaker.columnName, req.FullName(), err)
 			}
 
 			tieBreakerFields = append(tieBreakerFields, sortSpec{

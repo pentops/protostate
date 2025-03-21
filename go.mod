@@ -49,3 +49,5 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 )
+
+replace github.com/pentops/j5 => /Users/daemonl/pentops/j5

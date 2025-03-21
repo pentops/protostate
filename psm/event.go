@@ -62,7 +62,7 @@ func (es *EventSpec[K, S, ST, SD, E, IE]) validateAndPrepare() error {
 
 	// check that the cause type is supported.
 	switch es.Cause.Type.(type) {
-	case *psm_j5pb.Cause_PsmEvent, *psm_j5pb.Cause_Command, *psm_j5pb.Cause_ExternalEvent, *psm_j5pb.Cause_Reply:
+	case *psm_j5pb.Cause_PsmEvent, *psm_j5pb.Cause_Command, *psm_j5pb.Cause_ExternalEvent, *psm_j5pb.Cause_Message:
 		// All OK
 	default:
 		return fmt.Errorf("EventSpec.Cause.Source must be set")

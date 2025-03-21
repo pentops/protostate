@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -209,16 +208,15 @@ func BuildStateQuerySet[
 		return nil, fmt.Errorf("build getter for state query '%s': %w", smSpec.State.TableName, err)
 	}
 
-	statePrimaryKeys := []pgstore.ProtoFieldSpec{}
+	statePrimaryKeys := []pquery.ProtoField{}
 
 	for _, field := range smSpec.KeyColumns {
 		if !field.Primary {
 			continue
 		}
-		statePrimaryKeys = append(statePrimaryKeys, pgstore.ProtoFieldSpec{
-			ColumnName: field.ColumnName,
-			// No Path
-		})
+		statePrimaryKeys = append(statePrimaryKeys,
+			pquery.NewRootField(field.ColumnName),
+		)
 	}
 
 	listSpec := pquery.ListSpec[ListREQ, ListRES]{
@@ -252,9 +250,9 @@ func BuildStateQuerySet[
 			DataColumn: smSpec.Event.Root.ColumnName,
 			Auth:       getSpec.Auth,
 			AuthJoin:   getSpec.AuthJoin,
-			FallbackSortColumns: []pgstore.ProtoFieldSpec{{
-				ColumnName: smSpec.Event.ID.ColumnName,
-			}},
+			FallbackSortColumns: []pquery.ProtoField{
+				pquery.NewRootField(smSpec.Event.ID.ColumnName),
+			},
 		},
 		RequestFilter: smSpec.ListEventsRequestFilter,
 	}
