@@ -11,6 +11,7 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20241110231021-42663ac00b63
+	github.com/pentops/golib v0.0.0-20250107012216-1b5307b3bfe0
 	github.com/pentops/j5 v0.0.0-20250220215902-96e4ad10ce0b
 	github.com/pentops/log.go v0.0.15
 	github.com/pentops/o5-messaging v0.0.0-20250222021813-347361ac64f8
@@ -49,5 +50,3 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 )
-
-replace github.com/pentops/j5 => /Users/daemonl/pentops/j5

@@ -214,8 +214,9 @@ func BuildStateQuerySet[
 		if !field.Primary {
 			continue
 		}
+		keyPath := fmt.Sprintf("keys.%s", field.ProtoName)
 		statePrimaryKeys = append(statePrimaryKeys,
-			pquery.NewRootField(field.ColumnName),
+			pquery.NewProtoField(keyPath, &field.ColumnName),
 		)
 	}
 
@@ -251,7 +252,7 @@ func BuildStateQuerySet[
 			Auth:       getSpec.Auth,
 			AuthJoin:   getSpec.AuthJoin,
 			FallbackSortColumns: []pquery.ProtoField{
-				pquery.NewRootField(smSpec.Event.ID.ColumnName),
+				pquery.NewProtoField("metadata.event_id", &smSpec.Event.ID.ColumnName),
 			},
 		},
 		RequestFilter: smSpec.ListEventsRequestFilter,
