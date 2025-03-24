@@ -21,6 +21,10 @@ type NestedField struct {
 
 	// The path from the column root to the node
 	Path Path
+
+	// ValueColumn contains the value of the field directly in the table in
+	// addition to nested within the JSONB data.
+	ValueColumn *string
 }
 
 type ProtoFieldSpec struct {
@@ -48,6 +52,9 @@ func (nf *NestedField) ProtoChild(name protoreflect.Name) (*NestedField, error) 
 }
 
 func (nf *NestedField) Selector(inTable string) string {
+	if nf.ValueColumn != nil {
+		return fmt.Sprintf("%s.%s", inTable, *nf.ValueColumn)
+	}
 	if len(nf.Path.path) == 0 {
 		return fmt.Sprintf("%s.%s", inTable, nf.RootColumn)
 	}

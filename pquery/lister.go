@@ -51,24 +51,20 @@ type TableSpec struct {
 	FallbackSortColumns []ProtoField
 }
 
-// ProtoField represents a field within a protobuf message within a table.
+// ProtoField represents a field within a the root data.
 type ProtoField struct {
-	columnName   string
-	pathInColumn pgstore.ProtoPathSpec
+	// path from the root object to this field
+	pathInRoot pgstore.ProtoPathSpec
+
+	// optional column name when the field is also stored as a scalar directly
+	valueColumn *string
 }
 
-func NewProtoField(columnName string, protoPath string) ProtoField {
+func NewProtoField(protoPath string, columnName *string) ProtoField {
 	pp := pgstore.ParseProtoPathSpec(protoPath)
 	return ProtoField{
-		columnName:   columnName,
-		pathInColumn: pp,
-	}
-}
-
-func NewRootField(columnName string) ProtoField {
-	return ProtoField{
-		columnName: columnName,
-		// Empty path means the root element
+		valueColumn: columnName,
+		pathInRoot:  pp,
 	}
 }
 

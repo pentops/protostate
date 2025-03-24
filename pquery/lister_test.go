@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pentops/flowtest/prototest"
+	"github.com/pentops/golib/gl"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -172,8 +173,8 @@ func TestBuildListReflection(t *testing.T) {
 	}.toString(),
 		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
 			table.FallbackSortColumns = []ProtoField{{
-				columnName:   table.DataColumn,
-				pathInColumn: pgstore.ProtoPathSpec{"id"},
+				valueColumn: gl.Ptr("id"),
+				pathInRoot:  pgstore.ProtoPathSpec{"id"},
 			}}
 		},
 		func(t *testing.T, lr *ListReflectionSet) {
