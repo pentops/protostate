@@ -68,19 +68,19 @@ func TestPagination(t *testing.T) {
 	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.ListFoosRequest{}
-		res := &test_spb.ListFoosResponse{}
+		req := &test_spb.FooListRequest{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != 20 {
-			t.Fatalf("expected 20 states, got %d", len(res.Foos))
+		if len(res.Foo) != 20 {
+			t.Fatalf("expected 20 states, got %d", len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
@@ -95,12 +95,12 @@ func TestPagination(t *testing.T) {
 	})
 
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				Token: pageResp.NextToken,
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		query, err := queryer.MainLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
 		if err != nil {
@@ -113,12 +113,12 @@ func TestPagination(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
-		if len(res.Foos) != 10 {
-			t.Fatalf("expected 10 states, got %d", len(res.Foos))
+		if len(res.Foo) != 10 {
+			t.Fatalf("expected 10 states, got %d", len(res.Foo))
 		}
 	})
 }
@@ -176,10 +176,10 @@ func TestEventPagination(t *testing.T) {
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 
-		req := &test_spb.ListFooEventsRequest{
+		req := &test_spb.FooEventsRequest{
 			FooId: fooID,
 		}
-		res := &test_spb.ListFooEventsResponse{}
+		res := &test_spb.FooEventsResponse{}
 
 		err = queryer.ListEvents(ctx, db, req, res)
 		if err != nil {
@@ -228,13 +228,13 @@ func TestEventPagination(t *testing.T) {
 
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 
-		req := &test_spb.ListFooEventsRequest{
+		req := &test_spb.FooEventsRequest{
 			Page: &list_j5pb.PageRequest{
 				Token: pageResp.NextToken,
 			},
 			FooId: fooID,
 		}
-		res := &test_spb.ListFooEventsResponse{}
+		res := &test_spb.FooEventsResponse{}
 
 		query, err := queryer.EventLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
 		if err != nil {
@@ -316,19 +316,19 @@ func TestPageSize(t *testing.T) {
 	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page (default)", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.ListFoosRequest{}
-		res := &test_spb.ListFoosResponse{}
+		req := &test_spb.FooListRequest{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(20) {
-			t.Fatalf("expected %d states, got %d", 20, len(res.Foos))
+		if len(res.Foo) != int(20) {
+			t.Fatalf("expected %d states, got %d", 20, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
@@ -344,23 +344,23 @@ func TestPageSize(t *testing.T) {
 
 	ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(5)
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: &pageSize,
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(pageSize) {
-			t.Fatalf("expected %d states, got %d", pageSize, len(res.Foos))
+		if len(res.Foo) != int(pageSize) {
+			t.Fatalf("expected %d states, got %d", pageSize, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
@@ -376,12 +376,12 @@ func TestPageSize(t *testing.T) {
 
 	ss.Step("List Page (exceeding)", func(ctx context.Context, t flowtest.Asserter) {
 		pageSize := int64(50)
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: &pageSize,
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err == nil {

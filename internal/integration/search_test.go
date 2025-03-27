@@ -68,7 +68,7 @@ func TestDynamicSearching(t *testing.T) {
 
 	t.Run("Simple Search Field", func(t *testing.T) {
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -81,22 +81,22 @@ func TestDynamicSearching(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != 1 {
-				t.Fatalf("expected %d states, got %d", 1, len(res.Foos))
+			if len(res.Foo) != 1 {
+				t.Fatalf("expected %d states, got %d", 1, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(30-ii) {
 					t.Fatalf("expected weight %d, got %d", 30-ii, state.Data.Characteristics.Weight)
 				}
@@ -112,7 +112,7 @@ func TestDynamicSearching(t *testing.T) {
 		t.Run("Complex Search Field", func(t *testing.T) {
 			nextToken := ""
 			ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-				req := &test_spb.ListFoosRequest{
+				req := &test_spb.FooListRequest{
 					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 					},
@@ -134,22 +134,22 @@ func TestDynamicSearching(t *testing.T) {
 						},
 					},
 				}
-				res := &test_spb.ListFoosResponse{}
+				res := &test_spb.FooListResponse{}
 
 				err = queryer.List(ctx, db, req, res)
 				if err != nil {
 					t.Fatal(err.Error())
 				}
 
-				for ii, state := range res.Foos {
+				for ii, state := range res.Foo {
 					t.Logf("%d: %s", ii, state.Profiles)
 				}
 
-				if len(res.Foos) != 5 {
-					t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+				if len(res.Foo) != 5 {
+					t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 				}
 
-				for _, state := range res.Foos {
+				for _, state := range res.Foo {
 					matched := false
 					for _, profile := range state.Profiles {
 						if profile.Place >= 17 && profile.Place <= 21 {
@@ -176,7 +176,7 @@ func TestDynamicSearching(t *testing.T) {
 			})
 
 			ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-				req := &test_spb.ListFoosRequest{
+				req := &test_spb.FooListRequest{
 					Page: &list_j5pb.PageRequest{
 						PageSize: proto.Int64(5),
 						Token:    &nextToken,
@@ -199,22 +199,22 @@ func TestDynamicSearching(t *testing.T) {
 						},
 					},
 				}
-				res := &test_spb.ListFoosResponse{}
+				res := &test_spb.FooListResponse{}
 
 				err = queryer.List(ctx, db, req, res)
 				if err != nil {
 					t.Fatal(err.Error())
 				}
 
-				for ii, state := range res.Foos {
+				for ii, state := range res.Foo {
 					t.Logf("%d: %s", ii, state.Profiles)
 				}
 
-				if len(res.Foos) != 2 {
-					t.Fatalf("expected %d states, got %d", 2, len(res.Foos))
+				if len(res.Foo) != 2 {
+					t.Fatalf("expected %d states, got %d", 2, len(res.Foo))
 				}
 
-				for _, state := range res.Foos {
+				for _, state := range res.Foo {
 					matched := false
 					for _, profile := range state.Profiles {
 						if profile.Place >= 15 && profile.Place <= 16 {

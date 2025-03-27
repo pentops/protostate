@@ -12,7 +12,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pentops/flowtest v0.0.0-20241110231021-42663ac00b63
 	github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63
-	github.com/pentops/j5 v0.0.0-20250327010851-dd2940c9607d
+	github.com/pentops/j5 v0.0.0-20250327060939-337dc13256d1
 	github.com/pentops/log.go v0.0.15
 	github.com/pentops/o5-messaging v0.0.0-20250326164730-71b47c1a3deb
 	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b

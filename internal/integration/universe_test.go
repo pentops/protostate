@@ -91,8 +91,8 @@ func (c *MiniFooController) FooSummary(ctx context.Context, req *test_spb.FooSum
 	return res, nil
 }
 
-func (c *MiniFooController) GetFoo(ctx context.Context, req *test_spb.GetFooRequest) (*test_spb.GetFooResponse, error) {
-	res := &test_spb.GetFooResponse{}
+func (c *MiniFooController) FooGet(ctx context.Context, req *test_spb.FooGetRequest) (*test_spb.FooGetResponse, error) {
+	res := &test_spb.FooGetResponse{}
 	err := c.query.Get(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -100,8 +100,8 @@ func (c *MiniFooController) GetFoo(ctx context.Context, req *test_spb.GetFooRequ
 	return res, nil
 }
 
-func (c *MiniFooController) ListFoos(ctx context.Context, req *test_spb.ListFoosRequest) (*test_spb.ListFoosResponse, error) {
-	res := &test_spb.ListFoosResponse{}
+func (c *MiniFooController) FooList(ctx context.Context, req *test_spb.FooListRequest) (*test_spb.FooListResponse, error) {
+	res := &test_spb.FooListResponse{}
 	err := c.query.List(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -109,8 +109,8 @@ func (c *MiniFooController) ListFoos(ctx context.Context, req *test_spb.ListFoos
 	return res, nil
 }
 
-func (c *MiniFooController) ListFooEvents(ctx context.Context, req *test_spb.ListFooEventsRequest) (*test_spb.ListFooEventsResponse, error) {
-	res := &test_spb.ListFooEventsResponse{}
+func (c *MiniFooController) FooEvents(ctx context.Context, req *test_spb.FooEventsRequest) (*test_spb.FooEventsResponse, error) {
+	res := &test_spb.FooEventsResponse{}
 	err := c.query.ListEvents(ctx, c.db, req, res)
 	if err != nil {
 		return nil, err
@@ -130,8 +130,8 @@ func NewMiniBarController(db *sqrlx.Wrapper, query *test_spb.BarPSMQuerySet) *Mi
 	}
 }
 
-func (b *MiniBarController) GetBar(ctx context.Context, req *test_spb.GetBarRequest) (*test_spb.GetBarResponse, error) {
-	res := &test_spb.GetBarResponse{}
+func (b *MiniBarController) BarGet(ctx context.Context, req *test_spb.BarGetRequest) (*test_spb.BarGetResponse, error) {
+	res := &test_spb.BarGetResponse{}
 	err := b.query.Get(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err
@@ -139,8 +139,8 @@ func (b *MiniBarController) GetBar(ctx context.Context, req *test_spb.GetBarRequ
 	return res, nil
 }
 
-func (b *MiniBarController) ListBars(ctx context.Context, req *test_spb.ListBarsRequest) (*test_spb.ListBarsResponse, error) {
-	res := &test_spb.ListBarsResponse{}
+func (b *MiniBarController) BarList(ctx context.Context, req *test_spb.BarListRequest) (*test_spb.BarListResponse, error) {
+	res := &test_spb.BarListResponse{}
 	err := b.query.List(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err
@@ -148,8 +148,8 @@ func (b *MiniBarController) ListBars(ctx context.Context, req *test_spb.ListBars
 	return res, nil
 }
 
-func (b *MiniBarController) ListBarEvents(ctx context.Context, req *test_spb.ListBarEventsRequest) (*test_spb.ListBarEventsResponse, error) {
-	res := &test_spb.ListBarEventsResponse{}
+func (b *MiniBarController) BarEvents(ctx context.Context, req *test_spb.BarEventsRequest) (*test_spb.BarEventsResponse, error) {
+	res := &test_spb.BarEventsResponse{}
 	err := b.query.ListEvents(ctx, b.db, req, res)
 	if err != nil {
 		return nil, err

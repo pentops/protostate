@@ -87,7 +87,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 		OnEvent(test_pb.FooPSMEventCreated).
 		SetStatus(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
-			data *test_pb.FooStateData,
+			data *test_pb.FooData,
 			event *test_pb.FooEventType_Created,
 		) error {
 			data.Name = event.Name
@@ -106,7 +106,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 		OnEvent(test_pb.FooPSMEventCreated).
 		SetStatus(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
-			data *test_pb.FooStateData,
+			data *test_pb.FooData,
 			event *test_pb.FooEventType_Created,
 		) error {
 			data.Name = event.Name
@@ -124,7 +124,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 	// Testing Mutate() without OnEvent, the callback implies the event type.
 	sm.From(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
-			data *test_pb.FooStateData,
+			data *test_pb.FooData,
 			event *test_pb.FooEventType_Updated,
 		) error {
 			data.Field = event.Field
@@ -174,7 +174,7 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*test_pb.BarPSMDB, error) {
 		OnEvent(test_pb.BarPSMEventCreated).
 		SetStatus(test_pb.BarStatus_ACTIVE).
 		Mutate(test_pb.BarPSMMutation(func(
-			data *test_pb.BarStateData,
+			data *test_pb.BarData,
 			event *test_pb.BarEventType_Created,
 		) error {
 			data.Name = event.Name

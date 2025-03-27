@@ -27,7 +27,7 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 	fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
 	vals := []interface{}{}
 
-	if fieldOpts == nil {
+	if fieldOpts == nil || fieldOpts.Type == nil {
 		return nil, nil
 	}
 
@@ -252,6 +252,16 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) 
 				vals = append(vals, timestamppb.New(t))
 			}
 		}
+
+	case *list_j5pb.FieldConstraint_Oneof:
+		if fieldOps.Oneof.Filtering != nil && fieldOps.Oneof.Filtering.Filterable {
+			for _, val := range fieldOps.Oneof.Filtering.DefaultFilters {
+				vals = append(vals, val)
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("unknown field type for filter rules %T", fieldOps)
 	}
 	return vals, nil
 }
@@ -262,7 +272,11 @@ func buildDefaultFilters(columnName string, message protoreflect.MessageDescript
 	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
 		field := path.LeafField()
 		if field == nil {
-			return nil // oneof or something
+			oneof := path.LeafOneofWrapper()
+			if oneof == nil {
+				return nil
+			}
+			field = oneof
 		}
 
 		vals, err := filtersForField(field)
@@ -455,9 +469,22 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 	case protoreflect.OneofDescriptor:
 		filterable := false
 
-		filterOpts, ok := proto.GetExtension(leaf.Options().(*descriptorpb.OneofOptions), list_j5pb.E_Oneof).(*list_j5pb.OneofRules)
-		if !ok {
-			return fmt.Errorf("requested filter field '%s' does not have any filterable constraints defined", filterField.Name)
+		filterOpts := proto.GetExtension(leaf.Options().(*descriptorpb.OneofOptions), list_j5pb.E_Oneof).(*list_j5pb.OneofRules)
+
+		if filterOpts == nil {
+
+			fmt.Printf("No Filter Opts %s\n", filterField.GetName())
+			wrapperField := spec.LeafOneofWrapper()
+			if wrapperField != nil {
+				fmt.Printf("WWWW %s\n", wrapperField.Name())
+				fieldConstraint := proto.GetExtension(wrapperField.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
+				if fieldConstraint != nil {
+					oneof := fieldConstraint.GetOneof()
+					if oneof != nil && oneof.Filtering != nil {
+						filterOpts = oneof
+					}
+				}
+			}
 		}
 
 		if filterOpts != nil {
