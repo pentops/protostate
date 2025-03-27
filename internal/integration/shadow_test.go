@@ -69,21 +69,21 @@ func TestStateMachineShadow(t *testing.T) {
 	})
 
 	flow.Step("Check", func(ctx context.Context, t flowtest.Asserter) {
-		res1, err := uu.FooQuery.GetFoo(ctx, &test_spb.GetFooRequest{
+		res1, err := uu.FooQuery.FooGet(ctx, &test_spb.FooGetRequest{
 			FooId: foo1ID,
 		})
 		t.NoError(err)
 		// ACTIVE means the logic hook did not automatically run, which is what we
 		// want.
-		t.Equal(test_pb.FooStatus_ACTIVE, res1.State.Status)
-		t.Equal("foo1", res1.State.Data.Name)
+		t.Equal(test_pb.FooStatus_ACTIVE, res1.Foo.Status)
+		t.Equal("foo1", res1.Foo.Data.Name)
 
-		res2, err := uu.FooQuery.GetFoo(ctx, &test_spb.GetFooRequest{
+		res2, err := uu.FooQuery.FooGet(ctx, &test_spb.FooGetRequest{
 			FooId: foo2ID,
 		})
 		t.NoError(err)
-		t.Equal(test_pb.FooStatus_ACTIVE, res2.State.Status)
-		t.Equal("foo2", res2.State.Data.Name)
+		t.Equal(test_pb.FooStatus_ACTIVE, res2.Foo.Status)
+		t.Equal("foo2", res2.Foo.Data.Name)
 
 	})
 }

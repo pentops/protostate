@@ -53,7 +53,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
@@ -63,22 +63,22 @@ func TestSortingWithAuthScope(t *testing.T) {
 				},
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		if len(res.Foo) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			if state.Data.Characteristics.Weight != int64(10+ii) {
 				t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 			}
@@ -103,7 +103,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 				Token:    &nextToken,
@@ -114,22 +114,22 @@ func TestSortingWithAuthScope(t *testing.T) {
 				},
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		if len(res.Foo) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			if state.Data.Characteristics.Weight != int64(15+ii) {
 				t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 			}
@@ -179,7 +179,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 			},
@@ -189,22 +189,22 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 				},
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		if len(res.Foo) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			if state.Data.Characteristics.Weight != int64(10+ii) {
 				t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 			}
@@ -225,7 +225,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
-		req := &test_spb.ListFoosRequest{
+		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
 				Token:    &nextToken,
@@ -236,22 +236,22 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 				},
 			},
 		}
-		res := &test_spb.ListFoosResponse{}
+		res := &test_spb.FooListResponse{}
 
 		err = queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if len(res.Foos) != int(5) {
-			t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+		if len(res.Foo) != int(5) {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			t.Logf("%d: %s", ii, state.Data.Field)
 		}
 
-		for ii, state := range res.Foos {
+		for ii, state := range res.Foo {
 			if state.Data.Characteristics.Weight != int64(15+ii) {
 				t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 			}
@@ -294,7 +294,7 @@ func TestDynamicSorting(t *testing.T) {
 	t.Run("Top Level Field", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -304,22 +304,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(10+ii) {
 					t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 				}
@@ -338,7 +338,7 @@ func TestDynamicSorting(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
@@ -349,22 +349,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(15+ii) {
 					t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 				}
@@ -384,7 +384,7 @@ func TestDynamicSorting(t *testing.T) {
 	t.Run("Nested Field", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -394,22 +394,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(10+ii) {
 					t.Fatalf("expected weight %d, got %d", 10+ii, state.Data.Characteristics.Weight)
 				}
@@ -428,7 +428,7 @@ func TestDynamicSorting(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
@@ -439,22 +439,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(15+ii) {
 					t.Fatalf("expected weight %d, got %d", 15+ii, state.Data.Characteristics.Weight)
 				}
@@ -474,7 +474,7 @@ func TestDynamicSorting(t *testing.T) {
 	t.Run("Multiple Nested Fields", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -485,26 +485,26 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			if res.Foos[0].Data.Characteristics.Weight != int64(10) {
-				t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foos[0].Data.Characteristics.Weight)
+			if res.Foo[0].Data.Characteristics.Weight != int64(10) {
+				t.Fatalf("expected list to start with weight %d, got %d", 10, res.Foo[0].Data.Characteristics.Weight)
 			}
 
-			for _, state := range res.Foos {
+			for _, state := range res.Foo {
 				if state.Data.Characteristics.Weight%2 != 0 {
 					t.Fatalf("expected even number weight, got %d", state.Data.Characteristics.Weight)
 				}
@@ -523,7 +523,7 @@ func TestDynamicSorting(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
@@ -535,26 +535,26 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			if res.Foos[0].Data.Characteristics.Weight != int64(20) {
-				t.Fatalf("expected list to start with weight %d, got %d", 20, res.Foos[0].Data.Characteristics.Weight)
+			if res.Foo[0].Data.Characteristics.Weight != int64(20) {
+				t.Fatalf("expected list to start with weight %d, got %d", 20, res.Foo[0].Data.Characteristics.Weight)
 			}
 
-			for _, state := range res.Foos {
+			for _, state := range res.Foo {
 				if state.Data.Characteristics.Weight%2 != 0 {
 					t.Fatalf("expected even number weight, got %d", state.Data.Characteristics.Weight)
 				}
@@ -574,7 +574,7 @@ func TestDynamicSorting(t *testing.T) {
 	t.Run("Descending", func(t *testing.T) {
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 				},
@@ -587,22 +587,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(39-ii) {
 					t.Fatalf("expected weight %d, got %d", 39-ii, state.Data.Characteristics.Weight)
 				}
@@ -621,7 +621,7 @@ func TestDynamicSorting(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.ListFoosRequest{
+			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
 					Token:    &nextToken,
@@ -635,22 +635,22 @@ func TestDynamicSorting(t *testing.T) {
 					},
 				},
 			}
-			res := &test_spb.ListFoosResponse{}
+			res := &test_spb.FooListResponse{}
 
 			err = queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if len(res.Foos) != int(5) {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foos))
+			if len(res.Foo) != int(5) {
+				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				t.Logf("%d: %s", ii, state.Data.Field)
 			}
 
-			for ii, state := range res.Foos {
+			for ii, state := range res.Foo {
 				if state.Data.Characteristics.Weight != int64(34-ii) {
 					t.Fatalf("expected weight %d, got %d", 34-ii, state.Data.Characteristics.Weight)
 				}

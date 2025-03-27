@@ -204,28 +204,28 @@ func TestStateMachineHook(t *testing.T) {
 		// The delete=true flag causes a chain event, which sets the status to
 		// DELETED
 
-		res2, err := uu.FooQuery.GetFoo(ctx, &test_spb.GetFooRequest{
+		res2, err := uu.FooQuery.FooGet(ctx, &test_spb.FooGetRequest{
 			FooId: foo1ID,
 		})
 		t.NoError(err)
-		t.Equal(test_pb.FooStatus_DELETED, res2.State.Status)
+		t.Equal(test_pb.FooStatus_DELETED, res2.Foo.Status)
 
 	})
 
 	flow.Step("Hook should have pushed to Bar", func(ctx context.Context, t flowtest.Asserter) {
 
-		res, err := uu.BarQuery.ListBars(ctx, &test_spb.ListBarsRequest{})
+		res, err := uu.BarQuery.BarList(ctx, &test_spb.BarListRequest{})
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
 		t.Log(protojson.Format(res))
 
-		if len(res.Bars) != 1 {
-			t.Fatalf("expected 1 BAR, got %d", len(res.Bars))
+		if len(res.Bar) != 1 {
+			t.Fatalf("expected 1 BAR, got %d", len(res.Bar))
 		}
 
-		bar := res.Bars[0]
+		bar := res.Bar[0]
 
 		if bar.Data.Name != "updated Phoenix" {
 			t.Fatalf("expected name updated, got %s", bar.Data.Name)
@@ -268,11 +268,11 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 			t.Fatalf("expected state ACTIVE, got %s", state.GetStatus().ShortString())
 		}
 
-		req := &test_spb.ListFooEventsRequest{
+		req := &test_spb.FooEventsRequest{
 			FooId: fooID,
 		}
 
-		res, err := uu.FooQuery.ListFooEvents(ctx, req)
+		res, err := uu.FooQuery.FooEvents(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -387,17 +387,17 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("Get1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.GetFooRequest{
+		req := &test_spb.FooGetRequest{
 			FooId: fooID,
 		}
 
-		res, err := uu.FooQuery.GetFoo(ctx, req)
+		res, err := uu.FooQuery.FooGet(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if !proto.Equal(res.State, statesOut[fooID]) {
-			t.Fatalf("expected %v, got %v", statesOut[fooID], res.State)
+		if !proto.Equal(res.Foo, statesOut[fooID]) {
+			t.Fatalf("expected %v, got %v", statesOut[fooID], res.Foo)
 		}
 
 		if len(res.Events) != 2 {
@@ -407,11 +407,11 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("ListEvents1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.ListFooEventsRequest{
+		req := &test_spb.FooEventsRequest{
 			FooId: fooID,
 		}
 
-		res, err := uu.FooQuery.ListFooEvents(ctx, req)
+		res, err := uu.FooQuery.FooEvents(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -431,17 +431,17 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("Get2", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.GetFooRequest{
+		req := &test_spb.FooGetRequest{
 			FooId: foo2ID,
 		}
 
-		res, err := uu.FooQuery.GetFoo(ctx, req)
+		res, err := uu.FooQuery.FooGet(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		if res.State.Status != test_pb.FooStatus_DELETED {
-			t.Fatalf("expected state DELETED, got %s - Did the chain run?", res.State.Status.ShortString())
+		if res.Foo.Status != test_pb.FooStatus_DELETED {
+			t.Fatalf("expected state DELETED, got %s - Did the chain run?", res.Foo.Status.ShortString())
 		}
 
 		if len(res.Events) != 3 {
@@ -469,16 +469,16 @@ func TestFooStateMachine(t *testing.T) {
 	})
 
 	flow.Step("List", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.ListFoosRequest{}
+		req := &test_spb.FooListRequest{}
 
-		res, err := uu.FooQuery.ListFoos(ctx, req)
+		res, err := uu.FooQuery.FooList(ctx, req)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
 		t.Log(protojson.Format(res))
-		if len(res.Foos) != 1 {
-			t.Fatalf("expected 1 states for default filter (ACTIVE), got %d", len(res.Foos))
+		if len(res.Foo) != 1 {
+			t.Fatalf("expected 1 states for default filter (ACTIVE), got %d", len(res.Foo))
 		}
 	})
 

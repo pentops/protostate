@@ -1,0 +1,115 @@
+package test.v1
+
+entity Foo {
+	query.eventsInGet = true
+	query.defaultStatusFilter = ["ACTIVE"]
+
+	key fooId ! key:uuid {
+		primary = true
+		listRules.filtering.filterable = true
+	}
+
+	key tenantId ? key:uuid {
+		tenant = "tenant"
+		listRules.filtering.filterable = true
+	}
+
+	key metaTenantId key:uuid {
+		listRules.filtering.filterable = true
+	}
+
+	status ACTIVE
+	status DELETED
+
+	data name string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_name"
+	}
+
+	data field string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_field"
+	}
+
+	data description ? string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_description"
+	}
+
+	data characteristics object:FooCharacteristics
+	data profiles array:object:FooProfile
+
+	event Created {
+		field name string
+		field field string
+		field description ? string
+		field weight ? integer:INT64
+		field height ? integer:INT64
+		field length ? integer:INT64
+		field profiles array:object:FooProfile
+	}
+
+	event Updated {
+		field name string
+		field field string
+		field description ? string
+		field weight ? integer:INT64
+		field height ? integer:INT64
+		field length ? integer:INT64
+		field profiles array:object:FooProfile
+		field delete bool
+	}
+
+	event Deleted {
+		field delete bool
+	}
+
+}
+
+service Foo {
+
+	method FooSummary {
+
+		httpMethod = "GET"
+		httpPath = "/test/v1/foo/summary"
+
+		request {
+		}
+
+		response {
+			field countFoos integer:INT64
+			field totalWeight integer:INT64
+			field totalHeight integer:INT64
+			field totalLength integer:INT64
+		}
+
+	}
+}
+
+object FooCharacteristics {
+	field weight integer:INT64 {
+		listRules.filtering.filterable = true
+		listRules.sorting.sortable = true
+	}
+
+	field height integer:INT64 {
+		listRules.filtering.filterable = true
+		listRules.sorting.sortable = true
+	}
+
+	field length integer:INT64 {
+		listRules.filtering.filterable = true
+		listRules.sorting.sortable = true
+	}
+}
+
+object FooProfile {
+	field place integer:INT64 {
+		listRules.filtering.filterable = true
+	}
+
+	field name string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_profile_name"
+	}
+}

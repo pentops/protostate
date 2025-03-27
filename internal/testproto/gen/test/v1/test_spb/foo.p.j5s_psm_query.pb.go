@@ -12,62 +12,59 @@ import (
 // QuerySet is the query set for the Foo service.
 
 type FooPSMQuerySet = psm.StateQuerySet[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
+	*FooGetRequest,
+	*FooGetResponse,
+	*FooListRequest,
+	*FooListResponse,
+	*FooEventsRequest,
+	*FooEventsResponse,
 ]
 
 func NewFooPSMQuerySet(
 	smSpec psm.QuerySpec[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
+		*FooGetRequest,
+		*FooGetResponse,
+		*FooListRequest,
+		*FooListResponse,
+		*FooEventsRequest,
+		*FooEventsResponse,
 	],
 	options psm.StateQueryOptions,
 ) (*FooPSMQuerySet, error) {
 	return psm.BuildStateQuerySet[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
+		*FooGetRequest,
+		*FooGetResponse,
+		*FooListRequest,
+		*FooListResponse,
+		*FooEventsRequest,
+		*FooEventsResponse,
 	](smSpec, options)
 }
 
 type FooPSMQuerySpec = psm.QuerySpec[
-	*GetFooRequest,
-	*GetFooResponse,
-	*ListFoosRequest,
-	*ListFoosResponse,
-	*ListFooEventsRequest,
-	*ListFooEventsResponse,
+	*FooGetRequest,
+	*FooGetResponse,
+	*FooListRequest,
+	*FooListResponse,
+	*FooEventsRequest,
+	*FooEventsResponse,
 ]
 
 func DefaultFooPSMQuerySpec(tableSpec psm.QueryTableSpec) FooPSMQuerySpec {
 	return psm.QuerySpec[
-		*GetFooRequest,
-		*GetFooResponse,
-		*ListFoosRequest,
-		*ListFoosResponse,
-		*ListFooEventsRequest,
-		*ListFooEventsResponse,
+		*FooGetRequest,
+		*FooGetResponse,
+		*FooListRequest,
+		*FooListResponse,
+		*FooEventsRequest,
+		*FooEventsResponse,
 	]{
 		QueryTableSpec: tableSpec,
-		ListRequestFilter: func(req *ListFoosRequest) (map[string]interface{}, error) {
+		ListRequestFilter: func(req *FooListRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
-			if req.TenantId != nil {
-				filter["tenant_id"] = *req.TenantId
-			}
 			return filter, nil
 		},
-		ListEventsRequestFilter: func(req *ListFooEventsRequest) (map[string]interface{}, error) {
+		ListEventsRequestFilter: func(req *FooEventsRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
 			filter["foo_id"] = req.FooId
 			return filter, nil
@@ -90,8 +87,8 @@ func NewFooQueryServiceImpl(db sqrlx.Transactor, querySet *FooPSMQuerySet) *FooQ
 	}
 }
 
-func (s *FooQueryServiceImpl) GetFoo(ctx context.Context, req *GetFooRequest) (*GetFooResponse, error) {
-	resObject := &GetFooResponse{}
+func (s *FooQueryServiceImpl) FooGet(ctx context.Context, req *FooGetRequest) (*FooGetResponse, error) {
+	resObject := &FooGetResponse{}
 	err := s.querySet.Get(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err
@@ -99,8 +96,8 @@ func (s *FooQueryServiceImpl) GetFoo(ctx context.Context, req *GetFooRequest) (*
 	return resObject, nil
 }
 
-func (s *FooQueryServiceImpl) ListFoos(ctx context.Context, req *ListFoosRequest) (*ListFoosResponse, error) {
-	resObject := &ListFoosResponse{}
+func (s *FooQueryServiceImpl) FooList(ctx context.Context, req *FooListRequest) (*FooListResponse, error) {
+	resObject := &FooListResponse{}
 	err := s.querySet.List(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err
@@ -108,8 +105,8 @@ func (s *FooQueryServiceImpl) ListFoos(ctx context.Context, req *ListFoosRequest
 	return resObject, nil
 }
 
-func (s *FooQueryServiceImpl) ListFooEvents(ctx context.Context, req *ListFooEventsRequest) (*ListFooEventsResponse, error) {
-	resObject := &ListFooEventsResponse{}
+func (s *FooQueryServiceImpl) FooEvents(ctx context.Context, req *FooEventsRequest) (*FooEventsResponse, error) {
+	resObject := &FooEventsResponse{}
 	err := s.querySet.ListEvents(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err

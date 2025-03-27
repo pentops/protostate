@@ -51,23 +51,23 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &test_spb.GetFooRequest{
+			req := &test_spb.FooGetRequest{
 				FooId: fooID,
 			}
 
-			res := &test_spb.GetFooResponse{}
+			res := &test_spb.FooGetResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Data.Description == nil {
+			if res.Foo.Data.Description == nil {
 				t.Fatalf("expected description to be non nil")
 			}
 
-			if *res.State.Data.Description != "" {
-				t.Fatalf("expected description to be empty, got %s", *res.State.Data.Description)
+			if *res.Foo.Data.Description != "" {
+				t.Fatalf("expected description to be empty, got %s", *res.Foo.Data.Description)
 			}
 
 			stateJSON, err := getRawState(db, fooID)
@@ -98,23 +98,23 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &test_spb.GetFooRequest{
+			req := &test_spb.FooGetRequest{
 				FooId: fooID,
 			}
 
-			res := &test_spb.GetFooResponse{}
+			res := &test_spb.FooGetResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Data.Description == nil {
+			if res.Foo.Data.Description == nil {
 				t.Fatalf("expected description to be non nil")
 			}
 
-			if *res.State.Data.Description == "" {
-				t.Fatalf("expected description to be empty, got %s", *res.State.Data.Description)
+			if *res.Foo.Data.Description == "" {
+				t.Fatalf("expected description to be empty, got %s", *res.Foo.Data.Description)
 			}
 
 			stateJSON, err := getRawState(db, fooID)
@@ -146,18 +146,18 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &test_spb.GetFooRequest{
+			req := &test_spb.FooGetRequest{
 				FooId: fooID,
 			}
 
-			res := &test_spb.GetFooResponse{}
+			res := &test_spb.FooGetResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Data.Description != nil {
+			if res.Foo.Data.Description != nil {
 				t.Fatalf("expected description to be nil")
 			}
 
@@ -195,18 +195,18 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &test_spb.GetFooRequest{
+			req := &test_spb.FooGetRequest{
 				FooId: fooID,
 			}
 
-			res := &test_spb.GetFooResponse{}
+			res := &test_spb.FooGetResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Data.Field != "" {
+			if res.Foo.Data.Field != "" {
 				t.Fatalf("expected description to be empty")
 			}
 
@@ -240,18 +240,18 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			req := &test_spb.GetFooRequest{
+			req := &test_spb.FooGetRequest{
 				FooId: fooID,
 			}
 
-			res := &test_spb.GetFooResponse{}
+			res := &test_spb.FooGetResponse{}
 
 			err = queryer.Get(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.State.Data.Field == "" {
+			if res.Foo.Data.Field == "" {
 				t.Fatalf("expected description to be non empty")
 			}
 

@@ -12,64 +12,62 @@ import (
 // QuerySet is the query set for the Bar service.
 
 type BarPSMQuerySet = psm.StateQuerySet[
-	*GetBarRequest,
-	*GetBarResponse,
-	*ListBarsRequest,
-	*ListBarsResponse,
-	*ListBarEventsRequest,
-	*ListBarEventsResponse,
+	*BarGetRequest,
+	*BarGetResponse,
+	*BarListRequest,
+	*BarListResponse,
+	*BarEventsRequest,
+	*BarEventsResponse,
 ]
 
 func NewBarPSMQuerySet(
 	smSpec psm.QuerySpec[
-		*GetBarRequest,
-		*GetBarResponse,
-		*ListBarsRequest,
-		*ListBarsResponse,
-		*ListBarEventsRequest,
-		*ListBarEventsResponse,
+		*BarGetRequest,
+		*BarGetResponse,
+		*BarListRequest,
+		*BarListResponse,
+		*BarEventsRequest,
+		*BarEventsResponse,
 	],
 	options psm.StateQueryOptions,
 ) (*BarPSMQuerySet, error) {
 	return psm.BuildStateQuerySet[
-		*GetBarRequest,
-		*GetBarResponse,
-		*ListBarsRequest,
-		*ListBarsResponse,
-		*ListBarEventsRequest,
-		*ListBarEventsResponse,
+		*BarGetRequest,
+		*BarGetResponse,
+		*BarListRequest,
+		*BarListResponse,
+		*BarEventsRequest,
+		*BarEventsResponse,
 	](smSpec, options)
 }
 
 type BarPSMQuerySpec = psm.QuerySpec[
-	*GetBarRequest,
-	*GetBarResponse,
-	*ListBarsRequest,
-	*ListBarsResponse,
-	*ListBarEventsRequest,
-	*ListBarEventsResponse,
+	*BarGetRequest,
+	*BarGetResponse,
+	*BarListRequest,
+	*BarListResponse,
+	*BarEventsRequest,
+	*BarEventsResponse,
 ]
 
 func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 	return psm.QuerySpec[
-		*GetBarRequest,
-		*GetBarResponse,
-		*ListBarsRequest,
-		*ListBarsResponse,
-		*ListBarEventsRequest,
-		*ListBarEventsResponse,
+		*BarGetRequest,
+		*BarGetResponse,
+		*BarListRequest,
+		*BarListResponse,
+		*BarEventsRequest,
+		*BarEventsResponse,
 	]{
 		QueryTableSpec: tableSpec,
-		ListRequestFilter: func(req *ListBarsRequest) (map[string]interface{}, error) {
+		ListRequestFilter: func(req *BarListRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
-			if req.TenantId != nil {
-				filter["tenant_id"] = *req.TenantId
-			}
 			return filter, nil
 		},
-		ListEventsRequestFilter: func(req *ListBarEventsRequest) (map[string]interface{}, error) {
+		ListEventsRequestFilter: func(req *BarEventsRequest) (map[string]interface{}, error) {
 			filter := map[string]interface{}{}
 			filter["bar_id"] = req.BarId
+			filter["bar_other_id"] = req.BarOtherId
 			return filter, nil
 		},
 	}
@@ -78,10 +76,10 @@ func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 type BarQueryServiceImpl struct {
 	db       sqrlx.Transactor
 	querySet *BarPSMQuerySet
-	UnsafeBarServiceServer
+	UnsafeBarQueryServiceServer
 }
 
-var _ BarServiceServer = &BarQueryServiceImpl{}
+var _ BarQueryServiceServer = &BarQueryServiceImpl{}
 
 func NewBarQueryServiceImpl(db sqrlx.Transactor, querySet *BarPSMQuerySet) *BarQueryServiceImpl {
 	return &BarQueryServiceImpl{
@@ -90,8 +88,8 @@ func NewBarQueryServiceImpl(db sqrlx.Transactor, querySet *BarPSMQuerySet) *BarQ
 	}
 }
 
-func (s *BarQueryServiceImpl) GetBar(ctx context.Context, req *GetBarRequest) (*GetBarResponse, error) {
-	resObject := &GetBarResponse{}
+func (s *BarQueryServiceImpl) BarGet(ctx context.Context, req *BarGetRequest) (*BarGetResponse, error) {
+	resObject := &BarGetResponse{}
 	err := s.querySet.Get(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err
@@ -99,8 +97,8 @@ func (s *BarQueryServiceImpl) GetBar(ctx context.Context, req *GetBarRequest) (*
 	return resObject, nil
 }
 
-func (s *BarQueryServiceImpl) ListBars(ctx context.Context, req *ListBarsRequest) (*ListBarsResponse, error) {
-	resObject := &ListBarsResponse{}
+func (s *BarQueryServiceImpl) BarList(ctx context.Context, req *BarListRequest) (*BarListResponse, error) {
+	resObject := &BarListResponse{}
 	err := s.querySet.List(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err
@@ -108,8 +106,8 @@ func (s *BarQueryServiceImpl) ListBars(ctx context.Context, req *ListBarsRequest
 	return resObject, nil
 }
 
-func (s *BarQueryServiceImpl) ListBarEvents(ctx context.Context, req *ListBarEventsRequest) (*ListBarEventsResponse, error) {
-	resObject := &ListBarEventsResponse{}
+func (s *BarQueryServiceImpl) BarEvents(ctx context.Context, req *BarEventsRequest) (*BarEventsResponse, error) {
+	resObject := &BarEventsResponse{}
 	err := s.querySet.ListEvents(ctx, s.db, req, resObject)
 	if err != nil {
 		return nil, err

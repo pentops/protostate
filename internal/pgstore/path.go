@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"github.com/pentops/j5/lib/j5schema"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -85,6 +86,25 @@ func (pp Path) LeafField() protoreflect.FieldDescriptor {
 
 func (pp Path) LeafOneof() protoreflect.OneofDescriptor {
 	return pp.leafOneof
+}
+
+// LeafOneofWrapper handles the special case where the leaf is a oneof inside of
+// a oneof wrapper, then this returns the field definition of the object which
+// references the wrapper.
+func (pp Path) LeafOneofWrapper() protoreflect.FieldDescriptor {
+	if pp.leafOneof == nil {
+		return nil
+	}
+	parentMsg := pp.leafOneof.Parent().(protoreflect.MessageDescriptor)
+	if !j5schema.IsOneofWrapper(parentMsg) {
+		return nil
+	}
+
+	// The leaf is a proto oneof in a j5 oneof wrapper.
+	// path[-1] should be the message
+	// path[-2] should be the field
+	fieldNode := pp.path[len(pp.path)-2]
+	return fieldNode.field
 }
 
 func (pp Path) Leaf() protoreflect.Descriptor {

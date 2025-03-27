@@ -72,7 +72,7 @@ type IState[K IKeyset, ST IStatusEnum, SD IStateData] interface {
 	PSMData() SD
 }
 
-// IStateData is the Data Entity e.g. *testpb.FooStateData
+// IStateData is the Data Entity e.g. *testpb.FooData
 type IStateData interface {
 	IPSMMessage
 }

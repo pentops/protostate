@@ -12,17 +12,17 @@ import (
 )
 
 type composed struct {
-	ListFoosRequest  string
-	ListFoosResponse string
-	Foo              string
+	FooListRequest  string
+	FooListResponse string
+	Foo             string
 }
 
 func (c composed) toString() string {
 	out := ""
-	if c.ListFoosRequest != "" {
-		out += "message ListFoosRequest {\n" + c.ListFoosRequest + "\n}\n"
+	if c.FooListRequest != "" {
+		out += "message FooListRequest {\n" + c.FooListRequest + "\n}\n"
 	} else {
-		out += `message ListFoosRequest {
+		out += `message FooListRequest {
 				j5.list.v1.PageRequest page = 1;
 				j5.list.v1.QueryRequest query = 2;
 
@@ -32,10 +32,10 @@ func (c composed) toString() string {
 			}`
 	}
 
-	if c.ListFoosResponse != "" {
-		out += "message ListFoosResponse {\n" + c.ListFoosResponse + "\n}\n"
+	if c.FooListResponse != "" {
+		out += "message FooListResponse {\n" + c.FooListResponse + "\n}\n"
 	} else {
-		out += `message ListFoosResponse {
+		out += `message FooListResponse {
 				repeated Foo foos = 1;
 				j5.list.v1.PageResponse page = 2;
 			}`
@@ -71,8 +71,8 @@ func TestBuildListReflection(t *testing.T) {
 				` + input,
 		})
 
-		requestDesc := pdf.MessageByName(t, "test.ListFoosRequest")
-		responseDesc := pdf.MessageByName(t, "test.ListFoosResponse")
+		requestDesc := pdf.MessageByName(t, "test.FooListRequest")
+		responseDesc := pdf.MessageByName(t, "test.FooListResponse")
 
 		table := &TableSpec{}
 		if spec != nil {
@@ -110,7 +110,7 @@ func TestBuildListReflection(t *testing.T) {
 	// Successes
 
 	runHappy("full success", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 
@@ -119,7 +119,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 		}
@@ -140,7 +140,7 @@ func TestBuildListReflection(t *testing.T) {
 		})
 
 	runHappy("override default page size by validation", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 
@@ -149,7 +149,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1 [
 				(buf.validate.field).repeated.max_items = 10
 			];
@@ -166,7 +166,7 @@ func TestBuildListReflection(t *testing.T) {
 		})
 
 	runHappy("tie breaker fallback", composed{
-		ListFoosRequest: `
+		FooListRequest: `
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 		`,
@@ -187,7 +187,7 @@ func TestBuildListReflection(t *testing.T) {
 		})
 
 	runHappy("sort by bar", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 
@@ -196,7 +196,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 		}
@@ -222,7 +222,7 @@ func TestBuildListReflection(t *testing.T) {
 		})
 
 	runHappy("sort by bar by walking", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 
@@ -230,7 +230,7 @@ func TestBuildListReflection(t *testing.T) {
 			};
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 		}
@@ -269,7 +269,7 @@ func TestBuildListReflection(t *testing.T) {
 	// Response Errors
 
 	runSad("non message field in response", composed{
-		ListFoosResponse: `
+		FooListResponse: `
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 			Foo dangling = 3;
@@ -279,7 +279,7 @@ func TestBuildListReflection(t *testing.T) {
 		"unknown field")
 
 	runSad("non message in response", composed{
-		ListFoosResponse: `
+		FooListResponse: `
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 			string dangling = 3;
@@ -290,7 +290,7 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("extra array field in response", composed{
-		ListFoosResponse: `
+		FooListResponse: `
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 			repeated Foo dangling = 3;
@@ -300,7 +300,7 @@ func TestBuildListReflection(t *testing.T) {
 		"multiple repeated fields")
 
 	runSad("no array field in response", composed{
-		ListFoosResponse: `
+		FooListResponse: `
 			j5.list.v1.PageResponse page = 2;
 			`,
 	}.toString(),
@@ -309,7 +309,7 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("no page field in response", composed{
-		ListFoosResponse: `
+		FooListResponse: `
 			repeated Foo foos = 1;
 			`,
 	}.toString(),
@@ -320,7 +320,7 @@ func TestBuildListReflection(t *testing.T) {
 	// Request Errors
 
 	runSad("no fallback sort field", composed{
-		ListFoosRequest: `
+		FooListRequest: `
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 		`,
@@ -330,7 +330,7 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("tie breaker not in response", composed{
-		ListFoosRequest: `
+		FooListRequest: `
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 			option (j5.list.v1.list_request) = {
@@ -343,7 +343,7 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("no page field", composed{
-		ListFoosRequest: `
+		FooListRequest: `
 			j5.list.v1.QueryRequest query = 2;
 
 			option (j5.list.v1.list_request) = {
@@ -356,7 +356,7 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("no query field", composed{
-		ListFoosRequest: `
+		FooListRequest: `
 			j5.list.v1.PageRequest page = 1;
 
 			option (j5.list.v1.list_request) = {
@@ -369,12 +369,12 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("repeated field sort", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 		}
@@ -390,12 +390,12 @@ func TestBuildListReflection(t *testing.T) {
 	)
 
 	runSad("repeated sub field sort", `
-		message ListFoosRequest {
+		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
 			j5.list.v1.QueryRequest query = 2;
 		}
 
-		message ListFoosResponse {
+		message FooListResponse {
 			repeated Foo foos = 1;
 			j5.list.v1.PageResponse page = 2;
 		}

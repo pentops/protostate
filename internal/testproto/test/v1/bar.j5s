@@ -1,0 +1,43 @@
+package test.v1
+
+entity Bar {
+
+	key barId ! key:uuid {
+		primary = true
+	}
+
+	key barOtherId ! key:uuid {
+		primary = true
+	}
+
+	status ACTIVE
+	status DELETED
+
+	data tenantId ? key:uuid {
+		// foreign key filterable
+	}
+
+	data name string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_name"
+	}
+
+	data field string {
+		listRules.searching.searchable = true
+		listRules.searching.fieldIdentifier = "tsv_field"
+	}
+
+	event Created {
+		field name string
+		field field string
+	}
+
+	event Updated {
+		field name string
+		field field string
+	}
+
+	event Deleted {
+	}
+
+}

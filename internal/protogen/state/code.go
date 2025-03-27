@@ -3,8 +3,10 @@ package state
 import (
 	"fmt"
 
+	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -29,9 +31,10 @@ var (
 	smIInnerEvent = smImportPath.Ident("IInnerEvent")
 	smIKeyset     = smImportPath.Ident("IKeyset")
 
-	psmProtoImportPath     = protogen.GoImportPath("github.com/pentops/j5/gen/j5/state/v1/psm_j5pb")
-	psmEventMetadataStruct = psmProtoImportPath.Ident("EventMetadata")
-	psmStateMetadataStruct = psmProtoImportPath.Ident("StateMetadata")
+	psmProtoImportPath            = protogen.GoImportPath("github.com/pentops/j5/gen/j5/state/v1/psm_j5pb")
+	psmEventMetadataStruct        = psmProtoImportPath.Ident("EventMetadata")
+	psmStateMetadataStruct        = psmProtoImportPath.Ident("StateMetadata")
+	psmEventPublishMetadataStruct = psmProtoImportPath.Ident("EventPublishMetadata")
 )
 
 type PSMEntity struct {
@@ -71,6 +74,8 @@ func (ss PSMEntity) Write(g *protogen.GeneratedFile) {
 	ss.tableSpecAndConfig(g)
 	g.P()
 	ss.transitionFuncTypes(g)
+	g.P()
+	ss.eventPublishMetadata(g)
 }
 
 // prints the generic type parameters K, S, ST, SD, E, IE
@@ -288,7 +293,46 @@ func (ss PSMEntity) implementIInnerEvent(g *protogen.GeneratedFile) {
 		g.P("}")
 		g.P()
 	}
+}
 
+func (ss PSMEntity) eventPublishMetadata(g *protogen.GeneratedFile) {
+	g.P("func (event *", ss.event.message.GoIdent, ") EventPublishMetadata() *", psmEventPublishMetadataStruct, " {")
+	keyIdent := psmProtoImportPath.Ident("EventTenant")
+	g.P("  tenantKeys := make([]*", keyIdent, ", 0)")
+	for _, field := range ss.keyMessage.Fields {
+		// TODO: Map tenant keys
+		opt := proto.GetExtension(field.Desc.Options(), ext_j5pb.E_Key).(*ext_j5pb.PSMKeyFieldOptions)
+		if opt == nil {
+			continue
+		}
+		if opt.TenantType != nil {
+			if field.Desc.HasOptionalKeyword() {
+				g.P("if event.Keys.", field.GoName, " != nil {")
+				g.P("  tenantKeys = append(tenantKeys, &", keyIdent, "{")
+				g.P("    TenantType: \"", *opt.TenantType, "\",")
+				g.P("    TenantId:  *event.Keys.", field.GoName, ",")
+				g.P("  })")
+				g.P("}")
+			} else {
+				g.P("if msg.", field.GoName, " != \"\" {")
+				g.P("  tenantKeys = append(tenantKeys, &", keyIdent, "{")
+				g.P("    TenantType: \"", *opt.TenantType, "\",")
+				g.P("    TenantId:  event.Keys.", field.GoName, ",")
+				g.P("  })")
+				g.P("}")
+			}
+		}
+	}
+	g.P("  return &", psmEventPublishMetadataStruct, "{")
+	g.P("    EventId:   event.", ss.event.metadataField.GoName, ".EventId,")
+	g.P("    Sequence:  event.", ss.event.metadataField.GoName, ".Sequence,")
+	g.P("    Timestamp: event.", ss.event.metadataField.GoName, ".Timestamp,")
+	g.P("    Cause:     event.", ss.event.metadataField.GoName, ".Cause,")
+	g.P("    Auth: &", psmProtoImportPath.Ident("PublishAuth"), "{")
+	g.P("      TenantKeys: tenantKeys,")
+	g.P("    },")
+	g.P("  }")
+	g.P("}")
 }
 
 func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
