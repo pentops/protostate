@@ -97,6 +97,10 @@ func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
 
 // TransitionInTx uses an existing transaction to transition the state machine.
 func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context, tx sqrlx.Transaction, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	if sm == nil {
+		return *new(S), fmt.Errorf("transition in tx: state machine is nil")
+	}
+
 	var state S
 	var err error
 	state, err = sm.runTx(ctx, tx, event)
@@ -107,6 +111,10 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) TransitionInTx(ctx context.Context,
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, db Transactor, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	if sm == nil {
+		return *new(S), fmt.Errorf("transition: state machine is nil")
+	}
+
 	return sm.WithDB(db).Transition(ctx, event)
 }
 
@@ -140,6 +148,10 @@ var TxOptions = &sqrlx.TxOptions{
 // Transition transitions the state machine in a new transaction from the state
 // machine's database pool
 func (sm *DBStateMachine[K, S, ST, SD, E, IE]) Transition(ctx context.Context, event *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
+	if sm == nil {
+		return *new(S), fmt.Errorf("transition: state machine is nil")
+	}
+
 	var state S
 	err := sm.db.Transact(ctx, TxOptions, func(ctx context.Context, tx sqrlx.Transaction) error {
 		var err error
