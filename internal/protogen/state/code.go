@@ -314,7 +314,7 @@ func (ss PSMEntity) eventPublishMetadata(g *protogen.GeneratedFile) {
 				g.P("  })")
 				g.P("}")
 			} else {
-				g.P("if event.", field.GoName, " != \"\" {")
+				g.P("if event.Keys.", field.GoName, " != \"\" {")
 				g.P("  tenantKeys = append(tenantKeys, &", keyIdent, "{")
 				g.P("    TenantType: \"", *opt.TenantType, "\",")
 				g.P("    TenantId:  event.Keys.", field.GoName, ",")
