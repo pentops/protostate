@@ -775,6 +775,18 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		}
 	}
 
+	for _, se := range baton.delayedSideEffects {
+		err = sm.validator.Validate(se.msg)
+		if err != nil {
+			return nil, fmt.Errorf("validate delayed side effect: %s %w", se.msg.ProtoReflect().Descriptor().FullName(), err)
+		}
+
+		err = outbox.DefaultSender.SendDelayed(ctx, tx, se.delay, se.msg)
+		if err != nil {
+			return nil, fmt.Errorf("delayed side effect outbox: %w", err)
+		}
+	}
+
 	chain := []*EventSpec[K, S, ST, SD, E, IE]{}
 	for _, chained := range baton.chainEvents {
 		derived, err := sm.deriveEvent(event, chained)
