@@ -3,6 +3,7 @@ package psm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/o5-messaging/o5msg"
@@ -114,6 +115,7 @@ type HookBaton[
 	IE IInnerEvent,
 ] interface {
 	SideEffect(o5msg.Message)
+	DelayedSideEffect(o5msg.Message, time.Duration)
 	ChainEvent(IE)
 	FullCause() E
 	AsCause() *psm_j5pb.Cause

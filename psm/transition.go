@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/log.go/log"
@@ -19,9 +20,15 @@ type hookBaton[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] struct {
-	sideEffects []o5msg.Message
-	chainEvents []IE
-	causedBy    E
+	sideEffects        []o5msg.Message
+	delayedSideEffects []*delayedSideffect
+	chainEvents        []IE
+	causedBy           E
+}
+
+type delayedSideffect struct {
+	msg   o5msg.Message
+	delay time.Duration
 }
 
 func (td *hookBaton[K, S, ST, SD, E, IE]) ChainEvent(inner IE) {
@@ -30,6 +37,15 @@ func (td *hookBaton[K, S, ST, SD, E, IE]) ChainEvent(inner IE) {
 
 func (td *hookBaton[K, S, ST, SD, E, IE]) SideEffect(msg o5msg.Message) {
 	td.sideEffects = append(td.sideEffects, msg)
+}
+
+func (td *hookBaton[K, S, ST, SD, E, IE]) DelayedSideEffect(msg o5msg.Message, delay time.Duration) {
+	dmsg := &delayedSideffect{
+		msg:   msg,
+		delay: delay,
+	}
+
+	td.delayedSideEffects = append(td.delayedSideEffects, dmsg)
 }
 
 func (td *hookBaton[K, S, ST, SD, E, IE]) FullCause() E {
