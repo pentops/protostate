@@ -769,7 +769,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 			return nil, fmt.Errorf("validate side effect: %s %w", se.ProtoReflect().Descriptor().FullName(), err)
 		}
 
-		err = outbox.Send(ctx, tx, se)
+		err = outbox.DefaultSender.Send(ctx, tx, se)
 		if err != nil {
 			return nil, fmt.Errorf("side effect outbox: %w", err)
 		}
