@@ -14,7 +14,7 @@ require (
 	github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63
 	github.com/pentops/j5 v0.0.0-20250327060939-337dc13256d1
 	github.com/pentops/log.go v0.0.15
-	github.com/pentops/o5-messaging v0.0.0-20250326164730-71b47c1a3deb
+	github.com/pentops/o5-messaging v0.0.0-20250408063726-cf9d6419c7cd
 	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b
 	github.com/pentops/sqrlx.go v0.0.0-20250324231942-5f3ef6c21f8e
 	github.com/pressly/goose v2.7.0+incompatible

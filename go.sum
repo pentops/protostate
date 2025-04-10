@@ -83,8 +83,8 @@ github.com/pentops/j5 v0.0.0-20250327060939-337dc13256d1 h1:U6RkN2xUnHW2WIKxBNPg
 github.com/pentops/j5 v0.0.0-20250327060939-337dc13256d1/go.mod h1:57/DD8Uxf24hQnL/bZqPBAqt2n4eiAPewRJPhcz33us=
 github.com/pentops/log.go v0.0.15 h1:yoyu8/2LTvJ4daAkRuKcDyLe1eICwJdiCkWgZwgtq3A=
 github.com/pentops/log.go v0.0.15/go.mod h1:yR34x8aMlvhdGvqgIU4+0MiLjJTKt0vpcgUnVN2nZV4=
-github.com/pentops/o5-messaging v0.0.0-20250326164730-71b47c1a3deb h1:QP7BpLTRu3S59a4PePXeABLl4HVEfXtpzVRxTJJ1lAc=
-github.com/pentops/o5-messaging v0.0.0-20250326164730-71b47c1a3deb/go.mod h1:RuFTVPd7iejyBP+Pj3+Udf8gbv5SYtPFlXCrR0BPgqE=
+github.com/pentops/o5-messaging v0.0.0-20250408063726-cf9d6419c7cd h1:m3pSELKmnQxSuLBWqYD0iXTUKBlVlgZ52PwBHxxP1aw=
+github.com/pentops/o5-messaging v0.0.0-20250408063726-cf9d6419c7cd/go.mod h1:RuFTVPd7iejyBP+Pj3+Udf8gbv5SYtPFlXCrR0BPgqE=
 github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b h1:UfL+A9/Nwi0QWrW7K06L8vYA+LsFRowWFtVYZICil+s=
 github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b/go.mod h1:U4AOJK8uL3IkJx1t5MBsOXudjZ111il31WE9UxL8Wz8=
 github.com/pentops/sqrlx.go v0.0.0-20250324231942-5f3ef6c21f8e h1:1CZQsGPyYJTGS7uNsT6H3Yy69oi4T2QbkbEaUiNQ9js=
