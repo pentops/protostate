@@ -12,7 +12,6 @@ import (
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"github.com/bufbuild/protovalidate-go"
-	"github.com/elgris/sqrl"
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
@@ -364,7 +363,7 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 	return nil
 }
 
-func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sqrl.SelectBuilder, error) {
+func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sq.SelectBuilder, error) {
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
 

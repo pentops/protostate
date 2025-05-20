@@ -487,7 +487,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 		return fmt.Errorf("run transition hooks: %w", err)
 	}
 
-	if err := sm.transitionSet.runGlobalFollowerHooks(ctx, tx, state, event); err != nil {
+	if err := sm.runGlobalFollowerHooks(ctx, tx, state, event); err != nil {
 		return fmt.Errorf("run transition hooks: %w", err)
 	}
 
@@ -759,7 +759,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		return nil, fmt.Errorf("run transition hooks: %w", err)
 	}
 
-	if err := sm.transitionSet.runGlobalTransitionHooks(ctx, tx, baton, state, event); err != nil {
+	if err := sm.runGlobalTransitionHooks(ctx, tx, baton, state, event); err != nil {
 		return nil, fmt.Errorf("run transition hooks: %w", err)
 	}
 
