@@ -9,11 +9,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"maps"
 )
 
 func validateSearchesAnnotations(msg protoreflect.FieldDescriptors) error {
 	fields := make([]protoreflect.FieldDescriptor, msg.Len())
-	for i := 0; i < msg.Len(); i++ {
+	for i := range msg.Len() {
 		fields[i] = msg.Get(i)
 	}
 	_, err := validateSearchesAnnotationsInner(fields)
@@ -91,9 +92,7 @@ func validateSearchesAnnotationsInner(fields []protoreflect.FieldDescriptor) (ma
 		// The IDs inside each branch are unique, and unique with the parent keys.
 
 		// We still need to ensure that the IDs are unique with other oneofs.
-		for searchKey, usedIn := range combinedBranchIDs {
-			ids[searchKey] = usedIn
-		}
+		maps.Copy(ids, combinedBranchIDs)
 
 	}
 
@@ -131,7 +130,7 @@ func validateSearchAnnotationsField(ids map[string]protoreflect.Name, field prot
 	case protoreflect.MessageKind:
 		msg := field.Message().Fields()
 		fields := make([]protoreflect.FieldDescriptor, msg.Len())
-		for i := 0; i < msg.Len(); i++ {
+		for i := range msg.Len() {
 			fields[i] = msg.Get(i)
 		}
 
@@ -193,7 +192,7 @@ func validateQueryRequestSearches(message protoreflect.MessageDescriptor, search
 func buildTsvColumnMap(message protoreflect.MessageDescriptor) map[string]string {
 	out := make(map[string]string)
 
-	for i := 0; i < message.Fields().Len(); i++ {
+	for i := range message.Fields().Len() {
 		field := message.Fields().Get(i)
 
 		switch field.Kind() {

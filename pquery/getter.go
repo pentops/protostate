@@ -36,7 +36,7 @@ type GetSpec[
 	Auth       AuthProvider
 	AuthJoin   []*LeftJoin
 
-	PrimaryKey func(REQ) (map[string]interface{}, error)
+	PrimaryKey func(REQ) (map[string]any, error)
 
 	StateResponseField protoreflect.Name
 
@@ -106,7 +106,7 @@ type Getter[
 
 	dataColumn string
 	tableName  string
-	primaryKey func(REQ) (map[string]interface{}, error)
+	primaryKey func(REQ) (map[string]any, error)
 	auth       AuthProvider
 	authJoin   []*LeftJoin
 
@@ -243,7 +243,7 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		}
 
 		if len(authFilter) > 0 {
-			claimFilter := map[string]interface{}{}
+			claimFilter := map[string]any{}
 			for k, v := range authFilter {
 				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
 			}

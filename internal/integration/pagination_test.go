@@ -47,7 +47,7 @@ func TestPagination(t *testing.T) {
 		restore := silenceLogger()
 		defer restore()
 
-		for ii := 0; ii < 30; ii++ {
+		for ii := range 30 {
 			tt := time.Now()
 			fooID := uuid.NewString()
 
@@ -159,7 +159,7 @@ func TestEventPagination(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		for ii := 0; ii < 30; ii++ {
+		for ii := range 30 {
 			tt := time.Now()
 			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Field = fmt.Sprintf("foo %d at %s", ii, tt.Format(time.RFC3339Nano))
@@ -290,7 +290,7 @@ func TestPageSize(t *testing.T) {
 		restore := silenceLogger()
 		defer restore()
 
-		for ii := 0; ii < 30; ii++ {
+		for ii := range 30 {
 			tt := time.Now()
 			fooID := uuid.NewString()
 

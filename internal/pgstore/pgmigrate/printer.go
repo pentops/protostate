@@ -58,7 +58,7 @@ func (p *printer) setGap() {
 	p.gap = true
 }
 
-func (p *printer) p(elem ...interface{}) {
+func (p *printer) p(elem ...any) {
 	if p.gap {
 		fmt.Fprintln(&p.buf)
 		p.gap = false

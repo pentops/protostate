@@ -192,13 +192,13 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sor
 }
 
 func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
-	for i := 0; i < fields.Len(); i++ {
+	for i := range fields.Len() {
 		field := fields.Get(i)
 
 		if field.Kind() == protoreflect.MessageKind {
 			subFields := field.Message().Fields()
 
-			for i := 0; i < subFields.Len(); i++ {
+			for i := range subFields.Len() {
 				subField := subFields.Get(i)
 
 				if subField.Kind() == protoreflect.MessageKind {
