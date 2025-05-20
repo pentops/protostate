@@ -16,7 +16,7 @@ type sortSpec struct {
 }
 
 func (ss sortSpec) errorName() string {
-	return ss.NestedField.Path.JSONPathQuery()
+	return ss.Path.JSONPathQuery()
 }
 
 func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []ProtoField) ([]sortSpec, error) {
