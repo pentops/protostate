@@ -18,7 +18,7 @@ import (
 
 func silenceLogger() func() {
 	defaultLogger := log.DefaultLogger
-	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]interface{}) {
+	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]any) {
 	})
 	return func() {
 		log.DefaultLogger = defaultLogger
@@ -76,7 +76,7 @@ func setupFooListableData(ss *flowtest.Stepper[*testing.T], sm *test_pb.FooPSMDB
 
 	for ti := range tenants {
 		ids[tenants[ti]] = make([]string, 0, count)
-		for ii := 0; ii < count; ii++ {
+		for range count {
 			ids[tenants[ti]] = append(ids[tenants[ti]], uuid.NewString())
 		}
 	}

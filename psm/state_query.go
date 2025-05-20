@@ -30,8 +30,8 @@ type QuerySpec[
 ] struct {
 	QueryTableSpec
 
-	ListRequestFilter       func(ListREQ) (map[string]interface{}, error)
-	ListEventsRequestFilter func(ListEventsREQ) (map[string]interface{}, error)
+	ListRequestFilter       func(ListREQ) (map[string]any, error)
+	ListEventsRequestFilter func(ListEventsREQ) (map[string]any, error)
 }
 
 // StateQuerySet is a shortcut for manually specifying three different query
@@ -119,7 +119,7 @@ func BuildStateQuerySet[
 
 	unmappedRequestFields := map[protoreflect.Name]protoreflect.FieldDescriptor{}
 	reqFields := requestReflect.Fields()
-	for i := 0; i < reqFields.Len(); i++ {
+	for i := range reqFields.Len() {
 		field := requestReflect.Fields().Get(i)
 		unmappedRequestFields[field.Name()] = field
 	}
@@ -162,9 +162,9 @@ func BuildStateQuerySet[
 		getSpec.Auth = options.Auth
 	}
 
-	getSpec.PrimaryKey = func(req GetREQ) (map[string]interface{}, error) {
+	getSpec.PrimaryKey = func(req GetREQ) (map[string]any, error) {
 		refl := req.ProtoReflect()
-		out := map[string]interface{}{}
+		out := map[string]any{}
 		for k, v := range pkFields {
 			out[k] = refl.Get(v).Interface()
 		}
@@ -174,7 +174,7 @@ func BuildStateQuerySet[
 	var eventsInGet protoreflect.Name
 
 	getResponseReflect := (*new(GetRES)).ProtoReflect().Descriptor()
-	for i := 0; i < getResponseReflect.Fields().Len(); i++ {
+	for i := range getResponseReflect.Fields().Len() {
 		field := getResponseReflect.Fields().Get(i)
 		msg := field.Message()
 		if msg == nil {

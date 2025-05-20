@@ -28,7 +28,7 @@ type StateMachineConfig[
 }
 
 // DEPRECATED: This does nothing.
-type SystemActor interface{}
+type SystemActor any
 
 // DEPRECATED: This does nothing.
 func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor SystemActor) *StateMachineConfig[K, S, ST, SD, E, IE] {

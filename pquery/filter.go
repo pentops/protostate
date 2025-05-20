@@ -19,13 +19,13 @@ import (
 
 type filterSpec struct {
 	*pgstore.NestedField
-	filterVals []interface{}
+	filterVals []any
 }
 
-func filtersForField(field protoreflect.FieldDescriptor) ([]interface{}, error) {
+func filtersForField(field protoreflect.FieldDescriptor) ([]any, error) {
 
 	fieldOpts := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
-	vals := []interface{}{}
+	vals := []any{}
 
 	if fieldOpts == nil || fieldOpts.Type == nil {
 		return nil, nil
@@ -496,7 +496,7 @@ func validateQueryRequestFilterField(message protoreflect.MessageDescriptor, fil
 					val := filterField.Type.GetValue()
 
 					found := false
-					for i := 0; i < leaf.Fields().Len(); i++ {
+					for i := range leaf.Fields().Len() {
 						f := leaf.Fields().Get(i)
 						if strings.EqualFold(string(f.Name()), val) {
 							found = true

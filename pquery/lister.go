@@ -78,7 +78,7 @@ type Column struct {
 
 type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	TableSpec
-	RequestFilter func(REQ) (map[string]interface{}, error)
+	RequestFilter func(REQ) (map[string]any, error)
 }
 
 type QueryLogger func(sqrlx.Sqlizer)
@@ -117,7 +117,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 	fields := res.Fields()
 
-	for i := 0; i < fields.Len(); i++ {
+	for i := range fields.Len() {
 		field := fields.Get(i)
 		msg := field.Message()
 		if msg == nil {
@@ -178,7 +178,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	ll.tsvColumnMap = buildTsvColumnMap(ll.arrayField.Message())
 
 	requestFields := req.Fields()
-	for i := 0; i < requestFields.Len(); i++ {
+	for i := range requestFields.Len() {
 		field := requestFields.Get(i)
 		msg := field.Message()
 		if msg != nil {
@@ -234,7 +234,7 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	auth     AuthProvider
 	authJoin []*LeftJoin
 
-	requestFilter func(REQ) (map[string]interface{}, error)
+	requestFilter func(REQ) (map[string]any, error)
 
 	validator protovalidate.Validator
 }
@@ -476,7 +476,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 
 		if len(authFilter) > 0 {
-			claimFilter := map[string]interface{}{}
+			claimFilter := map[string]any{}
 			for k, v := range authFilter {
 				claimFilter[fmt.Sprintf("%s.%s", authAlias, k)] = v
 			}
@@ -505,7 +505,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 		}
 
 		lhsFields := make([]string, 0, len(sortFields))
-		rhsValues := make([]interface{}, 0, len(sortFields))
+		rhsValues := make([]any, 0, len(sortFields))
 		rhsPlaceholders := make([]string, 0, len(sortFields))
 
 		for _, sortField := range sortFields {

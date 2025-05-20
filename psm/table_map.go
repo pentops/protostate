@@ -229,7 +229,7 @@ func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 	var keyMessage protoreflect.MessageDescriptor
 
 	fields := stateMessage.Fields()
-	for idx := 0; idx < fields.Len(); idx++ {
+	for idx := range fields.Len() {
 		field := fields.Get(idx)
 		if field.Kind() != protoreflect.MessageKind {
 			continue
@@ -250,7 +250,7 @@ func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 	var eventKeysField protoreflect.FieldDescriptor
 
 	fields = eventMessage.Fields()
-	for idx := 0; idx < fields.Len(); idx++ {
+	for idx := range fields.Len() {
 		field := fields.Get(idx)
 		if field.Kind() != protoreflect.MessageKind {
 			continue

@@ -10,6 +10,7 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"slices"
 )
 
 type hookBaton[
@@ -163,7 +164,7 @@ func (hs *transitionSpec[K, S, ST, SD, E, IE]) runTransitionHooks(
 		}
 	}
 
-	log.WithFields(ctx, map[string]interface{}{
+	log.WithFields(ctx, map[string]any{
 		"logicCount": len(hs.logic),
 		"dataCount":  len(hs.data),
 		"linkCount":  len(hs.links),
@@ -309,11 +310,8 @@ func (hs transitionSet[K, S, ST, SD, E, IE]) findTransitions(status ST, wantType
 			hooks = append(hooks, search)
 			continue
 		}
-		for _, fromStatus := range search.fromStatus {
-			if fromStatus == status {
-				hooks = append(hooks, search)
-				break
-			}
+		if slices.Contains(search.fromStatus, status) {
+			hooks = append(hooks, search)
 		}
 	}
 

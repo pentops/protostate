@@ -198,7 +198,7 @@ func WalkPathNodes(rootMessage protoreflect.MessageDescriptor, callback func(Pat
 func (pp Path) walk(msg protoreflect.MessageDescriptor, callback func(Path) error) error {
 	fields := msg.Fields()
 	// walks only fields, not oneofs.
-	for i := 0; i < fields.Len(); i++ {
+	for i := range fields.Len() {
 		field := fields.Get(i)
 		fieldPath := append(pp.path, pathNode{
 			name:  field.Name(),
@@ -328,7 +328,7 @@ func findField(message protoreflect.MessageDescriptor, fieldPath string) []pathN
 		}}
 	}
 
-	for i := 0; i < fields.Len(); i++ {
+	for i := range fields.Len() {
 		field := fields.Get(i)
 		// Check for flattened fields
 		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), ext_j5pb.E_Field).(*ext_j5pb.FieldOptions)

@@ -147,7 +147,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 			state *test_pb.FooState,
 			event *test_pb.FooEventType_Updated,
 		) error {
-			log.WithFields(ctx, map[string]interface{}{
+			log.WithFields(ctx, map[string]any{
 				"foo_id": state.Keys.FooId,
 				"event":  event,
 			}).Info("Foo Update Hook")

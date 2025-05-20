@@ -341,7 +341,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 
 	upsertStateQuery := sqrlx.Upsert(sm.tableMap.State.TableName)
 
-	insertValues := []interface{}{}
+	insertValues := []any{}
 	insertColumns := []string{}
 
 	insertEventQuery := sq.Insert(sm.tableMap.Event.TableName)
@@ -378,7 +378,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 
 	_, err = tx.Insert(ctx, upsertStateQuery)
 	if err != nil {
-		log.WithFields(ctx, map[string]interface{}{
+		log.WithFields(ctx, map[string]any{
 			"keys":  keyValues,
 			"error": err.Error(),
 		}).Error("failed to upsert state")
@@ -387,7 +387,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 
 	_, err = tx.Insert(ctx, insertEventQuery)
 	if err != nil {
-		log.WithFields(ctx, map[string]interface{}{
+		log.WithFields(ctx, map[string]any{
 			"keys":  keyValues,
 			"error": err.Error(),
 		}).Error("failed to insert event")
@@ -506,11 +506,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
 	typeKey := unwrapped.PSMEventKey()
 	statusBefore := state.GetStatus()
 
-	ctx = log.WithFields(ctx, map[string]interface{}{
+	ctx = log.WithFields(ctx, map[string]any{
 		"eventType":    typeKey,
 		"stateMachine": state.PSMKeys().PSMFullName(),
 		"eventId":      event.PSMMetadata().EventId,
-		"transition": map[string]interface{}{
+		"transition": map[string]any{
 			"from":  statusBefore.ShortString(),
 			"event": typeKey,
 		},
@@ -528,7 +528,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEventMutation(
 		return nil, fmt.Errorf("run transition: %w", err)
 	}
 
-	ctx = log.WithFields(ctx, map[string]interface{}{
+	ctx = log.WithFields(ctx, map[string]any{
 		"transition": map[string]string{
 			"from":  statusBefore.ShortString(),
 			"to":    state.GetStatus().ShortString(),

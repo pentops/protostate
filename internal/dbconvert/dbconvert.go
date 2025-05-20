@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func FieldsToDBValues(m map[string]interface{}) (map[string]interface{}, error) {
-	out := map[string]interface{}{}
+func FieldsToDBValues(m map[string]any) (map[string]any, error) {
+	out := map[string]any{}
 	for k, v := range m {
 		converted, err := interfaceToDBValue(v)
 		if err != nil {
@@ -24,7 +24,7 @@ func FieldsToDBValues(m map[string]interface{}) (map[string]interface{}, error) 
 	return out, nil
 }
 
-func FieldsToEqMap(ofTable string, m map[string]interface{}) (sq.Eq, error) {
+func FieldsToEqMap(ofTable string, m map[string]any) (sq.Eq, error) {
 	out := sq.Eq{}
 	for k, v := range m {
 		converted, err := interfaceToDBValue(v)
@@ -38,7 +38,7 @@ func FieldsToEqMap(ofTable string, m map[string]interface{}) (sq.Eq, error) {
 	return out, nil
 }
 
-func interfaceToDBValue(i interface{}) (interface{}, error) {
+func interfaceToDBValue(i any) (any, error) {
 	switch v := i.(type) {
 	case *timestamppb.Timestamp:
 		return v.AsTime(), nil
