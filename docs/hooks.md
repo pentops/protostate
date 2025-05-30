@@ -1,7 +1,7 @@
 State Machine Hooks
 ===================
 
-[!Hook Types](./hook_types.svg)
+![Hook Types](./hook-types.png)
 
 ## Status
 
@@ -17,8 +17,9 @@ This is the only way to set the status.
 
 Callback function with access to the State Data and the incomming event.
 
-Cannot publish events, and has no database access. Must not have any side
-effects.
+- Cannot publish events
+- No database access
+- Must not have any side effects other than mutating state data
 
 Combined with the PSM logic, this is considered a 'pure' function as the state
 is cloned before the function is called.
