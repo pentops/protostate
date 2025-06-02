@@ -138,7 +138,7 @@ type TransitionMutation[
 	SE IInnerEvent,
 ] func(SD, SE) error
 
-func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) RunMutation(state S, event E) error {
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) runMutation(state S, event E) error {
 	asType, ok := any(event.UnwrapPSMEvent()).(SE)
 	if !ok {
 		name := event.ProtoReflect().Descriptor().FullName()
@@ -148,15 +148,14 @@ func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) RunMutation(state S, event 
 	return f(state.PSMData(), asType)
 }
 
-func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) EventType() string {
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) eventType() string {
 	return (*new(SE)).PSMEventKey()
 }
 
-// TransitionLogicHook Executes after the mutation is complete. This hook
-// can trigger side effects, including chained events, which are additional
-// events processed by the state machine. Use this for Business Logic which
-// determines the 'next step' in processing.
-type TransitionLogicHook[
+// TransitionHook Executes after the mutations. This hook has access to the
+// transaction and can trigger side effects, including chained events, which are additional
+// events processed by the state machine.
+type TransitionHook[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -164,58 +163,22 @@ type TransitionLogicHook[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 	SE IInnerEvent,
-] func(context.Context, HookBaton[K, S, ST, SD, E, IE], S, SE) error
-
-func (f TransitionLogicHook[K, S, ST, SD, E, IE, SE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
-	asType, ok := any(event.UnwrapPSMEvent()).(SE)
-	if !ok {
-		name := event.ProtoReflect().Descriptor().FullName()
-		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
-	}
-
-	return f(ctx, baton, state, asType)
+] struct {
+	Callback    func(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
+	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (f TransitionLogicHook[K, S, ST, SD, E, IE, SE]) EventType() string {
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+
+	return hook.Callback(ctx, tx, baton, state, event)
+}
+
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) eventType() string {
 	return (*new(SE)).PSMEventKey()
 }
 
-func (f TransitionLogicHook[K, S, ST, SD, E, IE, SE]) RunOnFollow() bool {
-	return false // This hook does not run on follow-up events, only on the initial transition.
-}
-
-// TransitionDataHook runs after the mutations, and can be used to update data
-// in tables which are not controlled as the state machine, e.g. for
-// pre-calculating fields for performance reasons. Use of this hook prevents
-// (future) transaction optimizations, as the transaction state
-// when the function is called must needs to match the processing state, but
-// only for this single transition, unlike the GeneralEventDataHook.
-type TransitionDataHook[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-	SE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, S, SE) error
-
-func (f TransitionDataHook[K, S, ST, SD, E, IE, SE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
-	asType, ok := any(event.UnwrapPSMEvent()).(SE)
-	if !ok {
-		name := event.ProtoReflect().Descriptor().FullName()
-		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
-	}
-
-	return f(ctx, tx, state, asType)
-}
-
-func (f TransitionDataHook[K, S, ST, SD, E, IE, SE]) EventType() string {
-	return (*new(SE)).PSMEventKey()
-}
-
-func (f TransitionDataHook[K, S, ST, SD, E, IE, SE]) RunOnFollow() bool {
-	return true
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runOnFollow() bool {
+	return hook.RunOnFollow
 }
 
 // GeneralLogicHook runs once per transition at the state-machine level
@@ -236,11 +199,11 @@ type GeneralLogicHook[
 	IE IInnerEvent,
 ] func(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
 
-func (f GeneralLogicHook[K, S, ST, SD, E, IE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+func (f GeneralLogicHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
 	return f(ctx, baton, state, event)
 }
 
-func (f GeneralLogicHook[K, S, ST, SD, E, IE]) RunOnFollow() bool {
+func (f GeneralLogicHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
 	return false
 }
 
@@ -259,11 +222,11 @@ type GeneralStateDataHook[
 	IE IInnerEvent,
 ] func(context.Context, sqrlx.Transaction, S) error
 
-func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S) error {
+func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S) error {
 	return f(ctx, tx, state)
 }
 
-func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) RunOnFollow() bool {
+func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
 	return true
 }
 
@@ -280,11 +243,11 @@ type GeneralEventDataHook[
 	IE IInnerEvent,
 ] func(context.Context, sqrlx.Transaction, S, E) error
 
-func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
 	return f(ctx, tx, state, event)
 }
 
-func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) RunOnFollow() bool {
+func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
 	return true
 }
 
@@ -311,23 +274,25 @@ type UpsertPublishHook[
 	SD IStateData,
 ] func(context.Context, Publisher, S) error
 
-type LinkHook[
-	K IKeyset, // Source Machine Keyset
-	S IState[K, ST, SD], // Source Machine State
-	ST IStatusEnum, // Source Machine Status Enum
-	SD IStateData, // Source Machine State Data
-	E IEvent[K, S, ST, SD, IE], // Source Machine Event
-	IE IInnerEvent, // Source Machine Inner Event
-	SE IInnerEvent, // Source Machine Specific Event
+func RunLinkHook[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+	SE IInnerEvent,
 
-	DK IKeyset, // Destination Keyset
-	DIE IInnerEvent, // Destination Inner Event
-] struct {
-	Destination LinkDestination[DK, DIE]
-	Derive      func(context.Context, S, SE, func(DK, DIE)) error
-}
-
-func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+	DK IKeyset,
+	DIE IInnerEvent,
+](
+	ctx context.Context,
+	destination LinkDestination[DK, DIE],
+	callback func(context.Context, S, SE, func(DK, DIE)) error,
+	tx sqrlx.Transaction,
+	state S,
+	event E,
+) error {
 	asType, ok := any(event.UnwrapPSMEvent()).(SE)
 	if !ok {
 		return fmt.Errorf("unexpected event type in transition: %T [IE] does not match [SE] (%T)", any(event), new(SE))
@@ -339,7 +304,7 @@ func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunTransition(ctx context.C
 	}
 
 	events := make([]matchedEvent, 0, 1)
-	err := lh.Derive(ctx, state, asType, func(key DK, event DIE) {
+	err := callback(ctx, state, asType, func(key DK, event DIE) {
 		events = append(events, matchedEvent{Key: key, Inner: event})
 	})
 	if err != nil {
@@ -358,19 +323,11 @@ func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunTransition(ctx context.C
 	for _, chained := range events {
 		destKeys := chained.Key
 		destEvent := chained.Inner
-		if err := lh.Destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent); err != nil {
+		if err := destination.transitionFromLink(ctx, tx, cause, destKeys, destEvent); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) EventType() string {
-	return (*new(SE)).PSMEventKey()
-}
-
-func (lh LinkHook[K, S, ST, SD, E, IE, SE, DK, DIE]) RunOnFollow() bool {
-	return false
 }
 
 type LinkDestination[

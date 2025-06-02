@@ -18,14 +18,14 @@ var (
 	smStateMachineConfig = smImportPath.Ident("StateMachineConfig")
 	smStateHookBaton     = smImportPath.Ident("HookBaton")
 
-	smTransitionMutationFunc   = smImportPath.Ident("TransitionMutation")
-	smTransitionLogicFunc      = smImportPath.Ident("TransitionLogicHook")
-	smTransitionDataFunc       = smImportPath.Ident("TransitionDataHook")
+	smTransitionMutation = smImportPath.Ident("TransitionMutation")
+	smTransitionHook     = smImportPath.Ident("TransitionHook")
+
 	smGeneralLogicHookFunc     = smImportPath.Ident("GeneralLogicHook")
 	smGeneralStateDataHookFunc = smImportPath.Ident("GeneralStateDataHook")
 	smGeneralEventDataHookFunc = smImportPath.Ident("GeneralEventDataHook")
-	smLinkHook                 = smImportPath.Ident("LinkHook")
 	smLinkDestination          = smImportPath.Ident("LinkDestination")
+	smRunLinkHook              = smImportPath.Ident("RunLinkHook")
 
 	smEventSpec   = smImportPath.Ident("EventSpec")
 	smIInnerEvent = smImportPath.Ident("IInnerEvent")
@@ -35,6 +35,9 @@ var (
 	psmEventMetadataStruct        = psmProtoImportPath.Ident("EventMetadata")
 	psmStateMetadataStruct        = psmProtoImportPath.Ident("StateMetadata")
 	psmEventPublishMetadataStruct = psmProtoImportPath.Ident("EventPublishMetadata")
+
+	contextContext   = protogen.GoImportPath("context").Ident("Context")
+	sqrlxTransaction = protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction")
 )
 
 type PSMEntity struct {
@@ -335,74 +338,188 @@ func (ss PSMEntity) eventPublishMetadata(g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
-func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
+const (
+	docMutation  = "runs at the start of a transition to merge the event information into the state data object. The state object is mutable in this context."
+	docLogicHook = "runs after the mutation is complete. This hook can trigger side effects, including chained events, which are additional events processed by the state machine. Use this for Business Logic which determines the 'next step' in processing."
+	docDataHook  = "runs after the mutations, and can be used to update data in tables which are not controlled as the state machine, e.g. for pre-calculating fields for performance reasons. Use of this hook prevents (future) transaction optimizations, as the transaction state when the function is called must needs to match the processing state, but only for this single transition, unlike the GeneralEventDataHook."
+	docLinkHook  = "runs after the mutation and logic hook, and can be used to link the state machine to other state machines in the same database transaction"
+)
 
-	// FooMutation
-	g.P("func ", ss.machineName,
-		"Mutation[SE ", ss.eventName, "]",
-		"(cb func(*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smTransitionMutationFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("] {")
-	g.P("return ", smTransitionMutationFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("](cb)")
-	g.P("}")
+func doc(name string, content string) string {
+	return fmt.Sprintf("// %s %s", name, content)
+}
+
+func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 
 	hookBatonType := ss.typeAlias(g, "HookBaton", smStateHookBaton)
 
-	// FooLogicHook
-	g.P("func ", ss.machineName,
-		"LogicHook[SE ", ss.eventName, "]",
-		"(cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		hookBatonType, ", ",
-		"*", ss.state.message.GoIdent, ", ",
-		"SE) error) ", smTransitionLogicFunc, "[")
+	type callbackType struct {
+		name   string
+		docStr string
+
+		hasLink bool
+
+		hasContext       bool
+		hasTx            bool
+		hasBaton         bool
+		hasState         bool
+		hasStateData     bool
+		hasEvent         bool
+		hasSpecificEvent bool
+	}
+
+	addFunc := func(spec callbackType, returnType any) {
+		funcName := fmt.Sprintf("%s%s", ss.machineName, spec.name)
+		g.P(doc(funcName, spec.docStr))
+		g.P("func ", funcName, "[")
+		g.P("\tSE ", ss.eventName, ",")
+		if spec.hasLink {
+			g.P("\tDK ", smIKeyset, ",")
+			g.P("\tDIE ", smIInnerEvent, ",")
+		}
+		g.P("](")
+
+		if spec.hasLink {
+			g.P("\tlinkDestination ", smLinkDestination, "[DK, DIE], ")
+		}
+
+		g.P("\tcb func(")
+
+		addParam := func(param ...any) {
+			g.P(append(param, ", ")...)
+		}
+
+		if spec.hasContext {
+			addParam(contextContext)
+		}
+		if spec.hasTx {
+			addParam(sqrlxTransaction)
+		}
+		if spec.hasBaton {
+			addParam(hookBatonType)
+		}
+		if spec.hasState {
+			addParam("*", ss.state.message.GoIdent)
+		}
+		if spec.hasStateData {
+			addParam("*", ss.state.dataField.Message.GoIdent)
+		}
+		if spec.hasEvent {
+			addParam("*", ss.event.message.GoIdent)
+		}
+		if spec.hasSpecificEvent {
+			addParam("SE")
+		}
+		if spec.hasLink {
+			addParam("func(DK, DIE)")
+		}
+		g.P("\t) error) ", returnType, "[")
+		ss.writeBaseTypesWithSE(g)
+		g.P("] {")
+	}
+
+	type transitionType struct {
+		callbackType
+		runOnFollow bool
+		body        func()
+	}
+
+	addTransition := func(spec transitionType) {
+		addFunc(spec.callbackType, smTransitionHook)
+		g.P("return ", smTransitionHook, "[")
+		ss.writeBaseTypesWithSE(g)
+		g.P("]{")
+		// types of the callback are fixed by smTransitionHook
+		g.P("Callback: func(",
+			"ctx ", contextContext, ", ",
+			"tx ", sqrlxTransaction, ", ",
+			"baton ", hookBatonType, ", ",
+			"state *", ss.state.message.GoIdent, ", ",
+			"event *", ss.event.message.GoIdent, ", ",
+			") error {")
+		// func body
+		spec.body()
+
+		g.P("},")
+		if spec.runOnFollow {
+			g.P("RunOnFollow: true,")
+		} else {
+			g.P("RunOnFollow: false,")
+		}
+		g.P("}")
+		g.P("}")
+	}
+
+	// FooMutation
+	mutationName := fmt.Sprintf("%sMutation", ss.machineName)
+	g.P(doc(mutationName, docMutation))
+	g.P("func ", mutationName, "[SE ", ss.eventName, "]",
+		"(cb func(*", ss.state.dataField.Message.GoIdent, ", SE) error) ", smTransitionMutation, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("] {")
-	g.P("return ", smTransitionLogicFunc, "[")
+	g.P("return ", smTransitionMutation, "[")
 	ss.writeBaseTypesWithSE(g)
 	g.P("](cb)")
 	g.P("}")
+	g.P()
+
+	convertType := func() {
+		g.P("	asType, ok := any(event.UnwrapPSMEvent()).(SE)")
+		g.P("	if !ok {")
+		g.P("		name := event.ProtoReflect().Descriptor().FullName()")
+		g.P(`		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))`)
+		g.P("	}")
+	}
+
+	// FooLogicHook
+	addTransition(transitionType{
+		callbackType: callbackType{
+			name:             "LogicHook",
+			docStr:           docLogicHook,
+			hasContext:       true,
+			hasBaton:         true,
+			hasState:         true,
+			hasSpecificEvent: true,
+		},
+		runOnFollow: false,
+		body: func() {
+			convertType()
+			g.P("return cb(ctx, baton, state, asType)")
+		},
+	})
 
 	// FooDataHook
-	g.P("func ", ss.machineName,
-		"DataHook[SE ", ss.eventName, "]",
-		"(cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx").Ident("Transaction"), ", ",
-		"*", ss.state.message.GoIdent, ", ",
-		"SE) error) ", smTransitionDataFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("] {")
-	g.P("return ", smTransitionDataFunc, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("](cb)")
-	g.P("}")
+	addTransition(transitionType{
+		callbackType: callbackType{
+			name:             "DataHook",
+			docStr:           docDataHook,
+			hasContext:       true,
+			hasTx:            true,
+			hasState:         true,
+			hasSpecificEvent: true,
+		},
+		runOnFollow: true,
+		body: func() {
+			convertType()
+			g.P("return cb(ctx, tx, state, asType)")
+		},
+	})
 
 	// FooPSMLinkHook
-	g.P("func ", ss.machineName, "LinkHook[SE ", ss.eventName, ", DK ", smIKeyset, ", DIE ", smIInnerEvent, "](")
-	g.P("linkDestination ", smLinkDestination, "[DK, DIE],")
-	g.P("cb func(",
-		protogen.GoImportPath("context").Ident("Context"), ", ",
-		"*", ss.state.message.GoIdent, ", ",
-		"SE, ",
-		"func(DK, DIE)",
-		") (error),")
-	g.P(") ", smLinkHook, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("DK, // Destination Keys")
-	g.P("DIE, // Destination Inner Event")
-	g.P("] {")
-	g.P("return ", smLinkHook, "[")
-	ss.writeBaseTypesWithSE(g)
-	g.P("DK, // Destination Keys")
-	g.P("DIE, // Destination Inner Event")
-	g.P("]{")
-	g.P("  Derive: cb,")
-	g.P("  Destination: linkDestination,")
-	g.P("}")
-	g.P("}")
+	addTransition(transitionType{
+		callbackType: callbackType{
+			name:             "LinkHook",
+			docStr:           docLinkHook,
+			hasLink:          true,
+			hasContext:       true,
+			hasState:         true,
+			hasSpecificEvent: true,
+		},
+		runOnFollow: false,
+		body: func() {
+			g.P("return ", smRunLinkHook, "(ctx, linkDestination, cb, tx, state, event)")
+		},
+	})
 
 	// FooPSMGenericLogicHook
 	g.P("func ", ss.machineName, "GeneralLogicHook",
@@ -417,6 +534,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
 	g.P("}")
+	g.P()
 
 	// FooPSMGeneralStateDataHook
 	g.P("func ", ss.machineName, "GeneralStateDataHook",
@@ -432,6 +550,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
 	g.P("}")
+	g.P()
 
 	// FooPSMGeneralStateDataHook
 	g.P("func ", ss.machineName, "GeneralEventDataHook",
@@ -447,6 +566,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
 	g.P("}")
+	g.P()
 
 	// FooPSMEventPublishHook
 	g.P("func ", ss.machineName, "EventPublishHook",
@@ -461,6 +581,7 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 	ss.writeBaseTypes(g)
 	g.P("](cb)")
 	g.P("}")
+	g.P()
 
 	// FooPSMUpsertPublishHook
 	g.P("func ", ss.machineName, "UpsertPublishHook",
