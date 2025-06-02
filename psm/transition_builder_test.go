@@ -77,7 +77,7 @@ func TestTransitionBuilder(t *testing.T) {
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
-				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				baton CallbackBaton[*testK, *testS, testST, *testSD, *testE, testIE],
 				state *testS,
 				event *testE,
 			) error {
@@ -99,7 +99,7 @@ func TestTransitionBuilder(t *testing.T) {
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
-				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				baton CallbackBaton[*testK, *testS, testST, *testSD, *testE, testIE],
 				state *testS,
 				event *testE,
 			) error {
@@ -114,7 +114,7 @@ func TestTransitionBuilder(t *testing.T) {
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
-				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				baton CallbackBaton[*testK, *testS, testST, *testSD, *testE, testIE],
 				state *testS,
 				event *testE,
 			) error {

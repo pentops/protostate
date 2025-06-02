@@ -31,7 +31,7 @@ func (ps PSMPublishSet) Write(g *protogen.GeneratedFile) {
 
 	publishHook := importPath.Ident(nameStub + "PSMEventPublishHook")
 
-	g.P("func Publish", nameStub, "() ", psmImportPath.Ident("EventPublishHook"), "[")
+	g.P("func Publish", nameStub, "() ", psmImportPath.Ident("GeneralEventHook"), "[")
 	g.P("*", ps.keyField.Message.GoIdent, ", // implements psm.IKeyset")
 	g.P("*", importPath.Ident(nameStub+"State"), ", // implements psm.IState")
 	g.P(ps.statusField.Enum.GoIdent, ", // implements psm.IStatusEnum")
