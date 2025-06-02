@@ -9,7 +9,7 @@ import (
 )
 
 // Publish Toipc for test.v1.Bar
-func PublishBar() psm.EventPublishHook[
+func PublishBar() psm.GeneralEventHook[
 	*test_pb.BarKeys,    // implements psm.IKeyset
 	*test_pb.BarState,   // implements psm.IState
 	test_pb.BarStatus,   // implements psm.IStatusEnum

@@ -232,15 +232,6 @@ func BarPSMBuilder() *psm.StateMachineConfig[
 	]{}
 }
 
-type BarPSMHookBaton = psm.HookBaton[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarData,    // implements psm.IStateData
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-]
-
 // BarPSMMutation runs at the start of a transition to merge the event information into the state data object. The state object is mutable in this context.
 func BarPSMMutation[SE BarPSMEvent](cb func(*BarData, SE) error) psm.TransitionMutation[
 	*BarKeys,    // implements psm.IKeyset
@@ -261,6 +252,24 @@ func BarPSMMutation[SE BarPSMEvent](cb func(*BarData, SE) error) psm.TransitionM
 		SE,          // Specific event type for the transition
 	](cb)
 }
+
+type BarPSMHookBaton = psm.HookBaton[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
+]
+
+type BarPSMFullBaton = psm.CallbackBaton[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
+]
 
 // BarPSMLogicHook runs after the mutation is complete. This hook can trigger side effects, including chained events, which are additional events processed by the state machine. Use this for Business Logic which determines the 'next step' in processing.
 func BarPSMLogicHook[
@@ -289,7 +298,7 @@ func BarPSMLogicHook[
 		BarPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMHookBaton, state *BarState, event *BarEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
 			if !ok {
 				name := event.ProtoReflect().Descriptor().FullName()
@@ -308,7 +317,7 @@ func BarPSMDataHook[
 	cb func(
 		context.Context,
 		sqrlx.Transaction,
-		*BarState,
+		*BarData,
 		SE,
 	) error) psm.TransitionHook[
 	*BarKeys,    // implements psm.IKeyset
@@ -328,13 +337,13 @@ func BarPSMDataHook[
 		BarPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMHookBaton, state *BarState, event *BarEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
 			if !ok {
 				name := event.ProtoReflect().Descriptor().FullName()
 				return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 			}
-			return cb(ctx, tx, state, asType)
+			return cb(ctx, tx, state.PSMData(), asType)
 		},
 		RunOnFollow: true,
 	}
@@ -370,13 +379,21 @@ func BarPSMLinkHook[
 		BarPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMHookBaton, state *BarState, event *BarEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			return psm.RunLinkHook(ctx, linkDestination, cb, tx, state, event)
 		},
 		RunOnFollow: false,
 	}
 }
-func BarPSMGeneralLogicHook(cb func(context.Context, BarPSMHookBaton, *BarState, *BarEvent) error) psm.GeneralLogicHook[
+
+// BarPSMGeneralLogicHook runs once per transition at the state-machine level regardless of which transition / event is being processed. It runs exactly once per transition, with the state object in the final state after the transition but prior to processing any further events. Chained events are added to the *end* of the event queue for the transaction, and side effects are published (as always) when the transaction is committed. The function MUST be pure, i.e. It MUST NOT produce any side-effects outside of the HookBaton, and MUST NOT modify the state.
+func BarPSMGeneralLogicHook(
+	cb func(
+		context.Context,
+		BarPSMHookBaton,
+		*BarState,
+		*BarEvent,
+	) error) psm.GeneralEventHook[
 	*BarKeys,    // implements psm.IKeyset
 	*BarState,   // implements psm.IState
 	BarStatus,   // implements psm.IStatusEnum
@@ -384,17 +401,28 @@ func BarPSMGeneralLogicHook(cb func(context.Context, BarPSMHookBaton, *BarState,
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralLogicHook[
+	return psm.GeneralEventHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
 		BarStatus,   // implements psm.IStatusEnum
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+			return cb(ctx, baton, state, event)
+		},
+		RunOnFollow: false,
+	}
 }
 
-func BarPSMGeneralStateDataHook(cb func(context.Context, sqrlx.Transaction, *BarState) error) psm.GeneralStateDataHook[
+// BarPSMGeneralStateDataHook runs at the state-machine level regardless of which transition / event is being processed. It runs at-least once before committing a database transaction after multiple transitions are complete. This hook has access only to the final state after the transitions and is used to update other tables based on the resulting state. It MUST be idempotent, it may be called after injecting externally-held state data.
+func BarPSMGeneralStateDataHook(
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*BarState,
+	) error) psm.GeneralStateHook[
 	*BarKeys,    // implements psm.IKeyset
 	*BarState,   // implements psm.IState
 	BarStatus,   // implements psm.IStatusEnum
@@ -402,17 +430,29 @@ func BarPSMGeneralStateDataHook(cb func(context.Context, sqrlx.Transaction, *Bar
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralStateDataHook[
+	return psm.GeneralStateHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
 		BarStatus,   // implements psm.IStatusEnum
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState) error {
+			return cb(ctx, tx, state)
+		},
+		RunOnFollow: true,
+	}
 }
 
-func BarPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *BarState, *BarEvent) error) psm.GeneralEventDataHook[
+// BarPSMGeneralEventDataHook runs after each transition at the state-machine level regardless of which transition / event is being processed. It runs exactly once per transition, before any other events are processed. The presence of this hook type prevents (future) transaction optimizations, so should be used sparingly.
+func BarPSMGeneralEventDataHook(
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*BarState,
+		*BarEvent,
+	) error) psm.GeneralEventHook[
 	*BarKeys,    // implements psm.IKeyset
 	*BarState,   // implements psm.IState
 	BarStatus,   // implements psm.IStatusEnum
@@ -420,17 +460,29 @@ func BarPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Bar
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralEventDataHook[
+	return psm.GeneralEventHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
 		BarStatus,   // implements psm.IStatusEnum
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+			return cb(ctx, tx, state, event)
+		},
+		RunOnFollow: true,
+	}
 }
 
-func BarPSMEventPublishHook(cb func(context.Context, psm.Publisher, *BarState, *BarEvent) error) psm.EventPublishHook[
+// BarPSMEventPublishHook  EventPublishHook runs for each transition, at least once before committing a database transaction after multiple transitions are complete. It should publish a derived version of the event using the publisher.
+func BarPSMEventPublishHook(
+	cb func(
+		context.Context,
+		psm.Publisher,
+		*BarState,
+		*BarEvent,
+	) error) psm.GeneralEventHook[
 	*BarKeys,    // implements psm.IKeyset
 	*BarState,   // implements psm.IState
 	BarStatus,   // implements psm.IStatusEnum
@@ -438,28 +490,48 @@ func BarPSMEventPublishHook(cb func(context.Context, psm.Publisher, *BarState, *
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.EventPublishHook[
+	return psm.GeneralEventHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
 		BarStatus,   // implements psm.IStatusEnum
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+			return cb(ctx, baton, state, event)
+		},
+		RunOnFollow: false,
+	}
 }
 
-func BarPSMUpsertPublishHook(cb func(context.Context, psm.Publisher, *BarState) error) psm.UpsertPublishHook[
-	*BarKeys,  // implements psm.IKeyset
-	*BarState, // implements psm.IState
-	BarStatus, // implements psm.IStatusEnum
-	*BarData,  // implements psm.IStateData
+// BarPSMUpsertPublishHook runs for each transition, at least once before committing a database transaction after multiple transitions are complete. It should publish a derived version of the event using the publisher.
+func BarPSMUpsertPublishHook(
+	cb func(
+		context.Context,
+		psm.Publisher,
+		*BarState,
+	) error) psm.GeneralEventHook[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.UpsertPublishHook[
-		*BarKeys,  // implements psm.IKeyset
-		*BarState, // implements psm.IState
-		BarStatus, // implements psm.IStatusEnum
-		*BarData,  // implements psm.IStateData
-	](cb)
+	return psm.GeneralEventHook[
+		*BarKeys,    // implements psm.IKeyset
+		*BarState,   // implements psm.IState
+		BarStatus,   // implements psm.IStatusEnum
+		*BarData,    // implements psm.IStateData
+		*BarEvent,   // implements psm.IEvent
+		BarPSMEvent, // implements psm.IInnerEvent
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+			return cb(ctx, baton, state)
+		},
+		RunOnFollow: false,
+	}
 }
 
 func (event *BarEvent) EventPublishMetadata() *psm_j5pb.EventPublishMetadata {

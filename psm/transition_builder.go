@@ -31,29 +31,27 @@ type transitionSet[
 ] struct {
 	globalEventHooks []globalEventHook[K, S, ST, SD, E, IE]
 	globalStateHooks []globalStateHook[K, S, ST, SD, E, IE]
-	eventPublishers  []EventPublishHook[K, S, ST, SD, E, IE]
-	upsertPublishers []UpsertPublishHook[K, S, ST, SD]
 	transitions      []*transitionSpec[K, S, ST, SD, E, IE]
 }
 
-func (hs *transitionSet[K, S, ST, SD, E, IE]) LogicHook(hook GeneralLogicHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) LogicHook(hook GeneralEventHook[K, S, ST, SD, E, IE]) {
 	hs.globalEventHooks = append(hs.globalEventHooks, hook)
 }
 
-func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDataHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateHook[K, S, ST, SD, E, IE]) {
 	hs.globalStateHooks = append(hs.globalStateHooks, hook)
 }
 
-func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
+func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventHook[K, S, ST, SD, E, IE]) {
 	hs.globalEventHooks = append(hs.globalEventHooks, hook)
 }
 
-func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishEvent(hook EventPublishHook[K, S, ST, SD, E, IE]) {
-	hs.eventPublishers = append(hs.eventPublishers, hook)
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishEvent(hook GeneralEventHook[K, S, ST, SD, E, IE]) {
+	hs.globalEventHooks = append(hs.globalEventHooks, hook)
 }
 
-func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishUpsert(hook UpsertPublishHook[K, S, ST, SD]) {
-	hs.upsertPublishers = append(hs.upsertPublishers, hook)
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishUpsert(hook GeneralStateHook[K, S, ST, SD, E, IE]) {
+	hs.globalStateHooks = append(hs.globalStateHooks, hook)
 }
 
 // From creates a new transition builder for the state machine, which will run

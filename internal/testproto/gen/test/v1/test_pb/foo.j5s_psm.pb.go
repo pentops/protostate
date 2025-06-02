@@ -237,15 +237,6 @@ func FooPSMBuilder() *psm.StateMachineConfig[
 	]{}
 }
 
-type FooPSMHookBaton = psm.HookBaton[
-	*FooKeys,    // implements psm.IKeyset
-	*FooState,   // implements psm.IState
-	FooStatus,   // implements psm.IStatusEnum
-	*FooData,    // implements psm.IStateData
-	*FooEvent,   // implements psm.IEvent
-	FooPSMEvent, // implements psm.IInnerEvent
-]
-
 // FooPSMMutation runs at the start of a transition to merge the event information into the state data object. The state object is mutable in this context.
 func FooPSMMutation[SE FooPSMEvent](cb func(*FooData, SE) error) psm.TransitionMutation[
 	*FooKeys,    // implements psm.IKeyset
@@ -266,6 +257,24 @@ func FooPSMMutation[SE FooPSMEvent](cb func(*FooData, SE) error) psm.TransitionM
 		SE,          // Specific event type for the transition
 	](cb)
 }
+
+type FooPSMHookBaton = psm.HookBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]
+
+type FooPSMFullBaton = psm.CallbackBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]
 
 // FooPSMLogicHook runs after the mutation is complete. This hook can trigger side effects, including chained events, which are additional events processed by the state machine. Use this for Business Logic which determines the 'next step' in processing.
 func FooPSMLogicHook[
@@ -294,7 +303,7 @@ func FooPSMLogicHook[
 		FooPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMHookBaton, state *FooState, event *FooEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
 			if !ok {
 				name := event.ProtoReflect().Descriptor().FullName()
@@ -313,7 +322,7 @@ func FooPSMDataHook[
 	cb func(
 		context.Context,
 		sqrlx.Transaction,
-		*FooState,
+		*FooData,
 		SE,
 	) error) psm.TransitionHook[
 	*FooKeys,    // implements psm.IKeyset
@@ -333,13 +342,13 @@ func FooPSMDataHook[
 		FooPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMHookBaton, state *FooState, event *FooEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
 			if !ok {
 				name := event.ProtoReflect().Descriptor().FullName()
 				return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 			}
-			return cb(ctx, tx, state, asType)
+			return cb(ctx, tx, state.PSMData(), asType)
 		},
 		RunOnFollow: true,
 	}
@@ -375,13 +384,21 @@ func FooPSMLinkHook[
 		FooPSMEvent, // implements psm.IInnerEvent
 		SE,          // Specific event type for the transition
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMHookBaton, state *FooState, event *FooEvent) error {
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			return psm.RunLinkHook(ctx, linkDestination, cb, tx, state, event)
 		},
 		RunOnFollow: false,
 	}
 }
-func FooPSMGeneralLogicHook(cb func(context.Context, FooPSMHookBaton, *FooState, *FooEvent) error) psm.GeneralLogicHook[
+
+// FooPSMGeneralLogicHook runs once per transition at the state-machine level regardless of which transition / event is being processed. It runs exactly once per transition, with the state object in the final state after the transition but prior to processing any further events. Chained events are added to the *end* of the event queue for the transaction, and side effects are published (as always) when the transaction is committed. The function MUST be pure, i.e. It MUST NOT produce any side-effects outside of the HookBaton, and MUST NOT modify the state.
+func FooPSMGeneralLogicHook(
+	cb func(
+		context.Context,
+		FooPSMHookBaton,
+		*FooState,
+		*FooEvent,
+	) error) psm.GeneralEventHook[
 	*FooKeys,    // implements psm.IKeyset
 	*FooState,   // implements psm.IState
 	FooStatus,   // implements psm.IStatusEnum
@@ -389,17 +406,28 @@ func FooPSMGeneralLogicHook(cb func(context.Context, FooPSMHookBaton, *FooState,
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralLogicHook[
+	return psm.GeneralEventHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
 		FooStatus,   // implements psm.IStatusEnum
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+			return cb(ctx, baton, state, event)
+		},
+		RunOnFollow: false,
+	}
 }
 
-func FooPSMGeneralStateDataHook(cb func(context.Context, sqrlx.Transaction, *FooState) error) psm.GeneralStateDataHook[
+// FooPSMGeneralStateDataHook runs at the state-machine level regardless of which transition / event is being processed. It runs at-least once before committing a database transaction after multiple transitions are complete. This hook has access only to the final state after the transitions and is used to update other tables based on the resulting state. It MUST be idempotent, it may be called after injecting externally-held state data.
+func FooPSMGeneralStateDataHook(
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*FooState,
+	) error) psm.GeneralStateHook[
 	*FooKeys,    // implements psm.IKeyset
 	*FooState,   // implements psm.IState
 	FooStatus,   // implements psm.IStatusEnum
@@ -407,17 +435,29 @@ func FooPSMGeneralStateDataHook(cb func(context.Context, sqrlx.Transaction, *Foo
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralStateDataHook[
+	return psm.GeneralStateHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
 		FooStatus,   // implements psm.IStatusEnum
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState) error {
+			return cb(ctx, tx, state)
+		},
+		RunOnFollow: true,
+	}
 }
 
-func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *FooState, *FooEvent) error) psm.GeneralEventDataHook[
+// FooPSMGeneralEventDataHook runs after each transition at the state-machine level regardless of which transition / event is being processed. It runs exactly once per transition, before any other events are processed. The presence of this hook type prevents (future) transaction optimizations, so should be used sparingly.
+func FooPSMGeneralEventDataHook(
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*FooState,
+		*FooEvent,
+	) error) psm.GeneralEventHook[
 	*FooKeys,    // implements psm.IKeyset
 	*FooState,   // implements psm.IState
 	FooStatus,   // implements psm.IStatusEnum
@@ -425,17 +465,29 @@ func FooPSMGeneralEventDataHook(cb func(context.Context, sqrlx.Transaction, *Foo
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralEventDataHook[
+	return psm.GeneralEventHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
 		FooStatus,   // implements psm.IStatusEnum
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+			return cb(ctx, tx, state, event)
+		},
+		RunOnFollow: true,
+	}
 }
 
-func FooPSMEventPublishHook(cb func(context.Context, psm.Publisher, *FooState, *FooEvent) error) psm.EventPublishHook[
+// FooPSMEventPublishHook  EventPublishHook runs for each transition, at least once before committing a database transaction after multiple transitions are complete. It should publish a derived version of the event using the publisher.
+func FooPSMEventPublishHook(
+	cb func(
+		context.Context,
+		psm.Publisher,
+		*FooState,
+		*FooEvent,
+	) error) psm.GeneralEventHook[
 	*FooKeys,    // implements psm.IKeyset
 	*FooState,   // implements psm.IState
 	FooStatus,   // implements psm.IStatusEnum
@@ -443,28 +495,48 @@ func FooPSMEventPublishHook(cb func(context.Context, psm.Publisher, *FooState, *
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.EventPublishHook[
+	return psm.GeneralEventHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
 		FooStatus,   // implements psm.IStatusEnum
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-	](cb)
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+			return cb(ctx, baton, state, event)
+		},
+		RunOnFollow: false,
+	}
 }
 
-func FooPSMUpsertPublishHook(cb func(context.Context, psm.Publisher, *FooState) error) psm.UpsertPublishHook[
-	*FooKeys,  // implements psm.IKeyset
-	*FooState, // implements psm.IState
-	FooStatus, // implements psm.IStatusEnum
-	*FooData,  // implements psm.IStateData
+// FooPSMUpsertPublishHook runs for each transition, at least once before committing a database transaction after multiple transitions are complete. It should publish a derived version of the event using the publisher.
+func FooPSMUpsertPublishHook(
+	cb func(
+		context.Context,
+		psm.Publisher,
+		*FooState,
+	) error) psm.GeneralEventHook[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.UpsertPublishHook[
-		*FooKeys,  // implements psm.IKeyset
-		*FooState, // implements psm.IState
-		FooStatus, // implements psm.IStatusEnum
-		*FooData,  // implements psm.IStateData
-	](cb)
+	return psm.GeneralEventHook[
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooData,    // implements psm.IStateData
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+			return cb(ctx, baton, state)
+		},
+		RunOnFollow: false,
+	}
 }
 
 func (event *FooEvent) EventPublishMetadata() *psm_j5pb.EventPublishMetadata {

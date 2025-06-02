@@ -9,7 +9,7 @@ import (
 )
 
 // Publish Toipc for test.v1.Foo
-func PublishFoo() psm.EventPublishHook[
+func PublishFoo() psm.GeneralEventHook[
 	*test_pb.FooKeys,    // implements psm.IKeyset
 	*test_pb.FooState,   // implements psm.IState
 	test_pb.FooStatus,   // implements psm.IStatusEnum

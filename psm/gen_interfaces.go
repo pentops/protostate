@@ -104,9 +104,8 @@ type IInnerEvent interface {
 	PSMEventKey() string
 }
 
-// HookBaton is sent with each logic transition hook to collect chain events and
-// side effects
-type HookBaton[
+// CallbackBaton should only be used in generated code.
+type CallbackBaton[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
@@ -119,9 +118,6 @@ type HookBaton[
 	ChainEvent(IE)
 	FullCause() E
 	AsCause() *psm_j5pb.Cause
-}
-
-type Publisher interface {
 	Publish(o5msg.Message)
 }
 
@@ -164,11 +160,11 @@ type TransitionHook[
 	IE IInnerEvent,
 	SE IInnerEvent,
 ] struct {
-	Callback    func(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
+	Callback    func(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S, E) error
 	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error {
 
 	return hook.Callback(ctx, tx, baton, state, event)
 }
@@ -181,98 +177,49 @@ func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runOnFollow() bool {
 	return hook.RunOnFollow
 }
 
-// GeneralLogicHook runs once per transition at the state-machine level
-// regardless of which transition / event is being processed. It runs exactly
-// once per transition, with the state object in the final state after the
-// transition but prior to processing any further events. Chained events are
-// added to the *end* of the event queue for the transaction, and side effects
-// are published (as always) when the transaction is committed. The function
-// MUST be pure, i.e. It MUST NOT produce any side-effects outside of the
-// HookBaton, and MUST NOT modify the
-// state.
-type GeneralLogicHook[
+// GeneralHook runs after Transition mutations and hooks for all events and
+// states.
+type GeneralEventHook[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
-] func(context.Context, HookBaton[K, S, ST, SD, E, IE], S, E) error
-
-func (f GeneralLogicHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
-	return f(ctx, baton, state, event)
+] struct {
+	Callback    func(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S, E) error
+	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (f GeneralLogicHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
-	return false
+func (f GeneralEventHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error {
+	return f.Callback(ctx, nil, baton, state, event)
 }
 
-// GeneralStateDataHook runs at the state-machine level regardless of which
-// transition / event is being processed. It runs at-least once before
-// committing a database transaction after multiple transitions are complete.
-// This hook has access only to the final state after the transitions and is
-// used to update other tables based on the resulting state. It MUST be
-// idempotent, it may be called after injecting externally-held state data.
-type GeneralStateDataHook[
+func (f GeneralEventHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
+	return f.RunOnFollow
+}
+
+// GeneralStateHook runs after Transition mutations and hooks for all events and
+// states.
+type GeneralStateHook[
 	K IKeyset,
 	S IState[K, ST, SD],
 	ST IStatusEnum,
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, S) error
-
-func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S) error {
-	return f(ctx, tx, state)
+] struct {
+	Callback    func(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S) error
+	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (f GeneralStateDataHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
-	return true
+func (f GeneralStateHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S) error {
+	return f.Callback(ctx, tx, baton, state)
 }
 
-// GeneralEventDataHook runs after each transition at the state-machine level regardless of which
-// transition / event is being processed. It runs exactly once per transition,
-// before any other events are processed. The presence of this hook type
-// prevents (future) transaction optimizations, so should be used sparingly.
-type GeneralEventDataHook[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] func(context.Context, sqrlx.Transaction, S, E) error
-
-func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton HookBaton[K, S, ST, SD, E, IE], state S, event E) error {
-	return f(ctx, tx, state, event)
+func (f GeneralStateHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
+	return f.RunOnFollow
 }
-
-func (f GeneralEventDataHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
-	return true
-}
-
-// EventPublishHook runs for each transition, at least once before committing a
-// database transaction after multiple transitions are complete. It should
-// publish a derived version of the event using the publisher.
-type EventPublishHook[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
-] func(context.Context, Publisher, S, E) error
-
-// UpsertPublishHook runs at least once after a set of transitions for an
-// entity, it should be used to publish an 'upsert' message of the current
-// state. The last call to for a set of transitions will be the final state. Use
-// the state metadata's last modified for upsert time.
-type UpsertPublishHook[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-] func(context.Context, Publisher, S) error
 
 func RunLinkHook[
 	K IKeyset,

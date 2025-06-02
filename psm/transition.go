@@ -10,6 +10,27 @@ import (
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
+// HookBaton is sent with each logic transition hook to collect chain events and
+// side effects
+type HookBaton[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] interface {
+	SideEffect(o5msg.Message)
+	DelayedSideEffect(o5msg.Message, time.Duration)
+	ChainEvent(IE)
+	FullCause() E
+	AsCause() *psm_j5pb.Cause
+}
+
+type Publisher interface {
+	Publish(o5msg.Message)
+}
+
 type hookBaton[
 	K IKeyset,
 	S IState[K, ST, SD],
@@ -45,6 +66,13 @@ func (td *hookBaton[K, S, ST, SD, E, IE]) DelayedSideEffect(msg o5msg.Message, d
 	}
 
 	td.sideEffects = append(td.sideEffects, dmsg)
+}
+
+// Publish implements Publisher
+func (td *hookBaton[K, S, ST, SD, E, IE]) Publish(msg o5msg.Message) {
+	td.sideEffects = append(td.sideEffects, &sideEffect{
+		msg: msg,
+	})
 }
 
 func (td *hookBaton[K, S, ST, SD, E, IE]) FullCause() E {
@@ -95,7 +123,7 @@ type globalEventHook[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	runTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
+	runTransition(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S, E) error
 	runOnFollow() bool
 }
 
@@ -107,7 +135,7 @@ type globalStateHook[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	runTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S) error
+	runTransition(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S) error
 	runOnFollow() bool
 }
 
@@ -163,7 +191,7 @@ func (hs *transition[K, S, ST, SD, E, IE]) runMutations(
 func (hs *transition[K, S, ST, SD, E, IE]) runHooks(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	baton HookBaton[K, S, ST, SD, E, IE],
+	baton CallbackBaton[K, S, ST, SD, E, IE],
 	state S,
 	event E,
 ) error {
