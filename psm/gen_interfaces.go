@@ -134,7 +134,7 @@ type TransitionMutation[
 	SE IInnerEvent,
 ] func(SD, SE) error
 
-func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) runMutation(state S, event E) error {
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) runMutation(state S, event E) error { // nolint:unused // Used by genereted code.
 	asType, ok := any(event.UnwrapPSMEvent()).(SE)
 	if !ok {
 		name := event.ProtoReflect().Descriptor().FullName()
@@ -144,7 +144,7 @@ func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) runMutation(state S, event 
 	return f(state.PSMData(), asType)
 }
 
-func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) eventType() string {
+func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint:unused // Used by genereted code.
 	return (*new(SE)).PSMEventKey()
 }
 
@@ -164,16 +164,16 @@ type TransitionHook[
 	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error {
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error { // nolint:unused // Used by genereted code.
 
 	return hook.Callback(ctx, tx, baton, state, event)
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) eventType() string {
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint:unused // Used by genereted code.
 	return (*new(SE)).PSMEventKey()
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runOnFollow() bool {
+func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runOnFollow() bool { // nolint:unused // Used by genereted code.
 	return hook.RunOnFollow
 }
 
@@ -191,11 +191,11 @@ type GeneralEventHook[
 	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (f GeneralEventHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error {
+func (f GeneralEventHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error { // nolint:unused // Used by genereted code.
 	return f.Callback(ctx, nil, baton, state, event)
 }
 
-func (f GeneralEventHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
+func (f GeneralEventHook[K, S, ST, SD, E, IE]) runOnFollow() bool { // nolint:unused // Used by genereted code.
 	return f.RunOnFollow
 }
 
@@ -213,11 +213,11 @@ type GeneralStateHook[
 	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
 }
 
-func (f GeneralStateHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S) error {
+func (f GeneralStateHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S) error { // nolint:unused // Used by genereted code.
 	return f.Callback(ctx, tx, baton, state)
 }
 
-func (f GeneralStateHook[K, S, ST, SD, E, IE]) runOnFollow() bool {
+func (f GeneralStateHook[K, S, ST, SD, E, IE]) runOnFollow() bool { // nolint:unused // Used by genereted code.
 	return f.RunOnFollow
 }
 
