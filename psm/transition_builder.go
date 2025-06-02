@@ -144,31 +144,40 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuil
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
 	hook transitionMutation[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := hook.EventType()
+	eventType := hook.eventType()
 	return tb.OnEvent(eventType).Mutate(hook)
+
 }
 
-// LogicHook is a shortcut for OnEvent().LogicHook() with the event type matching callback function.
+// Hook is a shortcut for OnEvent().Hook() with the event type matching callback function.
+func (tb BuilderFrom[K, S, ST, SD, E, IE]) Hook(
+	hook transitionHook[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	eventType := hook.eventType()
+	return tb.OnEvent(eventType).Hook(hook)
+}
+
+// DEPRECATED: use Hook
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := hook.EventType()
-	return tb.OnEvent(eventType).LogicHook(hook)
+	eventType := hook.eventType()
+	return tb.OnEvent(eventType).Hook(hook)
 }
 
-// DataHook is a shortcut for OnEvent().DataHook() with the event type matching callback function.
+// DEPRECATED: use Hook
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := hook.EventType()
-	return tb.OnEvent(eventType).DataHook(hook)
+	eventType := hook.eventType()
+	return tb.OnEvent(eventType).Hook(hook)
 }
 
-// LinkTo is a shortcut for OnEvent().LinkTo() with the event type matching callback function.
+// DEPRECATED: use Hook
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) LinkTo(
 	link transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	eventType := link.EventType()
+	eventType := link.eventType()
 	return tb.OnEvent(eventType).LinkTo(link)
 }
 
@@ -205,7 +214,15 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) SetStatus(
 	return tb
 }
 
-// LogicHook adds a new TransitionLogicHook which will run after all mutations
+// Hook adds one or more TransitionHooks to the transition.
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Hook(
+	hooks ...transitionHook[K, S, ST, SD, E, IE],
+) *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.hookSet.hooks = append(tb.hookSet.hooks, hooks...)
+	return tb
+}
+
+// DEPRECATED: use Hook
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
@@ -213,7 +230,7 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
 	return tb
 }
 
-// DataHook adds a new TransitionDataHook which will run after all mutations
+// DEPRECATED: use Hook
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) DataHook(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
@@ -228,8 +245,7 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S
 	return tb
 }
 
-// LinkTo registers a transition into another local state machine to run in the
-// same database transaction
+// DEPRECATED: use Hook
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LinkTo(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pentops/sqrlx.go/sqrlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,48 +73,56 @@ func TestTransitionBuilder(t *testing.T) {
 	gotTransitions := []string{}
 
 	hs.From(testST(1)).OnEvent("event1").
-		LogicHook(TransitionLogicHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
-			ctx context.Context,
-			baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
-			state *testS,
-			event *testIE1,
-		) error {
-			gotTransitions = append(gotTransitions, "A2:"+event.data)
-
-			return nil
-		})).
+		LogicHook(TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+			Callback: func(
+				ctx context.Context,
+				_ sqrlx.Transaction,
+				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				state *testS,
+				event *testE,
+			) error {
+				gotTransitions = append(gotTransitions, "A2")
+				return nil
+			},
+			RunOnFollow: true,
+		}).
 		Mutate(TransitionMutation[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
 			state *testSD,
 			event *testIE1,
 		) error {
-			gotTransitions = append(gotTransitions, "A1:"+event.data)
-
+			gotTransitions = append(gotTransitions, "A1")
 			return nil
 		}))
 
 	hs.From().OnEvent("event1").LogicHook(
-		TransitionLogicHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
-			ctx context.Context,
-			baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
-			state *testS,
-			event *testIE1,
-		) error {
-			gotTransitions = append(gotTransitions, "B:"+event.data)
-
-			return nil
-		}))
+		TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+			Callback: func(
+				ctx context.Context,
+				_ sqrlx.Transaction,
+				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				state *testS,
+				event *testE,
+			) error {
+				gotTransitions = append(gotTransitions, "B")
+				return nil
+			},
+			RunOnFollow: true,
+		})
 
 	hs.From().LogicHook(
-		TransitionLogicHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
-			ctx context.Context,
-			baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
-			state *testS,
-			event *testIE1,
-		) error {
-			gotTransitions = append(gotTransitions, "C:"+event.data)
-
-			return nil
-		}))
+		TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+			Callback: func(
+				ctx context.Context,
+				_ sqrlx.Transaction,
+				baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
+				state *testS,
+				event *testE,
+			) error {
+				gotTransitions = append(gotTransitions, "C")
+				return nil
+			},
+			RunOnFollow: true,
+		})
 
 	ctx := context.Background()
 
@@ -143,6 +152,6 @@ func TestTransitionBuilder(t *testing.T) {
 	}
 
 	t.Logf("transitions: %v", gotTransitions)
-	assert.Equal(t, []string{"A1:e1", "A2:e1", "B:e1", "C:e1"}, gotTransitions)
+	assert.Equal(t, []string{"A1", "A2", "B", "C"}, gotTransitions)
 
 }

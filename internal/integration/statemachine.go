@@ -83,7 +83,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 		return nil
 	}))
 
-	sm.From(test_pb.FooStatus_UNSPECIFIED).
+	sm.From(0).
 		OnEvent(test_pb.FooPSMEventCreated).
 		SetStatus(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
@@ -102,7 +102,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 			return nil
 		}))
 
-	sm.From(test_pb.FooStatus_UNSPECIFIED).
+	sm.From(0).
 		OnEvent(test_pb.FooPSMEventCreated).
 		SetStatus(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
@@ -140,8 +140,7 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 		}))
 
 	sm.From().
-		//OnEvent(test_pb.FooPSMEventUpdated).
-		LogicHook(test_pb.FooPSMLogicHook(func(
+		Hook(test_pb.FooPSMLogicHook(func(
 			ctx context.Context,
 			baton test_pb.FooPSMHookBaton,
 			state *test_pb.FooState,

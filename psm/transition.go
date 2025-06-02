@@ -71,8 +71,8 @@ type transitionMutation[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	RunMutation(S, E) error
-	EventType() string
+	runMutation(S, E) error
+	eventType() string
 }
 
 type transitionHook[
@@ -84,7 +84,7 @@ type transitionHook[
 	IE IInnerEvent,
 ] interface {
 	globalEventHook[K, S, ST, SD, E, IE]
-	EventType() string
+	eventType() string
 }
 
 type globalEventHook[
@@ -95,8 +95,8 @@ type globalEventHook[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	RunTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
-	RunOnFollow() bool
+	runTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S, E) error
+	runOnFollow() bool
 }
 
 type globalStateHook[
@@ -107,8 +107,8 @@ type globalStateHook[
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
 ] interface {
-	RunTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S) error
-	RunOnFollow() bool
+	runTransition(context.Context, sqrlx.Transaction, HookBaton[K, S, ST, SD, E, IE], S) error
+	runOnFollow() bool
 }
 
 type transition[
@@ -151,7 +151,7 @@ func (hs *transition[K, S, ST, SD, E, IE]) runMutations(
 
 	for _, mutation := range hs.mutations {
 		log.WithField(ctx, "mutation", mutation).Debug("running mutation")
-		err := mutation.RunMutation(state, event)
+		err := mutation.runMutation(state, event)
 		if err != nil {
 			return err
 		}
@@ -168,14 +168,14 @@ func (hs *transition[K, S, ST, SD, E, IE]) runHooks(
 	event E,
 ) error {
 	for _, hook := range hs.eventHooks {
-		err := hook.RunTransition(ctx, tx, baton, state, event)
+		err := hook.runTransition(ctx, tx, baton, state, event)
 		if err != nil {
 			return err
 		}
 	}
 
 	for _, hook := range hs.stateHooks {
-		err := hook.RunTransition(ctx, tx, baton, state)
+		err := hook.runTransition(ctx, tx, baton, state)
 		if err != nil {
 			return err
 		}
@@ -191,20 +191,20 @@ func (hs *transition[K, S, ST, SD, E, IE]) runFollowerHooks(
 	event E,
 ) error {
 	for _, hook := range hs.eventHooks {
-		if !hook.RunOnFollow() {
+		if !hook.runOnFollow() {
 			continue
 		}
-		err := hook.RunTransition(ctx, tx, nil, state, event)
+		err := hook.runTransition(ctx, tx, nil, state, event)
 		if err != nil {
 			return err
 		}
 	}
 
 	for _, hook := range hs.stateHooks {
-		if !hook.RunOnFollow() {
+		if !hook.runOnFollow() {
 			continue
 		}
-		err := hook.RunTransition(ctx, tx, nil, state)
+		err := hook.runTransition(ctx, tx, nil, state)
 		if err != nil {
 			return err
 		}
