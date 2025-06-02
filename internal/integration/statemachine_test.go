@@ -21,20 +21,6 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func TestMermaidPrinter(t *testing.T) {
-	fooSM, err := NewFooStateMachine(nil)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	out, err := fooSM.PrintMermaid()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	t.Log(out)
-
-}
-
 func TestStateEntityExtensions(t *testing.T) {
 	event := &test_pb.FooEvent{}
 	assert.Equal(t, test_pb.FooPSMEventNil, event.PSMEventKey())

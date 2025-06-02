@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testK struct {
@@ -18,6 +20,12 @@ type testS struct {
 
 func (v testS) Status() testST {
 	return v.status
+}
+
+func (v testS) PSMData() *testSD {
+	return &testSD{
+		IStateData: v,
+	}
 }
 
 type testST int32
@@ -63,14 +71,22 @@ func TestTransitionBuilder(t *testing.T) {
 
 	gotTransitions := []string{}
 
-	hs.From(testST(1)).OnEvent("event1").LogicHook(
-		TransitionLogicHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
+	hs.From(testST(1)).OnEvent("event1").
+		LogicHook(TransitionLogicHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
 			ctx context.Context,
 			baton HookBaton[*testK, *testS, testST, *testSD, *testE, testIE],
 			state *testS,
 			event *testIE1,
 		) error {
-			gotTransitions = append(gotTransitions, "A:"+event.data)
+			gotTransitions = append(gotTransitions, "A2:"+event.data)
+
+			return nil
+		})).
+		Mutate(TransitionMutation[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
+			state *testSD,
+			event *testIE1,
+		) error {
+			gotTransitions = append(gotTransitions, "A1:"+event.data)
 
 			return nil
 		}))
@@ -107,29 +123,26 @@ func TestTransitionBuilder(t *testing.T) {
 
 	event := &testE{
 		innerEvent: &testIE1{
-			data: "test",
+			data: "e1",
 		},
 	}
 
-	hookSet, err := hs.findTransitions(state.status, "event1")
+	hookSet, err := hs.buildTransition(state.status, "event1")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = hookSet.runTransitionHooks(ctx, nil, nil, state, event)
+	err = hookSet.runMutations(ctx, state, event)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(gotTransitions) != 3 {
-		t.Fatalf("unexpected transitions: %v", gotTransitions)
-	}
-	for idx, want := range []string{"A:test", "B:test", "C:test"} {
-		if gotTransitions[idx] != want {
-			t.Fatalf("unexpected transitions[%d]: %v", idx, gotTransitions[idx])
-		}
+	err = hookSet.runHooks(ctx, nil, nil, state, event)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	t.Logf("transitions: %v", gotTransitions)
+	assert.Equal(t, []string{"A1:e1", "A2:e1", "B:e1", "C:e1"}, gotTransitions)
 
 }

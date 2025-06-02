@@ -1,5 +1,61 @@
 package psm
 
+import (
+	"fmt"
+	"slices"
+)
+
+type transitionSpec[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] struct {
+	fromStatus []ST
+	toStatus   ST
+	noop       bool
+	eventType  string
+	mutations  []transitionMutation[K, S, ST, SD, E, IE]
+	hooks      []transitionHook[K, S, ST, SD, E, IE]
+}
+
+type transitionSet[
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
+] struct {
+	globalEventHooks []globalEventHook[K, S, ST, SD, E, IE]
+	globalStateHooks []globalStateHook[K, S, ST, SD, E, IE]
+	eventPublishers  []EventPublishHook[K, S, ST, SD, E, IE]
+	upsertPublishers []UpsertPublishHook[K, S, ST, SD]
+	transitions      []*transitionSpec[K, S, ST, SD, E, IE]
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) LogicHook(hook GeneralLogicHook[K, S, ST, SD, E, IE]) {
+	hs.globalEventHooks = append(hs.globalEventHooks, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) StateDataHook(hook GeneralStateDataHook[K, S, ST, SD, E, IE]) {
+	hs.globalStateHooks = append(hs.globalStateHooks, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) EventDataHook(hook GeneralEventDataHook[K, S, ST, SD, E, IE]) {
+	hs.globalEventHooks = append(hs.globalEventHooks, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishEvent(hook EventPublishHook[K, S, ST, SD, E, IE]) {
+	hs.eventPublishers = append(hs.eventPublishers, hook)
+}
+
+func (hs *transitionSet[K, S, ST, SD, E, IE]) PublishUpsert(hook UpsertPublishHook[K, S, ST, SD]) {
+	hs.upsertPublishers = append(hs.upsertPublishers, hook)
+}
+
 // From creates a new transition builder for the state machine, which will run
 // when the machine is transitioning from one of the given states. If the given
 // list is empty (From()), matches ALL starting states.
@@ -8,6 +64,52 @@ func (hs *transitionSet[K, S, ST, SD, E, IE]) From(states ...ST) BuilderFrom[K, 
 		hs:         hs,
 		fromStatus: states,
 	}
+}
+
+func (hs transitionSet[K, S, ST, SD, E, IE]) buildTransition(status ST, eventType string) (*transition[K, S, ST, SD, E, IE], error) {
+	foundSpecs := make([]*transitionSpec[K, S, ST, SD, E, IE], 0, 1)
+
+	for _, search := range hs.transitions {
+		if search.eventType != eventType {
+			continue
+		}
+		if len(search.fromStatus) == 0 {
+			foundSpecs = append(foundSpecs, search)
+			continue
+		}
+		if slices.Contains(search.fromStatus, status) {
+			foundSpecs = append(foundSpecs, search)
+		}
+	}
+
+	if len(foundSpecs) == 0 {
+		return nil, fmt.Errorf("no transition found for %s on %s", status, eventType)
+	}
+
+	merged := &transition[K, S, ST, SD, E, IE]{
+		fromStatus: status,
+		eventType:  eventType,
+	}
+
+	for _, spec := range foundSpecs {
+		merged.mutations = append(merged.mutations, spec.mutations...)
+		for _, hook := range spec.hooks {
+			merged.eventHooks = append(merged.eventHooks, hook)
+		}
+
+		if spec.toStatus != 0 {
+			if merged.toStatus == 0 {
+				merged.toStatus = spec.toStatus
+			} else if merged.toStatus != spec.toStatus {
+				return nil, fmt.Errorf("conflicting toStatus transitions for fromStatus %q event %q", status.ShortString(), eventType)
+			}
+		}
+	}
+
+	merged.eventHooks = append(merged.eventHooks, hs.globalEventHooks...)
+	merged.stateHooks = append(merged.stateHooks, hs.globalStateHooks...)
+
+	return merged, nil
 }
 
 type BuilderFrom[
@@ -40,7 +142,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) OnEvent(event string) *TransitionBuil
 
 // Mutate is a shortcut for OnEvent().Mutate() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
-	hook transitionMutationWrapper[K, S, ST, SD, E, IE],
+	hook transitionMutation[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).Mutate(hook)
@@ -48,7 +150,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) Mutate(
 
 // LogicHook is a shortcut for OnEvent().LogicHook() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
-	hook transitionLogicHookWrapper[K, S, ST, SD, E, IE],
+	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).LogicHook(hook)
@@ -56,7 +158,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) LogicHook(
 
 // DataHook is a shortcut for OnEvent().DataHook() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
-	hook transitionDataHookWrapper[K, S, ST, SD, E, IE],
+	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := hook.EventType()
 	return tb.OnEvent(eventType).DataHook(hook)
@@ -64,7 +166,7 @@ func (tb BuilderFrom[K, S, ST, SD, E, IE]) DataHook(
 
 // LinkTo is a shortcut for OnEvent().LinkTo() with the event type matching callback function.
 func (tb BuilderFrom[K, S, ST, SD, E, IE]) LinkTo(
-	link transitionLink[K, S, ST, SD, E, IE],
+	link transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	eventType := link.EventType()
 	return tb.OnEvent(eventType).LinkTo(link)
@@ -87,7 +189,7 @@ type TransitionBuilder[
 // data. A transition can have zero or one mutate function. Multiple mutation
 // callbacks may be registered.
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Mutate(
-	mutation transitionMutationWrapper[K, S, ST, SD, E, IE],
+	mutation transitionMutation[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	tb.hookSet.mutations = append(tb.hookSet.mutations, mutation)
 	return tb
@@ -105,17 +207,17 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) SetStatus(
 
 // LogicHook adds a new TransitionLogicHook which will run after all mutations
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LogicHook(
-	hook transitionLogicHookWrapper[K, S, ST, SD, E, IE],
+	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.hookSet.logic = append(tb.hookSet.logic, hook)
+	tb.hookSet.hooks = append(tb.hookSet.hooks, hook)
 	return tb
 }
 
 // DataHook adds a new TransitionDataHook which will run after all mutations
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) DataHook(
-	hook transitionDataHookWrapper[K, S, ST, SD, E, IE],
+	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.hookSet.data = append(tb.hookSet.data, hook)
+	tb.hookSet.hooks = append(tb.hookSet.hooks, hook)
 	return tb
 }
 
@@ -129,8 +231,8 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S
 // LinkTo registers a transition into another local state machine to run in the
 // same database transaction
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) LinkTo(
-	link transitionLink[K, S, ST, SD, E, IE],
+	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.hookSet.links = append(tb.hookSet.links, link)
+	tb.hookSet.hooks = append(tb.hookSet.hooks, hook)
 	return tb
 }
