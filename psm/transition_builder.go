@@ -212,6 +212,13 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) SetStatus(
 	return tb
 }
 
+// Noop registers a transition which does nothing, but prevents the machine from
+// erroring when the conditions are met.
+func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S, ST, SD, E, IE] {
+	tb.hookSet.noop = true
+	return tb
+}
+
 // Hook adds one or more TransitionHooks to the transition.
 func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Hook(
 	hooks ...transitionHook[K, S, ST, SD, E, IE],
@@ -233,13 +240,6 @@ func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) DataHook(
 	hook transitionHook[K, S, ST, SD, E, IE],
 ) *TransitionBuilder[K, S, ST, SD, E, IE] {
 	tb.hookSet.hooks = append(tb.hookSet.hooks, hook)
-	return tb
-}
-
-// Noop registers a transition which does nothing, but prevents the machine from
-// erroring when the conditions are met.
-func (tb *TransitionBuilder[K, S, ST, SD, E, IE]) Noop() *TransitionBuilder[K, S, ST, SD, E, IE] {
-	tb.hookSet.noop = true
 	return tb
 }
 

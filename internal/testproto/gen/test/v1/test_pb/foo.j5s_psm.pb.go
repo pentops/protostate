@@ -39,6 +39,24 @@ type FooPSMEventSpec = psm.EventSpec[
 	FooPSMEvent, // implements psm.IInnerEvent
 ]
 
+type FooPSMHookBaton = psm.HookBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]
+
+type FooPSMFullBaton = psm.CallbackBaton[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+]
+
 type FooPSMEventKey = string
 
 const (
@@ -258,24 +276,6 @@ func FooPSMMutation[SE FooPSMEvent](cb func(*FooData, SE) error) psm.TransitionM
 	](cb)
 }
 
-type FooPSMHookBaton = psm.HookBaton[
-	*FooKeys,    // implements psm.IKeyset
-	*FooState,   // implements psm.IState
-	FooStatus,   // implements psm.IStatusEnum
-	*FooData,    // implements psm.IStateData
-	*FooEvent,   // implements psm.IEvent
-	FooPSMEvent, // implements psm.IInnerEvent
-]
-
-type FooPSMFullBaton = psm.CallbackBaton[
-	*FooKeys,    // implements psm.IKeyset
-	*FooState,   // implements psm.IState
-	FooStatus,   // implements psm.IStatusEnum
-	*FooData,    // implements psm.IStateData
-	*FooEvent,   // implements psm.IEvent
-	FooPSMEvent, // implements psm.IInnerEvent
-]
-
 // FooPSMLogicHook runs after the mutation is complete. This hook can trigger side effects, including chained events, which are additional events processed by the state machine. Use this for Business Logic which determines the 'next step' in processing.
 func FooPSMLogicHook[
 	SE FooPSMEvent,
@@ -292,8 +292,8 @@ func FooPSMLogicHook[
 	*FooData,    // implements psm.IStateData
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
 	return psm.TransitionHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
@@ -301,7 +301,6 @@ func FooPSMLogicHook[
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
@@ -311,6 +310,7 @@ func FooPSMLogicHook[
 			}
 			return cb(ctx, baton, state, asType)
 		},
+		EventType:   eventType,
 		RunOnFollow: false,
 	}
 }
@@ -331,8 +331,8 @@ func FooPSMDataHook[
 	*FooData,    // implements psm.IStateData
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
 	return psm.TransitionHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
@@ -340,7 +340,6 @@ func FooPSMDataHook[
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
@@ -350,6 +349,7 @@ func FooPSMDataHook[
 			}
 			return cb(ctx, tx, state.PSMData(), asType)
 		},
+		EventType:   eventType,
 		RunOnFollow: true,
 	}
 }
@@ -373,8 +373,11 @@ func FooPSMLinkHook[
 	*FooData,    // implements psm.IStateData
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
+	wrapped := func(ctx context.Context, tx sqrlx.Transaction, state *FooState, event SE, add func(DK, DIE)) error {
+		return cb(ctx, state, event, add)
+	}
 	return psm.TransitionHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
@@ -382,11 +385,49 @@ func FooPSMLinkHook[
 		*FooData,    // implements psm.IStateData
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+			return psm.RunLinkHook(ctx, linkDestination, wrapped, tx, state, event)
+		},
+		EventType:   eventType,
+		RunOnFollow: false,
+	}
+}
+
+// FooPSMLinkDBHook like LinkHook, but has access to the current transaction for reads only (not enforced), use in place of controller logic to look up existing state.
+func FooPSMLinkDBHook[
+	SE FooPSMEvent,
+	DK psm.IKeyset,
+	DIE psm.IInnerEvent,
+](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*FooState,
+		SE,
+		func(DK, DIE),
+	) error) psm.TransitionHook[
+	*FooKeys,    // implements psm.IKeyset
+	*FooState,   // implements psm.IState
+	FooStatus,   // implements psm.IStatusEnum
+	*FooData,    // implements psm.IStateData
+	*FooEvent,   // implements psm.IEvent
+	FooPSMEvent, // implements psm.IInnerEvent
+] {
+	eventType := (*new(SE)).PSMEventKey()
+	return psm.TransitionHook[
+		*FooKeys,    // implements psm.IKeyset
+		*FooState,   // implements psm.IState
+		FooStatus,   // implements psm.IStatusEnum
+		*FooData,    // implements psm.IStateData
+		*FooEvent,   // implements psm.IEvent
+		FooPSMEvent, // implements psm.IInnerEvent
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
 			return psm.RunLinkHook(ctx, linkDestination, cb, tx, state, event)
 		},
+		EventType:   eventType,
 		RunOnFollow: false,
 	}
 }
@@ -414,7 +455,13 @@ func FooPSMGeneralLogicHook(
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton FooPSMFullBaton,
+			state *FooState,
+			event *FooEvent,
+		) error {
 			return cb(ctx, baton, state, event)
 		},
 		RunOnFollow: false,
@@ -443,7 +490,12 @@ func FooPSMGeneralStateDataHook(
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton FooPSMFullBaton,
+			state *FooState,
+		) error {
 			return cb(ctx, tx, state)
 		},
 		RunOnFollow: true,
@@ -473,7 +525,13 @@ func FooPSMGeneralEventDataHook(
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton FooPSMFullBaton,
+			state *FooState,
+			event *FooEvent,
+		) error {
 			return cb(ctx, tx, state, event)
 		},
 		RunOnFollow: true,
@@ -503,7 +561,13 @@ func FooPSMEventPublishHook(
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton FooPSMFullBaton,
+			state *FooState,
+			event *FooEvent,
+		) error {
 			return cb(ctx, baton, state, event)
 		},
 		RunOnFollow: false,
@@ -516,7 +580,7 @@ func FooPSMUpsertPublishHook(
 		context.Context,
 		psm.Publisher,
 		*FooState,
-	) error) psm.GeneralEventHook[
+	) error) psm.GeneralStateHook[
 	*FooKeys,    // implements psm.IKeyset
 	*FooState,   // implements psm.IState
 	FooStatus,   // implements psm.IStatusEnum
@@ -524,7 +588,7 @@ func FooPSMUpsertPublishHook(
 	*FooEvent,   // implements psm.IEvent
 	FooPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralEventHook[
+	return psm.GeneralStateHook[
 		*FooKeys,    // implements psm.IKeyset
 		*FooState,   // implements psm.IState
 		FooStatus,   // implements psm.IStatusEnum
@@ -532,7 +596,12 @@ func FooPSMUpsertPublishHook(
 		*FooEvent,   // implements psm.IEvent
 		FooPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton FooPSMFullBaton, state *FooState, event *FooEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton FooPSMFullBaton,
+			state *FooState,
+		) error {
 			return cb(ctx, baton, state)
 		},
 		RunOnFollow: false,
