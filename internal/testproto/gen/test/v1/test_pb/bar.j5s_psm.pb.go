@@ -39,6 +39,24 @@ type BarPSMEventSpec = psm.EventSpec[
 	BarPSMEvent, // implements psm.IInnerEvent
 ]
 
+type BarPSMHookBaton = psm.HookBaton[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
+]
+
+type BarPSMFullBaton = psm.CallbackBaton[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
+]
+
 type BarPSMEventKey = string
 
 const (
@@ -253,24 +271,6 @@ func BarPSMMutation[SE BarPSMEvent](cb func(*BarData, SE) error) psm.TransitionM
 	](cb)
 }
 
-type BarPSMHookBaton = psm.HookBaton[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarData,    // implements psm.IStateData
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-]
-
-type BarPSMFullBaton = psm.CallbackBaton[
-	*BarKeys,    // implements psm.IKeyset
-	*BarState,   // implements psm.IState
-	BarStatus,   // implements psm.IStatusEnum
-	*BarData,    // implements psm.IStateData
-	*BarEvent,   // implements psm.IEvent
-	BarPSMEvent, // implements psm.IInnerEvent
-]
-
 // BarPSMLogicHook runs after the mutation is complete. This hook can trigger side effects, including chained events, which are additional events processed by the state machine. Use this for Business Logic which determines the 'next step' in processing.
 func BarPSMLogicHook[
 	SE BarPSMEvent,
@@ -287,8 +287,8 @@ func BarPSMLogicHook[
 	*BarData,    // implements psm.IStateData
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
 	return psm.TransitionHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
@@ -296,7 +296,6 @@ func BarPSMLogicHook[
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
@@ -306,6 +305,7 @@ func BarPSMLogicHook[
 			}
 			return cb(ctx, baton, state, asType)
 		},
+		EventType:   eventType,
 		RunOnFollow: false,
 	}
 }
@@ -326,8 +326,8 @@ func BarPSMDataHook[
 	*BarData,    // implements psm.IStateData
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
 	return psm.TransitionHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
@@ -335,7 +335,6 @@ func BarPSMDataHook[
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			asType, ok := any(event.UnwrapPSMEvent()).(SE)
@@ -345,6 +344,7 @@ func BarPSMDataHook[
 			}
 			return cb(ctx, tx, state.PSMData(), asType)
 		},
+		EventType:   eventType,
 		RunOnFollow: true,
 	}
 }
@@ -368,8 +368,11 @@ func BarPSMLinkHook[
 	*BarData,    // implements psm.IStateData
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
-	SE,          // Specific event type for the transition
 ] {
+	eventType := (*new(SE)).PSMEventKey()
+	wrapped := func(ctx context.Context, tx sqrlx.Transaction, state *BarState, event SE, add func(DK, DIE)) error {
+		return cb(ctx, state, event, add)
+	}
 	return psm.TransitionHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
@@ -377,11 +380,49 @@ func BarPSMLinkHook[
 		*BarData,    // implements psm.IStateData
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
-		SE,          // Specific event type for the transition
+	]{
+		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+			return psm.RunLinkHook(ctx, linkDestination, wrapped, tx, state, event)
+		},
+		EventType:   eventType,
+		RunOnFollow: false,
+	}
+}
+
+// BarPSMLinkDBHook like LinkHook, but has access to the current transaction for reads only (not enforced), use in place of controller logic to look up existing state.
+func BarPSMLinkDBHook[
+	SE BarPSMEvent,
+	DK psm.IKeyset,
+	DIE psm.IInnerEvent,
+](
+	linkDestination psm.LinkDestination[DK, DIE],
+	cb func(
+		context.Context,
+		sqrlx.Transaction,
+		*BarState,
+		SE,
+		func(DK, DIE),
+	) error) psm.TransitionHook[
+	*BarKeys,    // implements psm.IKeyset
+	*BarState,   // implements psm.IState
+	BarStatus,   // implements psm.IStatusEnum
+	*BarData,    // implements psm.IStateData
+	*BarEvent,   // implements psm.IEvent
+	BarPSMEvent, // implements psm.IInnerEvent
+] {
+	eventType := (*new(SE)).PSMEventKey()
+	return psm.TransitionHook[
+		*BarKeys,    // implements psm.IKeyset
+		*BarState,   // implements psm.IState
+		BarStatus,   // implements psm.IStatusEnum
+		*BarData,    // implements psm.IStateData
+		*BarEvent,   // implements psm.IEvent
+		BarPSMEvent, // implements psm.IInnerEvent
 	]{
 		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
 			return psm.RunLinkHook(ctx, linkDestination, cb, tx, state, event)
 		},
+		EventType:   eventType,
 		RunOnFollow: false,
 	}
 }
@@ -409,7 +450,13 @@ func BarPSMGeneralLogicHook(
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton BarPSMFullBaton,
+			state *BarState,
+			event *BarEvent,
+		) error {
 			return cb(ctx, baton, state, event)
 		},
 		RunOnFollow: false,
@@ -438,7 +485,12 @@ func BarPSMGeneralStateDataHook(
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton BarPSMFullBaton,
+			state *BarState,
+		) error {
 			return cb(ctx, tx, state)
 		},
 		RunOnFollow: true,
@@ -468,7 +520,13 @@ func BarPSMGeneralEventDataHook(
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton BarPSMFullBaton,
+			state *BarState,
+			event *BarEvent,
+		) error {
 			return cb(ctx, tx, state, event)
 		},
 		RunOnFollow: true,
@@ -498,7 +556,13 @@ func BarPSMEventPublishHook(
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton BarPSMFullBaton,
+			state *BarState,
+			event *BarEvent,
+		) error {
 			return cb(ctx, baton, state, event)
 		},
 		RunOnFollow: false,
@@ -511,7 +575,7 @@ func BarPSMUpsertPublishHook(
 		context.Context,
 		psm.Publisher,
 		*BarState,
-	) error) psm.GeneralEventHook[
+	) error) psm.GeneralStateHook[
 	*BarKeys,    // implements psm.IKeyset
 	*BarState,   // implements psm.IState
 	BarStatus,   // implements psm.IStatusEnum
@@ -519,7 +583,7 @@ func BarPSMUpsertPublishHook(
 	*BarEvent,   // implements psm.IEvent
 	BarPSMEvent, // implements psm.IInnerEvent
 ] {
-	return psm.GeneralEventHook[
+	return psm.GeneralStateHook[
 		*BarKeys,    // implements psm.IKeyset
 		*BarState,   // implements psm.IState
 		BarStatus,   // implements psm.IStatusEnum
@@ -527,7 +591,12 @@ func BarPSMUpsertPublishHook(
 		*BarEvent,   // implements psm.IEvent
 		BarPSMEvent, // implements psm.IInnerEvent
 	]{
-		Callback: func(ctx context.Context, tx sqrlx.Transaction, baton BarPSMFullBaton, state *BarState, event *BarEvent) error {
+		Callback: func(
+			ctx context.Context,
+			tx sqrlx.Transaction,
+			baton BarPSMFullBaton,
+			state *BarState,
+		) error {
 			return cb(ctx, baton, state)
 		},
 		RunOnFollow: false,

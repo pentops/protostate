@@ -72,8 +72,9 @@ func TestTransitionBuilder(t *testing.T) {
 
 	gotTransitions := []string{}
 
-	hs.From(testST(1)).OnEvent("event1").
-		LogicHook(TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+	hs.From(testST(1)).
+		OnEvent("event1").
+		Hook(TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE]{
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
@@ -85,6 +86,7 @@ func TestTransitionBuilder(t *testing.T) {
 				return nil
 			},
 			RunOnFollow: true,
+			EventType:   "event1",
 		}).
 		Mutate(TransitionMutation[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1](func(
 			state *testSD,
@@ -94,8 +96,9 @@ func TestTransitionBuilder(t *testing.T) {
 			return nil
 		}))
 
-	hs.From().OnEvent("event1").LogicHook(
-		TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+	hs.From().
+		OnEvent("event1").
+		Hook(TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE]{
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
@@ -109,8 +112,8 @@ func TestTransitionBuilder(t *testing.T) {
 			RunOnFollow: true,
 		})
 
-	hs.From().LogicHook(
-		TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE, *testIE1]{
+	hs.From().
+		Hook(TransitionHook[*testK, *testS, testST, *testSD, *testE, testIE]{
 			Callback: func(
 				ctx context.Context,
 				_ sqrlx.Transaction,
@@ -121,6 +124,7 @@ func TestTransitionBuilder(t *testing.T) {
 				gotTransitions = append(gotTransitions, "C")
 				return nil
 			},
+			EventType:   "event1",
 			RunOnFollow: true,
 		})
 

@@ -158,22 +158,22 @@ type TransitionHook[
 	SD IStateData,
 	E IEvent[K, S, ST, SD, IE],
 	IE IInnerEvent,
-	SE IInnerEvent,
 ] struct {
 	Callback    func(context.Context, sqrlx.Transaction, CallbackBaton[K, S, ST, SD, E, IE], S, E) error
-	RunOnFollow bool // If true, this hook runs on follow-up events, not just the initial transition.
+	RunOnFollow bool   // If true, this hook runs on follow-up events, not just the initial transition.
+	EventType   string // If set, this hook only runs for the specific event type.
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error { // nolint:unused // Used by genereted code.
+func (hook TransitionHook[K, S, ST, SD, E, IE]) runTransition(ctx context.Context, tx sqrlx.Transaction, baton CallbackBaton[K, S, ST, SD, E, IE], state S, event E) error { // nolint:unused // Used by genereted code.
 
 	return hook.Callback(ctx, tx, baton, state, event)
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) eventType() string { // nolint:unused // Used by genereted code.
-	return (*new(SE)).PSMEventKey()
+func (hook TransitionHook[K, S, ST, SD, E, IE]) eventType() string { // nolint:unused // Used by genereted code.
+	return hook.EventType
 }
 
-func (hook TransitionHook[K, S, ST, SD, E, IE, SE]) runOnFollow() bool { // nolint:unused // Used by genereted code.
+func (hook TransitionHook[K, S, ST, SD, E, IE]) runOnFollow() bool { // nolint:unused // Used by genereted code.
 	return hook.RunOnFollow
 }
 
@@ -235,7 +235,7 @@ func RunLinkHook[
 ](
 	ctx context.Context,
 	destination LinkDestination[DK, DIE],
-	callback func(context.Context, S, SE, func(DK, DIE)) error,
+	callback func(context.Context, sqrlx.Transaction, S, SE, func(DK, DIE)) error,
 	tx sqrlx.Transaction,
 	state S,
 	event E,
@@ -251,7 +251,7 @@ func RunLinkHook[
 	}
 
 	events := make([]matchedEvent, 0, 1)
-	err := callback(ctx, state, asType, func(key DK, event DIE) {
+	err := callback(ctx, tx, state, asType, func(key DK, event DIE) {
 		events = append(events, matchedEvent{Key: key, Inner: event})
 	})
 	if err != nil {
