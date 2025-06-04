@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 func silenceLogger() func() {
 	defaultLogger := log.DefaultLogger
-	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields map[string]any) {
+	log.DefaultLogger = log.NewCallbackLogger(func(level string, msg string, fields []slog.Attr) {
 	})
 	return func() {
 		log.DefaultLogger = defaultLogger

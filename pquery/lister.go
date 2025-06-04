@@ -213,7 +213,7 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 	}
 
 	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
-	validateOpt := proto.GetExtension(arrayFieldOpt, validate.E_Field).(*validate.FieldConstraints)
+	validateOpt := proto.GetExtension(arrayFieldOpt, validate.E_Field).(*validate.FieldRules)
 	if repeated := validateOpt.GetRepeated(); repeated != nil {
 		if repeated.MaxItems != nil {
 			ll.defaultPageSize = *repeated.MaxItems
