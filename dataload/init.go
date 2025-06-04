@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"buf.build/go/protovalidate"
 	"buf.build/go/protoyaml"
-	"github.com/bufbuild/protovalidate-go"
 
 	"github.com/google/uuid"
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
