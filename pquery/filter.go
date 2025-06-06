@@ -253,6 +253,18 @@ func filtersForField(field protoreflect.FieldDescriptor) ([]any, error) {
 			}
 		}
 
+	case *list_j5pb.FieldConstraint_Date:
+		if fieldOps.Date.Filtering != nil && fieldOps.Date.Filtering.Filterable {
+			for _, val := range fieldOps.Date.Filtering.DefaultFilters {
+				t, err := time.Parse(time.DateOnly, val)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing default filter (%s): %w", field.JSONName(), err)
+				}
+
+				vals = append(vals, t)
+			}
+		}
+
 	case *list_j5pb.FieldConstraint_Oneof:
 		if fieldOps.Oneof.Filtering != nil && fieldOps.Oneof.Filtering.Filterable {
 			for _, val := range fieldOps.Oneof.Filtering.DefaultFilters {
