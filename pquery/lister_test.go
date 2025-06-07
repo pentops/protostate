@@ -63,9 +63,11 @@ func TestBuildListReflection(t *testing.T) {
 				package test;
 
 				// Import everything which may be used
+				import "j5/ext/v1/annotations.proto";
 				import "j5/list/v1/page.proto";
 				import "j5/list/v1/query.proto";
 				import "j5/list/v1/annotations.proto";
+				import "j5/types/date/v1/date.proto";
 				import "buf/validate/validate.proto";
 				import "google/protobuf/timestamp.proto";
 				` + input,
@@ -263,6 +265,47 @@ func TestBuildListReflection(t *testing.T) {
 				field := lr.defaultSortFields[0]
 				assert.Equal(t, "->'bar'->>'timestamp'", field.Path.JSONBArrowPath())
 				assert.Equal(t, "$.bar.timestamp", field.Path.JSONPathQuery())
+			}
+		})
+
+	runHappy("filter by bar date", `
+		message FooListRequest {
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
+
+			option (j5.list.v1.list_request) = {
+				sort_tiebreaker: ["bar.id"]
+			};
+		}
+
+		message FooListResponse {
+			repeated Foo foos = 1;
+			j5.list.v1.PageResponse page = 2;
+		}
+
+		message Foo {
+			string id = 1;
+			Bar bar = 2;
+		}
+
+		message Bar {
+			string id = 1;
+			j5.types.date.v1.Date date = 2 [
+				(j5.list.v1.field).date.filtering = {
+					filterable: true,
+					default_filters: ["2025-01-01"]
+				}
+			];
+		}
+		`,
+		nil,
+		func(t *testing.T, lr *ListReflectionSet) {
+			if len(lr.defaultFilterFields) != 1 {
+				t.Error("expected one filter field, got", len(lr.defaultFilterFields))
+			} else {
+				field := lr.defaultFilterFields[0]
+				assert.Equal(t, "->'bar'->>'date'", field.Path.JSONBArrowPath())
+				assert.Equal(t, "$.bar.date", field.Path.JSONPathQuery())
 			}
 		})
 
