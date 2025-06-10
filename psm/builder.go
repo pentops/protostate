@@ -27,15 +27,6 @@ type StateMachineConfig[
 	tableName *string
 }
 
-// DEPRECATED: This does nothing.
-type SystemActor any
-
-// DEPRECATED: This does nothing.
-func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) SystemActor(systemActor SystemActor) *StateMachineConfig[K, S, ST, SD, E, IE] {
-	//smc.systemActor = systemActor
-	return smc
-}
-
 func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) TableMap(tableMap *TableMap) *StateMachineConfig[K, S, ST, SD, E, IE] {
 	smc.tableMap = tableMap
 	return smc

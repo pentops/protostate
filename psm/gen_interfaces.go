@@ -87,11 +87,15 @@ type IEvent[
 	SD IStateData,
 	Inner any,
 ] interface {
-	proto.Message
+	looseEvent
 	UnwrapPSMEvent() Inner
 	SetPSMEvent(Inner) error
 	PSMKeys() K
 	SetPSMKeys(K)
+}
+
+type looseEvent interface {
+	proto.Message
 	PSMMetadata() *psm_j5pb.EventMetadata
 	PSMIsSet() bool
 }

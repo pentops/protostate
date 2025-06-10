@@ -21,7 +21,6 @@ func (t *CreateTableBuilder) Column(name string, typ ColumnType, options ...Colu
 	column := &column{
 		name:     name,
 		typeName: typ,
-		flags:    []string{},
 	}
 	for _, opt := range options {
 		opt(column)
@@ -59,9 +58,9 @@ type column struct {
 
 	primaryKey bool // Multi Primary Key is possible
 	notNull    bool
+	unique     bool
 
 	typeName ColumnType
-	flags    []string
 }
 
 type ColumnOption func(*column)
@@ -74,6 +73,10 @@ func PrimaryKey(c *column) {
 
 func NotNull(c *column) {
 	c.notNull = true
+}
+
+func Unique(c *column) {
+	c.unique = true
 }
 
 type ColumnType string
@@ -101,6 +104,9 @@ func (t *CreateTableBuilder) Build() (*Table, error) {
 		}
 		if col.notNull {
 			column.Flags = append(column.Flags, "NOT NULL")
+		}
+		if col.unique {
+			column.Flags = append(column.Flags, "UNIQUE")
 		}
 		table.Columns = append(table.Columns, column)
 	}
@@ -138,7 +144,7 @@ type ForeignKey struct {
 }
 
 func (tt *Table) DownSQL() (string, error) {
-	return fmt.Sprintf("DROP TABLE %s;", tt.Name), nil
+	return fmt.Sprintf("DROP TABLE IF EXISTS %s;", tt.Name), nil
 }
 
 func (table *Table) ToSQL() (string, error) {
