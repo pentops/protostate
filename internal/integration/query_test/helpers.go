@@ -34,7 +34,7 @@ func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
 	t.Log(stmt, args)
 }
 
-func getRawState(db *sqrlx.Wrapper, id string) (string, error) {
+func getRawState(db sqrlx.Transactor, id string) (string, error) {
 	var state []byte
 	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
 		q := sqrl.Select("state").From("foo").Where("foo_id = ?", id)
@@ -53,7 +53,7 @@ func getRawState(db *sqrlx.Wrapper, id string) (string, error) {
 	return string(state), nil
 }
 
-func getRawEvent(db *sqrlx.Wrapper, id string) (string, error) {
+func getRawEvent(db sqrlx.Transactor, id string) (string, error) {
 	var data []byte
 	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
 		q := sqrl.Select("data").From("foo_event").Where("id = ?", id)

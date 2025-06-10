@@ -58,8 +58,7 @@ func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSME
 		panic("metaTenantId is required")
 	}
 	e := &test_pb.FooPSMEventSpec{
-		EventID: uuid.NewString(),
-		Keys:    keys,
+		Keys: keys,
 		Cause: &psm_j5pb.Cause{
 			Type: &psm_j5pb.Cause_ExternalEvent{
 				ExternalEvent: &psm_j5pb.ExternalEventCause{
@@ -71,42 +70,5 @@ func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSME
 		Event: et,
 	}
 
-	return e
-}
-
-func newBarCreatedEvent(barID string, mod func(c *test_pb.BarEventType_Created)) *test_pb.BarPSMEventSpec {
-	created := &test_pb.BarEventType_Created{
-		Name:  "bar",
-		Field: "event",
-	}
-
-	if mod != nil {
-		mod(created)
-	}
-
-	return newBarEvent(barID, func(e *test_pb.BarPSMEventSpec) {
-		e.Event = created
-	})
-}
-
-var barOtherID = "FCC73FA5-B653-4DCC-AA6F-3548BECB7B2A"
-
-func newBarEvent(barID string, mod func(e *test_pb.BarPSMEventSpec)) *test_pb.BarPSMEventSpec {
-	e := &test_pb.BarPSMEventSpec{
-		EventID: uuid.NewString(),
-		Keys: &test_pb.BarKeys{
-			BarId:      barID,
-			BarOtherId: barOtherID,
-		},
-		Cause: &psm_j5pb.Cause{
-			Type: &psm_j5pb.Cause_ExternalEvent{
-				ExternalEvent: &psm_j5pb.ExternalEventCause{
-					SystemName: "a",
-					EventName:  "b",
-				},
-			},
-		},
-	}
-	mod(e)
 	return e
 }

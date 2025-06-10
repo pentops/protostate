@@ -8,6 +8,7 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/pgtest.go/pgtest"
+	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
@@ -36,8 +37,10 @@ func NewUniverse(t *testing.T) (*flowtest.Stepper[*testing.T], *Universe) {
 	return stepper, uu
 }
 
+const migrationDir = "../testproto/db/stage_2"
+
 func setupUniverse(t flowtest.Asserter, uu *Universe) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
+	conn := pgtest.GetTestDB(t, pgtest.WithDir(migrationDir))
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -63,6 +66,13 @@ func setupUniverse(t flowtest.Asserter, uu *Universe) {
 	uu.BarStateMachine = sm.Bar
 	uu.FooQuery = NewMiniFooController(db, fooQuery)
 	uu.BarQuery = NewMiniBarController(db, barQuery)
+
+	if err := pgmigrate.CreateStateMachines(context.Background(), conn,
+		sm.Foo.StateTableSpec(),
+		sm.Bar.StateTableSpec(),
+	); err != nil {
+		t.Fatal(err.Error())
+	}
 }
 
 type MiniFooController struct {

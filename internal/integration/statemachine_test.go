@@ -5,18 +5,16 @@ import (
 	"errors"
 	"testing"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
-	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
+	"github.com/pentops/golib/gl"
+	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
-	"github.com/pressly/goose"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/utils/ptr"
 )
@@ -31,35 +29,7 @@ func TestStateEntityExtensions(t *testing.T) {
 }
 
 func TestFooStateField(t *testing.T) {
-	conn := pgtest.GetTestDB(t)
-
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	barSpec, err := test_pb.BarPSMBuilder().BuildQueryTableSpec()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	if err := pgmigrate.CreateStateMachines(context.Background(), conn,
-		sm.StateTableSpec(),
-		*barSpec,
-	); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	if err := goose.Up(conn, stage1MigrationsDir); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
+	ss, uu := NewUniverse(t)
 	defer ss.RunSteps(t)
 
 	fooID := uuid.NewString()
@@ -67,7 +37,7 @@ func TestFooStateField(t *testing.T) {
 
 	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		event := newFooCreatedEvent(fooID, tenantID, nil)
-		stateOut, err := sm.Transition(ctx, event)
+		stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -79,7 +49,7 @@ func TestFooStateField(t *testing.T) {
 		event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 			u.Weight = ptr.To(int64(11))
 		})
-		stateOut, err := sm.Transition(ctx, event)
+		stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -90,7 +60,6 @@ func TestFooStateField(t *testing.T) {
 	ss.Step("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
 		differentTenantId := uuid.NewString()
 		event := &test_pb.FooPSMEventSpec{
-			EventID: uuid.NewString(),
 			Keys: &test_pb.FooKeys{
 				FooId:        fooID,
 				TenantId:     &differentTenantId,
@@ -102,38 +71,11 @@ func TestFooStateField(t *testing.T) {
 				Weight: ptr.To(int64(11)),
 			},
 		}
-		_, err := sm.Transition(ctx, event)
+		_, err := uu.FooStateMachine.Transition(ctx, event)
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
-}
-
-func TestBarStateMachine(t *testing.T) {
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewBarStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	barID := uuid.NewString()
-	event := newBarCreatedEvent(barID, nil)
-
-	stateOut, err := sm.Transition(ctx, event)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	if stateOut.GetStatus() != test_pb.BarStatus_ACTIVE {
-		t.Fatalf("Expect state ACTIVE, got %s", stateOut.GetStatus().ShortString())
-	}
 }
 
 func TestStateMachineHook(t *testing.T) {
@@ -228,6 +170,14 @@ func TestStateMachineIdempotencyInitial(t *testing.T) {
 	tenantID := uuid.NewString()
 	fooID := uuid.NewString()
 	event1 := newFooCreatedEvent(fooID, tenantID, nil)
+	event1.Cause = &psm_j5pb.Cause{
+		Type: &psm_j5pb.Cause_ExternalEvent{
+			ExternalEvent: &psm_j5pb.ExternalEventCause{
+				SystemName: "test",
+				ExternalId: gl.Ptr("external-id"),
+			},
+		},
+	}
 
 	flow.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 
@@ -296,6 +246,15 @@ func TestStateMachineIdempotencySnapshot(t *testing.T) {
 		c.Name = "1"
 	})
 
+	event1.Cause = &psm_j5pb.Cause{
+		Type: &psm_j5pb.Cause_ExternalEvent{
+			ExternalEvent: &psm_j5pb.ExternalEventCause{
+				SystemName: "test",
+				ExternalId: gl.Ptr("external-id"),
+			},
+		},
+	}
+
 	flow.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		state, err := uu.FooStateMachine.Transition(ctx, event1)
 		if err != nil {
@@ -357,6 +316,8 @@ func TestFooStateMachine(t *testing.T) {
 	})
 	statesOut := map[string]*test_pb.FooState{}
 
+	var event4ID string
+
 	flow.Setup(func(ctx context.Context, t flowtest.Asserter) error {
 		for _, event := range []*test_pb.FooPSMEventSpec{event1, event2, event3, event4} {
 			stateOut, err := uu.FooStateMachine.Transition(ctx, event)
@@ -414,6 +375,25 @@ func TestFooStateMachine(t *testing.T) {
 				t.Fatalf("expected sequence %d (idx %d), got %d", expect, idx, event.Metadata.Sequence)
 			}
 		}
+
+	})
+
+	flow.Step("ListEvents2", func(ctx context.Context, t flowtest.Asserter) {
+		req := &test_spb.FooEventsRequest{
+			FooId: foo2ID,
+		}
+
+		res, err := uu.FooQuery.FooEvents(ctx, req)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+		if len(res.Events) != 3 {
+			t.Fatalf("expected 3 events for foo 2, got %d", len(res.Events))
+		}
+		event4ID = res.Events[1].Metadata.EventId
+
 	})
 
 	flow.Step("Get2", func(ctx context.Context, t flowtest.Asserter) {
@@ -449,7 +429,8 @@ func TestFooStateMachine(t *testing.T) {
 			t.Fatalf("expected derived event to be caused by a PSM event")
 			return
 		}
-		if causeEvent.EventId != event4.EventID {
+		if causeEvent.EventId != event4ID {
+			t.Log(prototext.Format(causeEvent))
 			t.Fatalf("expected derived event to be caused by event 4")
 		}
 	})

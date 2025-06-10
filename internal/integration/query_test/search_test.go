@@ -4,64 +4,19 @@ import (
 	"context"
 	"testing"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
-	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
-	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
-	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
-	"github.com/pressly/goose"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestDynamicSearching(t *testing.T) {
-	conn := pgtest.GetTestDB(t)
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	barSpec, err := psm.BuildQueryTableSpec(
-		(&test_pb.BarState{}).ProtoReflect().Descriptor(),
-		(&test_pb.BarEvent{}).ProtoReflect().Descriptor(),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stateSpecs := []psm.QueryTableSpec{
-		sm.StateTableSpec(),
-		barSpec,
-	}
-
-	if err := pgmigrate.CreateStateMachines(context.Background(), conn, stateSpecs...); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	if err := pgmigrate.AddIndexes(context.Background(), conn, stateSpecs...); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	if err := goose.Up(conn, stage2MigrationsDir); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestDynamicSearching")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	tenants := []string{uuid.NewString()}
 	setupFooListableData(ss, sm, tenants, 30)
@@ -83,7 +38,7 @@ func TestDynamicSearching(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err := queryer.List(ctx, db, req, res)
 			if err != nil {
 				t.Fatal(err.Error())
 			}
