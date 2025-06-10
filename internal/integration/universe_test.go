@@ -37,10 +37,16 @@ func NewUniverse(t *testing.T) (*flowtest.Stepper[*testing.T], *Universe) {
 	return stepper, uu
 }
 
-const migrationDir = "../testproto/db/stage_2"
-
 func setupUniverse(t flowtest.Asserter, uu *Universe) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(migrationDir))
+	conn := pgtest.GetTestDB(t)
+	_, err := conn.Exec(`
+	CREATE TABLE foo_cache (
+		id uuid PRIMARY KEY,
+		weight int NOT NULL,
+		height int NOT NULL,
+		length int NOT NULL
+	);`)
+	t.NoError(err)
 	db, err := sqrlx.New(conn, sq.Dollar)
 	if err != nil {
 		t.Fatal(err.Error())
