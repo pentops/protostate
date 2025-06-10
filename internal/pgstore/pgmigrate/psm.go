@@ -224,7 +224,7 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 	stateTable := CreateTable(spec.State.TableName)
 
 	eventTable := CreateTable(spec.Event.TableName).
-		Column(spec.Event.ID.ColumnName, uuidType, PrimaryKey)
+		Column(spec.Event.ID.ColumnName, id62Type, PrimaryKey)
 
 	eventForeignKey := eventTable.ForeignKey("state", spec.State.TableName)
 	for _, key := range spec.KeyColumns {
@@ -252,7 +252,9 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	stateTable.Column(spec.State.Root.ColumnName, jsonbType, NotNull)
 
-	eventTable.Column(spec.Event.Timestamp.ColumnName, timestamptzType, NotNull).
+	eventTable.
+		Column(spec.Event.Timestamp.ColumnName, timestamptzType, NotNull).
+		Column(spec.Event.IdempotencyHash.ColumnName, textType, NotNull, Unique).
 		Column(spec.Event.Sequence.ColumnName, intType, NotNull).
 		Column(spec.Event.Root.ColumnName, jsonbType, NotNull).
 		Column(spec.Event.StateSnapshot.ColumnName, jsonbType, NotNull)

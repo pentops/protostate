@@ -8,15 +8,8 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
-	sq "github.com/elgris/sqrl"
-	"github.com/google/uuid"
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
-	"github.com/pentops/log.go/log"
-	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var ErrDuplicateEventID = errors.New("duplicate event ID")
@@ -78,11 +71,17 @@ func NewStateMachine[
 		return nil, err
 	}
 
+	validator, err := protovalidate.New()
+	if err != nil {
+		panic("failed to initialize validator: " + err.Error())
+	}
+
 	return &StateMachine[K, S, ST, SD, E, IE]{
 		keyValueFunc:     cb.keyValues,
 		initialStateFunc: cb.initialStateFunc,
 		tableMap:         cb.tableMap,
 		//SystemActor:      cb.systemActor,
+		validator: validator,
 	}, nil
 }
 
@@ -203,48 +202,6 @@ func (sm *DBStateMachine[K, S, ST, SD, E, IE]) FollowEvents(ctx context.Context,
 	return nil
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context, tx sqrlx.Transaction, keys K) (S, error) {
-	state := (*new(S)).ProtoReflect().New().Interface().(S)
-
-	selectQuery := sq.
-		Select(sm.tableMap.State.Root.ColumnName).
-		From(sm.tableMap.State.TableName)
-
-	allKeys, err := sm.keyValues(keys)
-	if err != nil {
-		return state, err
-	}
-	for _, key := range allKeys.values {
-		if !key.Primary {
-			continue
-		}
-		selectQuery = selectQuery.Where(sq.Eq{key.ColumnName: key.value})
-	}
-
-	var stateJSON []byte
-	err = tx.SelectRow(ctx, selectQuery).Scan(&stateJSON)
-	if errors.Is(err, sql.ErrNoRows) {
-		state.SetPSMKeys(proto.Clone(keys).(K))
-
-		if len(allKeys.missingRequired) > 0 {
-			return state, fmt.Errorf("missing required key(s) %v in initial event", allKeys.missingRequired)
-		}
-
-		// OK, leave empty state alone
-		return state, nil
-	}
-	if err != nil {
-		qq, _, _ := selectQuery.ToSql()
-		return state, fmt.Errorf("selecting current state (%s): %w", qq, err)
-	}
-
-	if err := protojson.Unmarshal(stateJSON, state); err != nil {
-		return state, err
-	}
-
-	return state, nil
-}
-
 type keyValues struct {
 	values []keyValue
 
@@ -308,151 +265,30 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) (*keyValue
 	}, nil
 
 }
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
-	ctx context.Context,
-	tx sqrlx.Transaction,
-	state S,
-	event E,
-) error {
-
-	stateDBValue, err := dbconvert.MarshalProto(state)
-	if err != nil {
-		return fmt.Errorf("state field: %w", err)
-	}
-
-	eventDBValue, err := dbconvert.MarshalProto(event)
-	if err != nil {
-		return fmt.Errorf("event field: %w", err)
-	}
-
-	// TODO: This does not change during transitions, so should be calculated
-	// early and once.
-	keyValues, err := sm.keyValues(state.PSMKeys())
-	if err != nil {
-		return fmt.Errorf("key fields: %w", err)
-	}
-	if len(keyValues.missingRequired) > 0 {
-		return fmt.Errorf("missing required key(s) %v in store", keyValues.missingRequired)
-	}
-
-	eventMeta := event.PSMMetadata()
-
-	upsertStateQuery := sqrlx.Upsert(sm.tableMap.State.TableName)
-
-	insertValues := []any{}
-	insertColumns := []string{}
-
-	insertEventQuery := sq.Insert(sm.tableMap.Event.TableName)
-
-	insertColumns = append(insertColumns, sm.tableMap.Event.ID.ColumnName)
-	insertValues = append(insertValues, eventMeta.EventId)
-
-	for _, key := range keyValues.values {
-		if key.Primary {
-			upsertStateQuery.Key(key.ColumnName, key.value)
-		} else {
-			upsertStateQuery.Set(key.ColumnName, key.value)
-		}
-
-		insertColumns = append(insertColumns, key.ColumnName)
-		insertValues = append(insertValues, key.value)
-	}
-
-	insertColumns = append(insertColumns,
-		sm.tableMap.Event.Timestamp.ColumnName,
-		sm.tableMap.Event.Sequence.ColumnName,
-		sm.tableMap.Event.Root.ColumnName,
-		sm.tableMap.Event.StateSnapshot.ColumnName,
-	)
-	insertValues = append(insertValues,
-		eventMeta.Timestamp.AsTime(),
-		eventMeta.Sequence,
-		eventDBValue,
-		stateDBValue,
-	)
-	insertEventQuery.Columns(insertColumns...).Values(insertValues...)
-
-	upsertStateQuery.Set(sm.tableMap.State.Root.ColumnName, stateDBValue)
-
-	_, err = tx.Insert(ctx, upsertStateQuery)
-	if err != nil {
-		log.WithFields(ctx, map[string]any{
-			"keys":  keyValues,
-			"error": err.Error(),
-		}).Error("failed to upsert state")
-		return fmt.Errorf("upsert state: %w", err)
-	}
-
-	_, err = tx.Insert(ctx, insertEventQuery)
-	if err != nil {
-		log.WithFields(ctx, map[string]any{
-			"keys":  keyValues,
-			"error": err.Error(),
-		}).Error("failed to insert event")
-		return fmt.Errorf("insert event: %w", err)
-	}
-
-	return nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) eventQuery(eventID string) *sq.SelectBuilder {
-
-	selectQuery := sq.
-		Select(sm.tableMap.Event.Root.ColumnName).
-		From(sm.tableMap.Event.TableName).
-		Where(sq.Eq{sm.tableMap.Event.ID.ColumnName: eventID})
-
-	return selectQuery
-}
-
-// followEventDeduplicate is similar to the firstEventUniqueCheck, but it
-// compares the entire event including metadata, as this is not designed to
-// handle consumer idempotency.
-func (sm *StateMachine[K, S, ST, SD, E, IE]) followEventDeduplicate(ctx context.Context, tx sqrlx.Transaction, event E) (bool, error) {
-	selectQuery := sm.eventQuery(event.PSMMetadata().EventId)
-
-	var eventData, stateData []byte
-	err := tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("selecting event for deduplication: %w", err)
-	}
-
-	existing := (*new(E)).ProtoReflect().New().Interface().(E)
-	if err := protojson.Unmarshal(eventData, existing); err != nil {
-		return true, fmt.Errorf("unmarshalling event: %w", err)
-	}
-
-	if !proto.Equal(existing, event) {
-		return true, fmt.Errorf("event %s already exists with different data", existing.PSMMetadata().EventId)
-	}
-
-	return true, nil
-}
-
 func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, tx sqrlx.Transaction, events []E) error {
 
 	for _, event := range events {
 
-		if err := sm.validateEvent(event); err != nil {
+		if err := sm.validator.Validate(event); err != nil {
 			return fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
-		}
-
-		exists, err := sm.followEventDeduplicate(ctx, tx, event)
-		if err != nil {
-			return err
-		}
-		if exists {
-			continue
 		}
 
 		state, err := sm.getCurrentState(ctx, tx, event.PSMKeys())
 		if err != nil {
 			return err
+		}
+
+		wrapped, err := prepareFollowEvent[K, S, ST, SD, E, IE](event, state)
+		if err != nil {
+			return err
+		}
+
+		exists, err := sm.followEventDeduplicate(ctx, tx, wrapped)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
 		}
 
 		if state.GetStatus() == 0 {
@@ -463,9 +299,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvents(ctx context.Context, t
 			state = newState
 		}
 
-		sm.nextStateEvent(state, event.PSMMetadata())
+		incrementEventSequence(state, event.PSMMetadata())
 
-		err = sm.followEvent(ctx, tx, state, event)
+		err = sm.followEvent(ctx, tx, wrapped)
 		if err != nil {
 			return fmt.Errorf("run event %s (%s): %w", event.PSMMetadata().EventId, event.UnwrapPSMEvent().PSMEventKey(), err)
 		}
@@ -487,9 +323,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInitialEvent(ctx context.Context
 	}
 
 	eventSpec := &EventSpec[K, S, ST, SD, E, IE]{
-		Keys:    keys,
-		EventID: uuid.NewString(),
-		Event:   innerEvent,
+		Keys:  keys,
+		Event: innerEvent,
 		Cause: &psm_j5pb.Cause{
 			Type: &psm_j5pb.Cause_Init{
 				Init: &psm_j5pb.InitCause{},
@@ -497,13 +332,13 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInitialEvent(ctx context.Context
 		},
 	}
 
-	prepared, err := sm.prepareEvent(state, eventSpec)
+	prepared, err := eventSpec.buildWrapper(state)
 	if err != nil {
 		return state, fmt.Errorf("prepare event: %w", err)
 	}
 
 	// RunEvent modifies state in place
-	returnState, err := sm.runEvent(ctx, tx, state, prepared, captureFinalState)
+	returnState, err := sm.runEvent(ctx, tx, prepared, captureFinalState)
 	if err != nil {
 		return state, fmt.Errorf("input event %s: %w", eventSpec.Event.PSMEventKey(), err)
 	}
@@ -514,17 +349,8 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInitialEvent(ctx context.Context
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	if err := outerEvent.validateAndPrepare(); err != nil {
+		// type of 'S' is *State, we can't return nil, error return situations suck.
 		return *new(S), fmt.Errorf("event %s: %w", outerEvent.Event.ProtoReflect().Descriptor().FullName(), err)
-	}
-
-	if outerEvent.EventID == "" {
-		outerEvent.EventID = uuid.NewString()
-	}
-
-	if existingState, didExist, err := sm.firstEventUniqueCheck(ctx, tx, outerEvent.EventID, outerEvent.Event); err != nil {
-		return existingState, err
-	} else if didExist {
-		return existingState, nil
 	}
 
 	state, err := sm.getCurrentState(ctx, tx, outerEvent.Keys)
@@ -549,14 +375,18 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		outerEvent.Keys = state.PSMKeys()
 	}
 
-	prepared, err := sm.prepareEvent(state, outerEvent)
+	prepared, err := outerEvent.buildWrapper(state)
 	if err != nil {
 		return state, fmt.Errorf("prepare event: %w", err)
 	}
 
-	// RunEvent modifies state in place
-	returnState, err := sm.runEvent(ctx, tx, state, prepared, captureInitialState) // return the state after the first transition
+	if existingState, didExist, err := sm.causeEventIdempotency(ctx, tx, prepared); err != nil {
+		return existingState, err
+	} else if didExist {
+		return existingState, nil
+	}
 
+	returnState, err := sm.runEvent(ctx, tx, prepared, captureInitialState) // return the state after the first transition
 	if err != nil {
 		return state, fmt.Errorf("input event %s: %w", outerEvent.Event.PSMEventKey(), err)
 	}
@@ -564,116 +394,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 	return *returnState, nil
 }
 
-// firstEventUniqueCheck checks if the event ID for the outer triggering event
-// is unique in the event table. If not, it checks if the event is a repeat
-// processing of the same event, and returns the state after the initial
-// transition.
-func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.Context, tx sqrlx.Transaction, eventID string, data IE) (S, bool, error) {
-	var s S
-	selectQuery := sm.eventQuery(eventID)
-
-	selectQuery.Column(sm.tableMap.Event.StateSnapshot.ColumnName)
-
-	var eventData, stateData []byte
-	err := tx.SelectRow(ctx, selectQuery).Scan(&eventData, &stateData)
-	if errors.Is(err, sql.ErrNoRows) {
-		return s, false, nil
-	}
-	if err != nil {
-		return s, false, fmt.Errorf("selecting event: %w", err)
-	}
-
-	existing := (*new(E)).ProtoReflect().New().Interface().(E)
-
-	if err := protojson.Unmarshal(eventData, existing); err != nil {
-		return s, false, fmt.Errorf("unmarshalling event: %w", err)
-	}
-
-	if !proto.Equal(existing.UnwrapPSMEvent(), data) {
-		return s, false, ErrDuplicateEventID
-	}
-
-	state := (*new(S)).ProtoReflect().New()
-	if err := protojson.Unmarshal(stateData, state.Interface()); err != nil {
-		return s, false, fmt.Errorf("unmarshalling state: %w", err)
-	}
-
-	return state.Interface().(S), true, nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) eventsMustBeUnique(ctx context.Context, tx sqrlx.Transaction, events ...*EventSpec[K, S, ST, SD, E, IE]) error {
-	for _, event := range events {
-		if event.EventID == "" {
-			continue // UUID Gen Later
-		}
-		selectQuery := sm.eventQuery(event.EventID)
-
-		var data []byte
-		err := tx.SelectRow(ctx, selectQuery).Scan(&data)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("selecting event: %w", err)
-		}
-		return ErrDuplicateEventID
-	}
-	return nil
-
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) validateEvent(event E) error {
-	if sm.validator == nil {
-		v, err := protovalidate.New()
-		if err != nil {
-			fmt.Println("failed to initialize validator:", err)
-		}
-		sm.validator = v
-	}
-
-	return sm.validator.Validate(event)
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) prepareEvent(state S, spec *EventSpec[K, S, ST, SD, E, IE]) (built E, err error) {
-
-	built = (*new(E)).ProtoReflect().New().Interface().(E)
-	if err := built.SetPSMEvent(spec.Event); err != nil {
-		return built, fmt.Errorf("set event: %w", err)
-	}
-	built.SetPSMKeys(spec.Keys)
-
-	eventMeta := built.PSMMetadata()
-	eventMeta.EventId = spec.EventID
-	eventMeta.Timestamp = timestamppb.Now()
-	eventMeta.Cause = spec.Cause
-
-	sm.nextStateEvent(state, eventMeta)
-
-	return
-
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) nextStateEvent(state S, eventMeta *psm_j5pb.EventMetadata) {
-	stateMeta := state.PSMMetadata()
-
-	eventMeta.Sequence = 0
-	if state.GetStatus() == 0 {
-		eventMeta.Sequence = 0
-		stateMeta.CreatedAt = eventMeta.Timestamp
-		stateMeta.UpdatedAt = eventMeta.Timestamp
-	} else {
-		eventMeta.Sequence = stateMeta.LastSequence + 1
-		stateMeta.LastSequence = eventMeta.Sequence
-		stateMeta.UpdatedAt = eventMeta.Timestamp
-	}
-}
-
 func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Context, tx sqrlx.Transaction, cause *psm_j5pb.Cause, keys K, innerEvent IE) error { // nolint: unused // Used when the state machine is implementing LinkDestination
 	event := &EventSpec[K, S, ST, SD, E, IE]{
 		Keys:      keys,
 		Timestamp: time.Now(),
 		Event:     innerEvent,
-		EventID:   uuid.NewString(),
 		Cause:     cause,
 	}
 
@@ -688,14 +413,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) transitionFromLink(ctx context.Cont
 func (sm *StateMachine[K, S, ST, SD, E, IE]) deriveEvent(cause E, chained IE) (evt *EventSpec[K, S, ST, SD, E, IE], err error) {
 
 	causeMetadata := cause.PSMMetadata()
-	eventID := uuid.NewString()
 	psmKeys := cause.PSMKeys()
 
 	eventOut := &EventSpec[K, S, ST, SD, E, IE]{
 		Keys:      psmKeys,
 		Timestamp: time.Now(),
 		Event:     chained,
-		EventID:   eventID,
 		Cause: &psm_j5pb.Cause{
 			Type: &psm_j5pb.Cause_PsmEvent{
 				PsmEvent: &psm_j5pb.PSMEventCause{

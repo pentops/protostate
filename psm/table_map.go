@@ -40,6 +40,9 @@ func (tm *TableMap) Validate() error {
 	if tm.Event.ID == nil {
 		return fmt.Errorf("missing Event.Data in TableMap")
 	}
+	if tm.Event.IdempotencyHash == nil {
+		return fmt.Errorf("missing Event.IdempotencyHash in TableMap")
+	}
 	if tm.Event.Timestamp == nil {
 		return fmt.Errorf("missing Event.Timestamp in TableMap")
 	}
@@ -66,8 +69,11 @@ type EventTableSpec struct {
 	Root *FieldSpec
 
 	// a UUID holding the primary key of the event
-	// TODO: Multi-column ID for Events?
 	ID *FieldSpec
+
+	// Stores a globally unique itempotency key, hashed appropriately for
+	// unique-per-tenant at entry
+	IdempotencyHash *FieldSpec
 
 	// timestamptz The time of the event
 	Timestamp *FieldSpec
@@ -155,6 +161,9 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 			ID: &FieldSpec{
 				ColumnName: "id",
 				//PathFromRoot: psm.PathSpec{string(ss.EventMetadataField.Name()), "event_id"},
+			},
+			IdempotencyHash: &FieldSpec{
+				ColumnName: "idempotency",
 			},
 			Timestamp: &FieldSpec{
 				ColumnName: "timestamp",

@@ -2,7 +2,6 @@ package psm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/pentops/log.go/log"
@@ -22,12 +21,13 @@ const (
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	ctx context.Context,
 	tx sqrlx.Transaction,
-	state S,
-	event E,
+	bb preparedEvent[K, S, ST, SD, E, IE],
 	captureState captureStateType,
 ) (*S, error) {
+	event := bb.event
+	state := bb.state
 
-	if err := sm.validateEvent(event); err != nil {
+	if err := sm.validator.Validate(event); err != nil {
 		return nil, fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
 	}
 
@@ -52,7 +52,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		return nil, fmt.Errorf("run transition: %w", err)
 	}
 
-	err = sm.storeAfterMutation(ctx, tx, state, event)
+	err = sm.storeStateAndEvent(ctx, tx, bb)
 	if err != nil {
 		return nil, fmt.Errorf("after transition from %s on %s: %w",
 			transition.fromStatus.ShortString(),
@@ -89,28 +89,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 				return nil, fmt.Errorf("side effect outbox: %w", err)
 			}
 		} else {
-
 			err = outbox.DefaultSender.SendDelayed(ctx, tx, se.delay, se.msg)
 			if err != nil {
 				return nil, fmt.Errorf("delayed side effect outbox: %w", err)
 			}
 		}
-	}
-
-	chain := []*EventSpec[K, S, ST, SD, E, IE]{}
-	for _, chained := range baton.chainEvents {
-		derived, err := sm.deriveEvent(event, chained)
-		if err != nil {
-			return nil, fmt.Errorf("derive chained: %w", err)
-		}
-		chain = append(chain, derived)
-	}
-
-	if err := sm.eventsMustBeUnique(ctx, tx, chain...); err != nil {
-		if errors.Is(err, ErrDuplicateEventID) {
-			return nil, ErrDuplicateChainedEventID
-		}
-		return nil, err
 	}
 
 	log.Info(ctx, "Event Complete")
@@ -120,15 +103,20 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 		captureIntermediate = captureFinalState
 	}
 
-	for _, chainedEvent := range chain {
-		prepared, err := sm.prepareEvent(state, chainedEvent)
+	for _, chained := range baton.chainEvents {
+		derived, err := sm.deriveEvent(event, chained)
+		if err != nil {
+			return nil, fmt.Errorf("derive chained: %w", err)
+		}
+
+		prepared, err := derived.buildWrapper(state)
 		if err != nil {
 			return nil, fmt.Errorf("prepare event: %w", err)
 		}
 
-		stateAfterRun, err := sm.runEvent(ctx, tx, state, prepared, captureIntermediate)
+		stateAfterRun, err := sm.runEvent(ctx, tx, prepared, captureIntermediate)
 		if err != nil {
-			return nil, fmt.Errorf("chained event: %s: %w", chainedEvent.Event.PSMEventKey(), err)
+			return nil, fmt.Errorf("chained event: %s: %w", derived.Event.PSMEventKey(), err)
 		}
 		if captureState == captureFinalState {
 			returnState = stateAfterRun
@@ -138,15 +126,15 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	return returnState, nil
 }
 
-func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx sqrlx.Transaction, state S, event E) error {
+func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx sqrlx.Transaction, se preparedEvent[K, S, ST, SD, E, IE]) error {
 
-	typeKey := event.UnwrapPSMEvent().PSMEventKey()
-	statusBefore := state.GetStatus()
+	typeKey := se.event.UnwrapPSMEvent().PSMEventKey()
+	statusBefore := se.state.GetStatus()
 
 	ctx = log.WithFields(ctx, map[string]any{
-		"stateMachine": state.PSMKeys().PSMFullName(),
+		"stateMachine": se.state.PSMKeys().PSMFullName(),
 		"transition": map[string]any{
-			"eventId": event.PSMMetadata().EventId,
+			"eventId": se.event.PSMMetadata().EventId,
 			"from":    statusBefore.ShortString(),
 			"event":   typeKey,
 		},
@@ -157,11 +145,11 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 		return err
 	}
 
-	if err := transition.runMutations(ctx, state, event); err != nil {
+	if err := transition.runMutations(ctx, se.state, se.event); err != nil {
 		return fmt.Errorf("run transition: %w", err)
 	}
 
-	err = sm.storeAfterMutation(ctx, tx, state, event)
+	err = sm.storeStateAndEvent(ctx, tx, se)
 	if err != nil {
 		return fmt.Errorf("after transition from %s on %s: %w",
 			transition.fromStatus.ShortString(),
@@ -169,33 +157,9 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEvent(ctx context.Context, tx
 			err)
 	}
 
-	if err := transition.runFollowerHooks(ctx, tx, state, event); err != nil {
+	if err := transition.runFollowerHooks(ctx, tx, se.state, se.event); err != nil {
 		return fmt.Errorf("run transition hooks: %w", err)
 	}
 
 	return nil
-}
-
-func (sm *StateMachine[K, S, ST, SD, E, IE]) storeAfterMutation(
-	ctx context.Context,
-	tx sqrlx.Transaction,
-	state S,
-	event E,
-) error {
-
-	if state.GetStatus() == 0 {
-		return fmt.Errorf("state machine transitioned to zero status")
-	}
-
-	err := sm.validator.Validate(state)
-	if err != nil {
-		return err
-	}
-
-	if err := sm.store(ctx, tx, state, event); err != nil {
-		return err
-	}
-
-	return nil
-
 }
