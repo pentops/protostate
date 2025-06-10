@@ -4,37 +4,22 @@ import (
 	"context"
 	"testing"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
-	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
-	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestSortingWithAuthScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooSortingWithAuth")
+	ss, uu := NewFooUniverse(t, WithStateQueryOptions(newTokenQueryStateOption()))
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), newTokenQueryStateOption())
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	tenantID1 := uuid.NewString()
 	tenantID2 := uuid.NewString()
@@ -146,24 +131,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 }
 
 func TestSortingWithAuthNoScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooSortingWithAuth")
+	ss, uu := NewFooUniverse(t, WithStateQueryOptions(newTokenQueryStateOption()))
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), newTokenQueryStateOption())
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	tenants := []string{uuid.NewString(), uuid.NewString()}
 	setupFooListableData(ss, sm, tenants, 30)
@@ -269,24 +242,12 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 }
 
 func TestDynamicSorting(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestDynamicSorting")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	tenants := []string{uuid.NewString()}
 	setupFooListableData(ss, sm, tenants, 30)

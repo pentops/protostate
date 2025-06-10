@@ -22,9 +22,15 @@ func TestStateMachineShadow(t *testing.T) {
 
 	events := []*test_pb.FooEvent{{
 		Metadata: &psm_j5pb.EventMetadata{
-			EventId:   uuid.NewString(),
-			Sequence:  1,
-			Cause:     &psm_j5pb.Cause{},
+			EventId:  uuid.NewString(),
+			Sequence: 1,
+			Cause: &psm_j5pb.Cause{
+				Type: &psm_j5pb.Cause_ExternalEvent{
+					ExternalEvent: &psm_j5pb.ExternalEventCause{
+						SystemName: "test",
+					},
+				},
+			},
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &test_pb.FooKeys{
@@ -41,9 +47,15 @@ func TestStateMachineShadow(t *testing.T) {
 		},
 	}, {
 		Metadata: &psm_j5pb.EventMetadata{
-			EventId:   uuid.NewString(),
-			Sequence:  1,
-			Cause:     &psm_j5pb.Cause{},
+			EventId:  uuid.NewString(),
+			Sequence: 1,
+			Cause: &psm_j5pb.Cause{
+				Type: &psm_j5pb.Cause_ExternalEvent{
+					ExternalEvent: &psm_j5pb.ExternalEventCause{
+						SystemName: "test",
+					},
+				},
+			},
 			Timestamp: timestamppb.Now(),
 		},
 		Keys: &test_pb.FooKeys{

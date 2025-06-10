@@ -7,33 +7,20 @@ import (
 	"testing"
 	"time"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
-	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/utils/ptr"
 )
 
 func TestPagination(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooStateField")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
 	defer ss.RunSteps(t)
 
 	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
@@ -68,13 +55,7 @@ func TestPagination(t *testing.T) {
 	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
-		req := &test_spb.FooListRequest{}
-		res := &test_spb.FooListResponse{}
-
-		err = queryer.List(ctx, db, req, res)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
+		res := uu.ListFoo(t, &test_spb.FooListRequest{})
 
 		if len(res.Foo) != 20 {
 			t.Fatalf("expected 20 states, got %d", len(res.Foo))
@@ -108,7 +89,7 @@ func TestPagination(t *testing.T) {
 		}
 		printQuery(t, query)
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, uu.DB, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -126,19 +107,9 @@ func TestPagination(t *testing.T) {
 func TestEventPagination(t *testing.T) {
 	// Foo event default sort is deeply nested. This tests that the nested filter
 	// works on pagination
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T](t.Name())
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
 	defer ss.RunSteps(t)
 
 	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
@@ -153,7 +124,7 @@ func TestEventPagination(t *testing.T) {
 		restore := silenceLogger()
 		defer restore()
 
-		event := newFooCreatedEvent(fooID, tenantID, nil)
+		event := newFooCreatedEvent(fooID, tenantID)
 		_, err := sm.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -265,24 +236,12 @@ func TestEventPagination(t *testing.T) {
 }
 
 func TestPageSize(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooRequestPageSize")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
 		tenantID := uuid.NewString()
@@ -319,7 +278,7 @@ func TestPageSize(t *testing.T) {
 		req := &test_spb.FooListRequest{}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -351,7 +310,7 @@ func TestPageSize(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req, res)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -383,7 +342,7 @@ func TestPageSize(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req, res)
 		if err == nil {
 			t.Fatal("expected error")
 		}

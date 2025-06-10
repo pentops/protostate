@@ -17,12 +17,12 @@ type StateMachines struct {
 
 func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 
-	foo, err := NewFooStateMachine(db)
+	foo, err := NewFooStateMachine()
 	if err != nil {
 		return nil, err
 	}
 
-	bar, err := NewBarStateMachine(db)
+	bar, err := NewBarStateMachine()
 	if err != nil {
 		return nil, err
 	}
@@ -46,13 +46,13 @@ func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 		}))
 
 	return &StateMachines{
-		Foo: foo,
-		Bar: bar,
+		Foo: foo.WithDB(db),
+		Bar: bar.WithDB(db),
 	}, nil
 
 }
 
-func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
+func NewFooStateMachine() (*test_pb.FooPSM, error) {
 	sm, err := test_pb.FooPSMBuilder().BuildStateMachine()
 	if err != nil {
 		return nil, err
@@ -160,10 +160,11 @@ func NewFooStateMachine(db *sqrlx.Wrapper) (*test_pb.FooPSMDB, error) {
 		OnEvent(test_pb.FooPSMEventDeleted).
 		SetStatus(test_pb.FooStatus_DELETED)
 
-	return (*test_pb.FooPSMDB)(sm.WithDB(db)), nil
+	return sm, nil
+
 }
 
-func NewBarStateMachine(db *sqrlx.Wrapper) (*test_pb.BarPSMDB, error) {
+func NewBarStateMachine() (*test_pb.BarPSM, error) {
 	sm, err := test_pb.BarPSMBuilder().BuildStateMachine()
 	if err != nil {
 		return nil, err
@@ -181,5 +182,5 @@ func NewBarStateMachine(db *sqrlx.Wrapper) (*test_pb.BarPSMDB, error) {
 			return nil
 		}))
 
-	return (*test_pb.BarPSMDB)(sm.WithDB(db)), nil
+	return sm, nil
 }

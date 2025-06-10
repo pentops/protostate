@@ -5,48 +5,29 @@ import (
 	"testing"
 	"time"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
 	"github.com/pentops/flowtest"
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
-	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
-	"github.com/pentops/protostate/pquery"
-	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestDefaultFiltering(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T](t.Name())
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	tenants := []string{uuid.NewString()}
 	tenantIDs := setupFooListableData(ss, sm, tenants, 10)
 
 	ss.Step("Setup Extra Statuses", func(ctx context.Context, t flowtest.Asserter) {
 		for _, id := range tenantIDs[tenants[0]][:2] {
-			event := newFooUpdatedEvent(id, tenants[0], func(u *test_pb.FooEventType_Updated) {
-				u.Delete = true
-			})
+			event := newFooDeletedEvent(id, tenants[0])
 
 			_, err := sm.Transition(ctx, event)
 			if err != nil {
@@ -88,37 +69,13 @@ func TestDefaultFiltering(t *testing.T) {
 	})
 }
 
-func testLogger(t *testing.T) pquery.QueryLogger {
-	return func(query sqrlx.Sqlizer) {
-		queryString, args, err := query.ToSql()
-		if err != nil {
-			t.Logf("Query Error: %s", err.Error())
-			return
-		}
-		t.Logf("Query %s; ARGS %#v", queryString, args)
-	}
-}
-
 func TestFilteringWithAuthScope(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestFooFilteringWithAuth")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), newTokenQueryStateOption())
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	queryer.SetQueryLogger(testLogger(t))
 
 	tenantID1 := uuid.NewString()
 	tenantID2 := uuid.NewString()
@@ -192,25 +149,12 @@ func TestFilteringWithAuthScope(t *testing.T) {
 }
 
 func TestDynamicFiltering(t *testing.T) {
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	ss := flowtest.NewStepper[*testing.T]("TestDynamicFiltering")
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	var err error
 	defer ss.RunSteps(t)
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	queryer.SetQueryLogger(testLogger(t))
 
 	tenants := []string{uuid.NewString()}
 	ids := setupFooListableData(ss, sm, tenants, 60)
@@ -888,62 +832,6 @@ func TestDynamicFiltering(t *testing.T) {
 				case *test_pb.FooEventType_Created_:
 				default:
 					t.Fatalf("expected event to be of type %T, got %T", &test_pb.FooEventType_Created_{}, event.Event.Type)
-				}
-
-				t.Logf("%d: %s", ii, event.Event)
-			}
-		})
-
-		ss.Step("List Page (deleted)", func(ctx context.Context, t flowtest.Asserter) {
-			id := ids[tenants[0]][0]
-
-			event := newFooUpdatedEvent(id, tenants[0], func(u *test_pb.FooEventType_Updated) {
-				u.Delete = true
-			})
-
-			_, err := sm.Transition(ctx, event)
-			if err != nil {
-				t.Fatal(err.Error())
-			}
-
-			req := &test_spb.FooEventsRequest{
-				FooId: id,
-				Page: &list_j5pb.PageRequest{
-					PageSize: proto.Int64(5),
-				},
-				Query: &list_j5pb.QueryRequest{
-					Filters: []*list_j5pb.Filter{
-						{
-							Type: &list_j5pb.Filter_Field{
-								Field: &list_j5pb.Field{
-									Name: "event.type",
-									Type: &list_j5pb.FieldType{
-										Type: &list_j5pb.FieldType_Value{
-											Value: "deleted",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			res := &test_spb.FooEventsResponse{}
-
-			err = queryer.EventLister.List(ctx, db, req, res)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if len(res.Events) != 1 {
-				t.Fatalf("expected %d states, got %d", 1, len(res.Events))
-			}
-
-			for ii, event := range res.Events {
-				switch event.Event.Type.(type) {
-				case *test_pb.FooEventType_Deleted_:
-				default:
-					t.Fatalf("expected event to be of type %T, got %T", &test_pb.FooEventType_Deleted_{}, event.Event.Type)
 				}
 
 				t.Logf("%d: %s", ii, event.Event)

@@ -1,40 +1,21 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
-	sq "github.com/elgris/sqrl"
 	"github.com/google/uuid"
-	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
-	"github.com/pentops/protostate/psm"
-	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
 )
 
 func TestMarshaling(t *testing.T) {
-	ctx := context.Background()
-
-	conn := pgtest.GetTestDB(t, pgtest.WithDir(allMigrationsDir))
-	db, err := sqrlx.New(conn, sq.Dollar)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sm, err := NewFooStateMachine(db)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), psm.StateQueryOptions{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	queryer.SetQueryLogger(testLogger(t))
+	ss, uu := NewFooUniverse(t)
+	sm := uu.SM
+	db := uu.DB
+	queryer := uu.Query
+	defer ss.RunSteps(t)
 
 	tenantID := uuid.NewString()
 
@@ -42,6 +23,7 @@ func TestMarshaling(t *testing.T) {
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
+			ctx := t.Context()
 			event := newFooCreatedEvent(fooID, tenantID, func(c *test_pb.FooEventType_Created) {
 				c.Description = ptr.To("")
 			})
@@ -90,6 +72,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
+			ctx := t.Context()
 			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Description = ptr.To("non blank description")
 			})
@@ -137,6 +120,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with missing", func(t *testing.T) {
+			ctx := t.Context()
 			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Description = nil
 			})
@@ -182,6 +166,7 @@ func TestMarshaling(t *testing.T) {
 	})
 
 	t.Run("Non optional field", func(t *testing.T) {
+		ctx := t.Context()
 		fooID := uuid.NewString()
 
 		t.Run("Get with empty", func(t *testing.T) {
@@ -230,6 +215,7 @@ func TestMarshaling(t *testing.T) {
 		})
 
 		t.Run("Get with non empty", func(t *testing.T) {
+			ctx := t.Context()
 			event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
 				u.Field = "non empty"
 				u.Description = nil
