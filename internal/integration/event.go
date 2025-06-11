@@ -58,17 +58,20 @@ func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSME
 		panic("metaTenantId is required")
 	}
 	e := &test_pb.FooPSMEventSpec{
-		Keys: keys,
-		Cause: &psm_j5pb.Cause{
-			Type: &psm_j5pb.Cause_ExternalEvent{
-				ExternalEvent: &psm_j5pb.ExternalEventCause{
-					SystemName: "a",
-					EventName:  "b",
-				},
-			},
-		},
+		Keys:  keys,
+		Cause: testCause(),
 		Event: et,
 	}
 
 	return e
+}
+
+func testCause() *psm_j5pb.Cause {
+	return &psm_j5pb.Cause{
+		Type: &psm_j5pb.Cause_ExternalEvent{
+			ExternalEvent: &psm_j5pb.ExternalEventCause{
+				SystemName: "test",
+			},
+		},
+	}
 }

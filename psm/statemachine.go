@@ -14,6 +14,8 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -511,6 +513,30 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runInitialEvent(ctx context.Context
 
 }
 
+func assertPresentKeysMatch[K IKeyset](existing, event K) error {
+	a, err := existing.PSMKeyValues()
+	if err != nil {
+		return fmt.Errorf("existing keys: %w", err)
+	}
+	eventMap, err := event.PSMKeyValues()
+	if err != nil {
+		return fmt.Errorf("event keys: %w", err)
+	}
+
+	for key, eventValue := range eventMap {
+		existingValue, ok := a[key]
+		if !ok {
+			return fmt.Errorf("event key %s is not present in existing keys", key)
+		}
+		if existingValue != eventValue {
+			return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+		}
+	}
+
+	return nil
+
+}
+
 func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx.Transaction, outerEvent *EventSpec[K, S, ST, SD, E, IE]) (S, error) {
 
 	if err := outerEvent.validateAndPrepare(); err != nil {
@@ -543,6 +569,10 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runTx(ctx context.Context, tx sqrlx
 		// state keys, so the non-primary keys of the event need not be set for every
 		// event.
 
+		err = assertPresentKeysMatch(state.PSMKeys(), outerEvent.Keys)
+		if err != nil {
+			return state, err
+		}
 		// TODO: Consider checking that any key which *is* set matches.
 		// The event will be validated later using buf validate so any required non-primary keys are
 		// evaluated at that point.

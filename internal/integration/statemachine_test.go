@@ -13,6 +13,7 @@ import (
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -28,7 +29,7 @@ func TestStateEntityExtensions(t *testing.T) {
 	assert.Equal(t, test_pb.FooPSMEventCreated, event.PSMEventKey())
 }
 
-func TestFooStateField(t *testing.T) {
+func TestKeyMismatch(t *testing.T) {
 	ss, uu := NewUniverse(t)
 	defer ss.RunSteps(t)
 
@@ -36,7 +37,19 @@ func TestFooStateField(t *testing.T) {
 	tenantID := uuid.NewString()
 
 	ss.Step("Create", func(ctx context.Context, t flowtest.Asserter) {
-		event := newFooCreatedEvent(fooID, tenantID, nil)
+		event := &test_pb.FooPSMEventSpec{
+			Keys: &test_pb.FooKeys{
+				FooId:        fooID,
+				TenantId:     &tenantID,
+				MetaTenantId: metaTenant,
+			},
+			Event: &test_pb.FooEventType_Created{
+				Name:   "foo",
+				Field:  "event3",
+				Weight: ptr.To(int64(10)),
+			},
+			Cause: testCause(),
+		}
 		stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -46,9 +59,19 @@ func TestFooStateField(t *testing.T) {
 	})
 
 	ss.Step("Update OK, Same Key", func(ctx context.Context, t flowtest.Asserter) {
-		event := newFooUpdatedEvent(fooID, tenantID, func(u *test_pb.FooEventType_Updated) {
-			u.Weight = ptr.To(int64(11))
-		})
+		event := &test_pb.FooPSMEventSpec{
+			Keys: &test_pb.FooKeys{
+				FooId:        fooID,
+				TenantId:     &tenantID,
+				MetaTenantId: metaTenant,
+			},
+			Event: &test_pb.FooEventType_Updated{
+				Name:   "foo",
+				Field:  "event3",
+				Weight: ptr.To(int64(11)),
+			},
+			Cause: testCause(),
+		}
 		stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -57,7 +80,31 @@ func TestFooStateField(t *testing.T) {
 		t.Equal(tenantID, *stateOut.Keys.TenantId)
 	})
 
+	ss.Step("Update OK, Partial Key", func(ctx context.Context, t flowtest.Asserter) {
+		event := &test_pb.FooPSMEventSpec{
+			Keys: &test_pb.FooKeys{
+				FooId:        fooID,
+				TenantId:     nil,
+				MetaTenantId: metaTenant,
+			},
+			Event: &test_pb.FooEventType_Updated{
+				Name:   "foo",
+				Field:  "event3",
+				Weight: gl.Ptr(int64(12)),
+			},
+			Cause: testCause(),
+		}
+		stateOut, err := uu.FooStateMachine.Transition(ctx, event)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		t.Equal(test_pb.FooStatus_ACTIVE, stateOut.Status)
+		t.Equal(tenantID, *stateOut.Keys.TenantId)
+		t.Equal(int64(12), stateOut.Data.Characteristics.Weight)
+	})
+
 	ss.Step("Update Not OK, Different key specified", func(ctx context.Context, t flowtest.Asserter) {
+		// that it's the TenantID is not important to this test, it's just a key.
 		differentTenantId := uuid.NewString()
 		event := &test_pb.FooPSMEventSpec{
 			Keys: &test_pb.FooKeys{
@@ -68,13 +115,12 @@ func TestFooStateField(t *testing.T) {
 			Event: &test_pb.FooEventType_Updated{
 				Name:   "foo",
 				Field:  "event3",
-				Weight: ptr.To(int64(11)),
+				Weight: ptr.To(int64(12)),
 			},
+			Cause: testCause(),
 		}
 		_, err := uu.FooStateMachine.Transition(ctx, event)
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		t.CodeError(err, codes.FailedPrecondition)
 	})
 }
 
