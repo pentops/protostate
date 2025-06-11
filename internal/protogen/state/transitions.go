@@ -234,14 +234,14 @@ func (ss PSMEntity) transitionFuncTypes(g *protogen.GeneratedFile) {
 			params: []param{
 				paramContext,
 				paramTx,
-				paramStateData,
+				paramState,
 				paramSpecificEvent,
 			},
 		},
 		runOnFollow: true,
 		body: func() {
 			convertType()
-			g.P("return cb(ctx, tx, state.PSMData(), asType)")
+			g.P("return cb(ctx, tx, state, asType)")
 		},
 	})
 

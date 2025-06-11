@@ -357,7 +357,65 @@ func TestStateDataHook(t *testing.T) {
 		be.Equal(1, summary.CountFoos).Run(t, "Foo Count")
 		be.Equal(100, summary.TotalWeight).Run(t, "Weight")
 	})
+}
 
+func TestTransitionDataHook(t *testing.T) {
+	flow, uu := NewUniverse(t)
+	defer flow.RunSteps(t)
+
+	flow.Setup(func(ctx context.Context, t flowtest.Asserter) error {
+
+		uu.FooStateMachine.From().
+			OnEvent(test_pb.FooPSMEventCreated).
+			Hook(test_pb.FooPSMDataHook(func(
+				ctx context.Context,
+				tx sqrlx.Transaction,
+				state *test_pb.FooState,
+				event *test_pb.FooEventType_Created,
+			) error {
+
+				if state.Data.Characteristics == nil || state.Status != test_pb.FooStatus_ACTIVE {
+					_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+
+				_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").
+					Key("id", state.Keys.FooId).
+					Set("weight", state.Data.Characteristics.Weight).
+					Set("height", state.Data.Characteristics.Height).
+					Set("length", state.Data.Characteristics.Length))
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}))
+
+		return nil
+	})
+
+	tenantID := uuid.NewString()
+	foo1ID := uuid.NewString()
+
+	flow.Step("Setup", func(ctx context.Context, t flowtest.Asserter) {
+		event1 := newFooCreatedEvent(foo1ID, tenantID, func(c *test_pb.FooEventType_Created) {
+			c.Weight = gl.Ptr(int64(100))
+		})
+		_, err := uu.FooStateMachine.Transition(ctx, event1)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+	})
+
+	flow.Step("Query Cache", func(ctx context.Context, t flowtest.Asserter) {
+		summary, err := uu.FooQuery.FooSummary(ctx, &test_spb.FooSummaryRequest{})
+		t.NoError(err)
+		be.Equal(1, summary.CountFoos).Run(t, "Foo Count")
+		be.Equal(100, summary.TotalWeight).Run(t, "Weight")
+	})
 }
 
 func TestStateMachineIdempotencyInitial(t *testing.T) {

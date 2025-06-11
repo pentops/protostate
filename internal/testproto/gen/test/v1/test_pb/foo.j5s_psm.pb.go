@@ -322,7 +322,7 @@ func FooPSMDataHook[
 	cb func(
 		context.Context,
 		sqrlx.Transaction,
-		*FooData,
+		*FooState,
 		SE,
 	) error) psm.TransitionHook[
 	*FooKeys,    // implements psm.IKeyset
@@ -347,7 +347,7 @@ func FooPSMDataHook[
 				name := event.ProtoReflect().Descriptor().FullName()
 				return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 			}
-			return cb(ctx, tx, state.PSMData(), asType)
+			return cb(ctx, tx, state, asType)
 		},
 		EventType:   eventType,
 		RunOnFollow: true,
