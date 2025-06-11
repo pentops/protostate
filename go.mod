@@ -10,14 +10,13 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20250521181823-71b0be743b08
+	github.com/pentops/flowtest v0.0.0-20250611222350-b5c7162d9db1
 	github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63
 	github.com/pentops/j5 v0.0.0-20250605002250-2add77d73a52
 	github.com/pentops/log.go v0.0.16
 	github.com/pentops/o5-messaging v0.0.0-20250520213617-fba07334e9aa
 	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b
 	github.com/pentops/sqrlx.go v0.0.0-20250520210217-2f46de329c7a
-	github.com/pressly/goose v2.7.0+incompatible
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822
 	google.golang.org/grpc v1.72.2
@@ -41,6 +40,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pressly/goose v2.7.0+incompatible // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b // indirect

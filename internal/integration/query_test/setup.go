@@ -34,25 +34,6 @@ func NewFooStateMachine() (*test_pb.FooPSM, error) {
 			return nil
 		}))
 
-	sm.From(0).
-		OnEvent(test_pb.FooPSMEventCreated).
-		SetStatus(test_pb.FooStatus_ACTIVE).
-		Mutate(test_pb.FooPSMMutation(func(
-			data *test_pb.FooData,
-			event *test_pb.FooEventType_Created,
-		) error {
-			data.Name = event.Name
-			data.Field = event.Field
-			data.Description = event.Description
-			data.Characteristics = &test_pb.FooCharacteristics{
-				Weight: event.GetWeight(),
-				Height: event.GetHeight(),
-				Length: event.GetLength(),
-			}
-			data.Profiles = event.Profiles
-			return nil
-		}))
-
 	// Testing Mutate() without OnEvent, the callback implies the event type.
 	sm.From(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(

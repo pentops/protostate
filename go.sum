@@ -73,8 +73,8 @@ github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stg
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
-github.com/pentops/flowtest v0.0.0-20250521181823-71b0be743b08 h1:Xeip/GxtvcAGFFyLBjH8NqP7xtJvPu6Rlu1ZzUhcxhk=
-github.com/pentops/flowtest v0.0.0-20250521181823-71b0be743b08/go.mod h1:vNp8crAKcH0f/sZU9frkmQLUeDsTIgMqV14kQtkAqC0=
+github.com/pentops/flowtest v0.0.0-20250611222350-b5c7162d9db1 h1:HFhoMQYMnf4rhXqFz9rJznYcLexvzA/tSoZW6024nUs=
+github.com/pentops/flowtest v0.0.0-20250611222350-b5c7162d9db1/go.mod h1:vNp8crAKcH0f/sZU9frkmQLUeDsTIgMqV14kQtkAqC0=
 github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63 h1:s5qtWT2/s79gy/wm3/bwvKYLK6u2AkW05JiLPqxraP0=
 github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63/go.mod h1:I58JIVvL1/nP4CEHGKGbBhvWIEA9mVkGeoviemaqanU=
 github.com/pentops/j5 v0.0.0-20250605002250-2add77d73a52 h1:natrugFwp8KWyN1W1SHphF+IokRkU+Yf+k/akHk2V1A=

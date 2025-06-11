@@ -1,11 +1,6 @@
 package integration
 
 import (
-	"context"
-
-	sq "github.com/elgris/sqrl"
-	"github.com/google/uuid"
-	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -27,24 +22,6 @@ func BuildStateMachines(db *sqrlx.Wrapper) (*StateMachines, error) {
 		return nil, err
 	}
 
-	foo.From(test_pb.FooStatus_ACTIVE).
-		OnEvent(test_pb.FooPSMEventDeleted).
-		LinkTo(test_pb.FooPSMLinkHook(bar, func(
-			ctx context.Context,
-			state *test_pb.FooState,
-			event *test_pb.FooEventType_Deleted,
-			cb func(*test_pb.BarKeys, test_pb.BarPSMEvent),
-		) error {
-			cb(&test_pb.BarKeys{
-				BarId:      uuid.NewString(),
-				BarOtherId: state.Keys.FooId,
-			}, &test_pb.BarEventType_Created{
-				Name:  state.Data.Name + " Phoenix",
-				Field: state.Data.Field,
-			})
-			return nil
-		}))
-
 	return &StateMachines{
 		Foo: foo.WithDB(db),
 		Bar: bar.WithDB(db),
@@ -58,31 +35,6 @@ func NewFooStateMachine() (*test_pb.FooPSM, error) {
 		return nil, err
 	}
 
-	sm.StateDataHook(test_pb.FooPSMGeneralStateDataHook(func(
-		ctx context.Context,
-		tx sqrlx.Transaction,
-		state *test_pb.FooState,
-	) error {
-
-		if state.Data.Characteristics == nil || state.Status != test_pb.FooStatus_ACTIVE {
-			_, err := tx.Delete(ctx, sq.Delete("foo_cache").Where("id = ?", state.Keys.FooId))
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		_, err := tx.Exec(ctx, sqrlx.Upsert("foo_cache").Key("id", state.Keys.FooId).
-			Set("weight", state.Data.Characteristics.Weight).
-			Set("height", state.Data.Characteristics.Height).
-			Set("length", state.Data.Characteristics.Length))
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}))
-
 	sm.From(0).
 		OnEvent(test_pb.FooPSMEventCreated).
 		SetStatus(test_pb.FooStatus_ACTIVE).
@@ -102,26 +54,6 @@ func NewFooStateMachine() (*test_pb.FooPSM, error) {
 			return nil
 		}))
 
-	sm.From(0).
-		OnEvent(test_pb.FooPSMEventCreated).
-		SetStatus(test_pb.FooStatus_ACTIVE).
-		Mutate(test_pb.FooPSMMutation(func(
-			data *test_pb.FooData,
-			event *test_pb.FooEventType_Created,
-		) error {
-			data.Name = event.Name
-			data.Field = event.Field
-			data.Description = event.Description
-			data.Characteristics = &test_pb.FooCharacteristics{
-				Weight: event.GetWeight(),
-				Height: event.GetHeight(),
-				Length: event.GetLength(),
-			}
-			data.Profiles = event.Profiles
-			return nil
-		}))
-
-	// Testing Mutate() without OnEvent, the callback implies the event type.
 	sm.From(test_pb.FooStatus_ACTIVE).
 		Mutate(test_pb.FooPSMMutation(func(
 			data *test_pb.FooData,
@@ -136,23 +68,6 @@ func NewFooStateMachine() (*test_pb.FooPSM, error) {
 				Length: event.GetLength(),
 			}
 
-			return nil
-		}))
-
-	sm.From().
-		Hook(test_pb.FooPSMLogicHook(func(
-			ctx context.Context,
-			baton test_pb.FooPSMHookBaton,
-			state *test_pb.FooState,
-			event *test_pb.FooEventType_Updated,
-		) error {
-			log.WithFields(ctx, map[string]any{
-				"foo_id": state.Keys.FooId,
-				"event":  event,
-			}).Info("Foo Update Hook")
-			if event.Delete {
-				baton.ChainEvent(&test_pb.FooEventType_Deleted{})
-			}
 			return nil
 		}))
 

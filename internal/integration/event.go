@@ -12,7 +12,7 @@ import (
 
 var metaTenant = uuid.NewString()
 
-func newFooCreatedEvent(fooID, tenantID string, mod func(c *test_pb.FooEventType_Created)) *test_pb.FooPSMEventSpec {
+func newFooCreatedEvent(fooID, tenantID string, mod ...func(c *test_pb.FooEventType_Created)) *test_pb.FooPSMEventSpec {
 	weight := int64(10)
 	created := &test_pb.FooEventType_Created{
 		Name:        "foo",
@@ -21,8 +21,8 @@ func newFooCreatedEvent(fooID, tenantID string, mod func(c *test_pb.FooEventType
 		Weight:      &weight,
 	}
 
-	if mod != nil {
-		mod(created)
+	for _, m := range mod {
+		m(created)
 	}
 
 	return newFooEvent(&test_pb.FooKeys{
@@ -32,7 +32,7 @@ func newFooCreatedEvent(fooID, tenantID string, mod func(c *test_pb.FooEventType
 	}, created)
 }
 
-func newFooUpdatedEvent(fooID, tenantID string, mod func(u *test_pb.FooEventType_Updated)) *test_pb.FooPSMEventSpec {
+func newFooUpdatedEvent(fooID, tenantID string, mod ...func(u *test_pb.FooEventType_Updated)) *test_pb.FooPSMEventSpec {
 	weight := int64(20)
 	updated := &test_pb.FooEventType_Updated{
 		Name:        "foo",
@@ -41,8 +41,8 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *test_pb.FooEventType
 		Weight:      &weight,
 	}
 
-	if mod != nil {
-		mod(updated)
+	for _, m := range mod {
+		m(updated)
 	}
 
 	return newFooEvent(&test_pb.FooKeys{
@@ -50,6 +50,14 @@ func newFooUpdatedEvent(fooID, tenantID string, mod func(u *test_pb.FooEventType
 		TenantId:     &tenantID,
 		MetaTenantId: metaTenant,
 	}, updated)
+}
+
+func newFooDeletedEvent(fooID, tenantID string) *test_pb.FooPSMEventSpec {
+	return newFooEvent(&test_pb.FooKeys{
+		FooId:        fooID,
+		TenantId:     &tenantID,
+		MetaTenantId: metaTenant,
+	}, &test_pb.FooEventType_Deleted{})
 }
 
 func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSMEventSpec {
