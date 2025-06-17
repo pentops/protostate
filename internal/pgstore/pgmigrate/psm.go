@@ -7,6 +7,7 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
@@ -217,6 +218,7 @@ const (
 	intType         = ColumnType("int")
 	timestamptzType = ColumnType("timestamptz")
 	jsonbType       = ColumnType("jsonb")
+	dateType        = ColumnType("date")
 )
 
 func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
@@ -228,11 +230,9 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 
 	eventForeignKey := eventTable.ForeignKey("state", spec.State.TableName)
 	for _, key := range spec.KeyColumns {
-		format := textType
-		if key.Format.GetUuid() != nil {
-			format = uuidType
-		} else if key.Format.GetId62() != nil {
-			format = id62Type
+		format, err := fieldFormat(key.Schema)
+		if err != nil {
+			return nil, nil, fmt.Errorf("key %s: %w", key.ColumnName, err)
 		}
 
 		if key.Primary {
@@ -268,4 +268,28 @@ func BuildPSMTables(spec psm.QueryTableSpec) (*Table, *Table, error) {
 	}
 
 	return state, event, nil
+}
+
+func fieldFormat(schema *schema_j5pb.Field) (ColumnType, error) {
+
+	switch ft := schema.Type.(type) {
+	case *schema_j5pb.Field_String_:
+		return textType, nil
+	case *schema_j5pb.Field_Key:
+		switch ft.Key.Format.Type.(type) {
+		case *schema_j5pb.KeyFormat_Custom_:
+			return textType, nil
+		case *schema_j5pb.KeyFormat_Uuid:
+			return uuidType, nil
+		case *schema_j5pb.KeyFormat_Id62:
+			return id62Type, nil
+		default:
+			return textType, nil
+		}
+	case *schema_j5pb.Field_Date:
+		return dateType, nil
+	default:
+		return textType, fmt.Errorf("unsupported type for key field %T", schema.Type)
+	}
+
 }

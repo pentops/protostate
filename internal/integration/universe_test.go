@@ -82,14 +82,15 @@ func setupUniverse(t flowtest.Asserter, uu *Universe) {
 }
 
 type MiniFooController struct {
-	db    *sqrlx.Wrapper
-	query *test_spb.FooPSMQuerySet
+	db *sqrlx.Wrapper
+	*test_spb.FooQueryServiceImpl
 }
 
 func NewMiniFooController(db *sqrlx.Wrapper, query *test_spb.FooPSMQuerySet) *MiniFooController {
+
 	return &MiniFooController{
-		db:    db,
-		query: query,
+		db:                  db,
+		FooQueryServiceImpl: test_spb.NewFooQueryServiceImpl(db, query),
 	}
 }
 
@@ -107,68 +108,14 @@ func (c *MiniFooController) FooSummary(ctx context.Context, req *test_spb.FooSum
 	return res, nil
 }
 
-func (c *MiniFooController) FooGet(ctx context.Context, req *test_spb.FooGetRequest) (*test_spb.FooGetResponse, error) {
-	res := &test_spb.FooGetResponse{}
-	err := c.query.Get(ctx, c.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
-func (c *MiniFooController) FooList(ctx context.Context, req *test_spb.FooListRequest) (*test_spb.FooListResponse, error) {
-	res := &test_spb.FooListResponse{}
-	err := c.query.List(ctx, c.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
-func (c *MiniFooController) FooEvents(ctx context.Context, req *test_spb.FooEventsRequest) (*test_spb.FooEventsResponse, error) {
-	res := &test_spb.FooEventsResponse{}
-	err := c.query.ListEvents(ctx, c.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
 type MiniBarController struct {
-	db    *sqrlx.Wrapper
-	query *test_spb.BarPSMQuerySet
+	db *sqrlx.Wrapper
+	*test_spb.BarQueryServiceImpl
 }
 
 func NewMiniBarController(db *sqrlx.Wrapper, query *test_spb.BarPSMQuerySet) *MiniBarController {
 	return &MiniBarController{
-		db:    db,
-		query: query,
+		db:                  db,
+		BarQueryServiceImpl: test_spb.NewBarQueryServiceImpl(db, query),
 	}
-}
-
-func (b *MiniBarController) BarGet(ctx context.Context, req *test_spb.BarGetRequest) (*test_spb.BarGetResponse, error) {
-	res := &test_spb.BarGetResponse{}
-	err := b.query.Get(ctx, b.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
-func (b *MiniBarController) BarList(ctx context.Context, req *test_spb.BarListRequest) (*test_spb.BarListResponse, error) {
-	res := &test_spb.BarListResponse{}
-	err := b.query.List(ctx, b.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
-func (b *MiniBarController) BarEvents(ctx context.Context, req *test_spb.BarEventsRequest) (*test_spb.BarEventsResponse, error) {
-	res := &test_spb.BarEventsResponse{}
-	err := b.query.ListEvents(ctx, b.db, req, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
 }

@@ -188,6 +188,9 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 			case "j5.list.v1.QueryRequest":
 				ll.queryRequestField = field
 				continue
+			case "j5.types.date.v1.Date":
+				ll.RequestFilterFields = append(ll.RequestFilterFields, field)
+				continue
 			default:
 				return nil, fmt.Errorf("unknown field in request: '%s' of type %s", field.Name(), field.Kind())
 			}

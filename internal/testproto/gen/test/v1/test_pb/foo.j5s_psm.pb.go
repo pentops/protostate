@@ -77,8 +77,8 @@ func (msg *FooKeys) PSMIsSet() bool {
 func (msg *FooKeys) PSMFullName() string {
 	return "test.v1.foo"
 }
-func (msg *FooKeys) PSMKeyValues() (map[string]string, error) {
-	keyset := map[string]string{
+func (msg *FooKeys) PSMKeyValues() (map[string]any, error) {
+	keyset := map[string]any{
 		"foo_id": msg.FooId,
 	}
 	if msg.TenantId != nil {
@@ -610,12 +610,6 @@ func FooPSMUpsertPublishHook(
 
 func (event *FooEvent) EventPublishMetadata() *psm_j5pb.EventPublishMetadata {
 	tenantKeys := make([]*psm_j5pb.EventTenant, 0)
-	if event.Keys.TenantId != nil {
-		tenantKeys = append(tenantKeys, &psm_j5pb.EventTenant{
-			TenantType: "tenant",
-			TenantId:   *event.Keys.TenantId,
-		})
-	}
 	return &psm_j5pb.EventPublishMetadata{
 		EventId:   event.Metadata.EventId,
 		Sequence:  event.Metadata.Sequence,

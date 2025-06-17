@@ -96,7 +96,7 @@ type KeyColumn struct {
 	ExplicitlyOptional bool // makes strings pointers
 	Unique             bool
 
-	Format *schema_j5pb.KeyFormat
+	Schema *schema_j5pb.Field // The schema for this key field, used for validation and serialization.
 
 	//TenantKey  *string
 }
@@ -198,17 +198,7 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 
 func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescriptor) (*KeyColumn, error) {
 
-	key := field.Schema.ToJ5Field().GetKey()
-	if key == nil {
-		return nil, fmt.Errorf("key field %s: expected key, got %T", field.FullName(), field.Schema.ToJ5Field().Type)
-	}
-	isPrimary := false
-	if key.Entity != nil {
-		switch key.Entity.Type.(type) {
-		case *schema_j5pb.EntityKey_PrimaryKey:
-			isPrimary = true
-		}
-	}
+	isPrimary := field.Entity != nil && field.Entity.Primary
 
 	kc := &KeyColumn{
 		ColumnName:         strcase.ToSnake(field.JSONName),
@@ -217,7 +207,7 @@ func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescr
 		Primary:            isPrimary,
 		Required:           isPrimary || field.Required,
 		ExplicitlyOptional: field.ExplicitlyOptional,
-		Format:             key.Format,
+		Schema:             field.Schema.ToJ5Field(),
 	}
 
 	return kc, nil

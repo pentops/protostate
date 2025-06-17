@@ -11,6 +11,7 @@ import (
 	"github.com/pentops/flowtest/be"
 	"github.com/pentops/golib/gl"
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
+	"github.com/pentops/j5/j5types/date_j5t"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
@@ -251,6 +252,7 @@ func TestLink(t *testing.T) {
 				cb(&test_pb.BarKeys{
 					BarId:      uuid.NewString(),
 					BarOtherId: state.Keys.FooId,
+					DateKey:    date_j5t.NewDate(2020, 1, 1),
 				}, &test_pb.BarEventType_Created{
 					Name:  state.Data.Name + " Phoenix",
 					Field: state.Data.Field,
@@ -570,7 +572,25 @@ func TestFooStateMachine(t *testing.T) {
 	event5 := newFooDeletedEvent(foo2ID, tenantID)
 	statesOut := map[string]*test_pb.FooState{}
 
-	flow.Setup(func(ctx context.Context, t flowtest.Asserter) error {
+	flow.Step("List Empty", func(ctx context.Context, t flowtest.Asserter) {
+		req := &test_spb.FooListRequest{}
+
+		res, err := uu.FooQuery.FooList(ctx, req)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		/*
+			if res.Foo == nil {
+				t.Fatal("expected non-nil response")
+			}
+		*/
+		t.Log(protojson.Format(res))
+		if len(res.Foo) != 0 {
+			t.Fatalf("expected 0 states")
+		}
+	})
+
+	flow.Step("Add Events", func(ctx context.Context, t flowtest.Asserter) {
 		for _, event := range []*test_pb.FooPSMEventSpec{event1, event2, event3, event4, event5} {
 			stateOut, err := uu.FooStateMachine.Transition(ctx, event)
 			if err != nil {
@@ -582,7 +602,6 @@ func TestFooStateMachine(t *testing.T) {
 		if statesOut[fooID].GetStatus() != test_pb.FooStatus_ACTIVE {
 			t.Fatalf("Expect state ACTIVE, got %s", statesOut[fooID].GetStatus().ShortString())
 		}
-		return nil
 	})
 
 	flow.Step("Get1", func(ctx context.Context, t flowtest.Asserter) {
