@@ -151,7 +151,7 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMKeyValues() (map[string]any, error) {")
 	g.P("  keyset := map[string]any{")
 	for _, columnSpec := range keyColumns {
-		if !columnSpec.Required {
+		if !columnSpec.Primary {
 			continue
 		}
 		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
@@ -159,7 +159,7 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 	}
 	g.P("  }")
 	for _, columnSpec := range keyColumns {
-		if columnSpec.Required {
+		if columnSpec.Primary {
 			continue
 		}
 		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
