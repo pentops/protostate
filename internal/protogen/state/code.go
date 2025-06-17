@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -311,22 +312,22 @@ func (ss PSMEntity) eventPublishMetadata(g *protogen.GeneratedFile) {
 	g.P("  tenantKeys := make([]*", keyIdent, ", 0)")
 	for _, field := range ss.keyMessage.Fields {
 		// TODO: Map tenant keys
-		opt := proto.GetExtension(field.Desc.Options(), ext_j5pb.E_Key).(*ext_j5pb.PSMKeyFieldOptions)
+		opt := proto.GetExtension(field.Desc.Options(), ext_j5pb.E_Key).(*schema_j5pb.EntityKey)
 		if opt == nil {
 			continue
 		}
-		if opt.TenantType != nil {
+		if opt.Tenant != nil {
 			if field.Desc.HasOptionalKeyword() {
 				g.P("if event.Keys.", field.GoName, " != nil {")
 				g.P("  tenantKeys = append(tenantKeys, &", keyIdent, "{")
-				g.P("    TenantType: \"", *opt.TenantType, "\",")
+				g.P("    TenantType: \"", *opt.Tenant, "\",")
 				g.P("    TenantId:  *event.Keys.", field.GoName, ",")
 				g.P("  })")
 				g.P("}")
 			} else {
 				g.P("if event.Keys.", field.GoName, " != \"\" {")
 				g.P("  tenantKeys = append(tenantKeys, &", keyIdent, "{")
-				g.P("    TenantType: \"", *opt.TenantType, "\",")
+				g.P("    TenantType: \"", *opt.Tenant, "\",")
 				g.P("    TenantId:  event.Keys.", field.GoName, ",")
 				g.P("  })")
 				g.P("}")

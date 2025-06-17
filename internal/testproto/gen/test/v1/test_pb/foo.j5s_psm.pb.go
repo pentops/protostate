@@ -610,6 +610,12 @@ func FooPSMUpsertPublishHook(
 
 func (event *FooEvent) EventPublishMetadata() *psm_j5pb.EventPublishMetadata {
 	tenantKeys := make([]*psm_j5pb.EventTenant, 0)
+	if event.Keys.TenantId != nil {
+		tenantKeys = append(tenantKeys, &psm_j5pb.EventTenant{
+			TenantType: "tenant",
+			TenantId:   *event.Keys.TenantId,
+		})
+	}
 	return &psm_j5pb.EventPublishMetadata{
 		EventId:   event.Metadata.EventId,
 		Sequence:  event.Metadata.Sequence,
