@@ -18,7 +18,7 @@ type StateMachineConfig[
 ] struct {
 	//systemActor SystemActor
 
-	keyValues func(K) (map[string]string, error)
+	keyValues func(K) (map[string]any, error)
 
 	initialStateFunc func(context.Context, sqrlx.Transaction, K) (IE, error)
 
@@ -48,7 +48,7 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) TableName(tableName string) 
 }
 
 // KeyFields derives the key values from the Key entity. Should return ID Strings, and omit entries for NULL values
-func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) DeriveKeyValues(cbFunc func(K) (map[string]string, error)) *StateMachineConfig[K, S, ST, SD, E, IE] {
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) DeriveKeyValues(cbFunc func(K) (map[string]any, error)) *StateMachineConfig[K, S, ST, SD, E, IE] {
 	smc.keyValues = cbFunc
 	return smc
 }

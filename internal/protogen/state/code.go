@@ -148,8 +148,8 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 
 	keyColumns := ss.tableMap.KeyColumns
 
-	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMKeyValues() (map[string]string, error) {")
-	g.P("  keyset := map[string]string{")
+	g.P("func (msg *", ss.keyMessage.GoIdent, ") PSMKeyValues() (map[string]any, error) {")
+	g.P("  keyset := map[string]any{")
 	for _, columnSpec := range keyColumns {
 		if !columnSpec.Required {
 			continue

@@ -77,10 +77,11 @@ func (msg *BarKeys) PSMIsSet() bool {
 func (msg *BarKeys) PSMFullName() string {
 	return "test.v1.bar"
 }
-func (msg *BarKeys) PSMKeyValues() (map[string]string, error) {
-	keyset := map[string]string{
+func (msg *BarKeys) PSMKeyValues() (map[string]any, error) {
+	keyset := map[string]any{
 		"bar_id":       msg.BarId,
 		"bar_other_id": msg.BarOtherId,
+		"date_key":     msg.DateKey,
 	}
 	return keyset, nil
 }

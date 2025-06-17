@@ -68,6 +68,7 @@ func DefaultBarPSMQuerySpec(tableSpec psm.QueryTableSpec) BarPSMQuerySpec {
 			filter := map[string]interface{}{}
 			filter["bar_id"] = req.BarId
 			filter["bar_other_id"] = req.BarOtherId
+			filter["date_key"] = req.DateKey
 			return filter, nil
 		},
 	}

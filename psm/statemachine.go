@@ -45,7 +45,7 @@ type StateMachine[
 ] struct {
 	transitionSet[K, S, ST, SD, E, IE]
 
-	keyValueFunc func(K) (map[string]string, error)
+	keyValueFunc func(K) (map[string]any, error)
 
 	initialStateFunc func(context.Context, sqrlx.Transaction, K) (IE, error)
 
@@ -259,12 +259,12 @@ type keyValues struct {
 }
 
 type keyValue struct {
-	value string
+	value any
 	KeyColumn
 }
 
 func (sm *StateMachine[K, S, ST, SD, E, IE]) keyValues(keysMessage K) (*keyValues, error) {
-	var rawValues map[string]string
+	var rawValues map[string]any
 	var err error
 	if sm.keyValueFunc != nil {
 		rawValues, err = sm.keyValueFunc(keysMessage)
