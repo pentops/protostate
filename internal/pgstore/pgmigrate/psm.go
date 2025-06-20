@@ -276,6 +276,9 @@ func fieldFormat(schema *schema_j5pb.Field) (ColumnType, error) {
 	case *schema_j5pb.Field_String_:
 		return textType, nil
 	case *schema_j5pb.Field_Key:
+		if ft.Key.Format == nil {
+			return textType, nil
+		}
 		switch ft.Key.Format.Type.(type) {
 		case *schema_j5pb.KeyFormat_Custom_:
 			return textType, nil
