@@ -41,13 +41,11 @@ func FieldsToEqMap(ofTable string, m map[string]any) (sq.Eq, error) {
 }
 
 func interfaceToDBValue(i any) (any, error) {
-	fmt.Printf("interfaceToDBValue: %T\n", i)
 	switch v := i.(type) {
 	case *timestamppb.Timestamp:
 		return v.AsTime(), nil
 
 	case *date_j5t.Date:
-		fmt.Printf("date: %v\n", v)
 		return v.DateString(), nil
 
 	case driver.Valuer:
