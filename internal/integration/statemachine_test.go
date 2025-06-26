@@ -283,6 +283,8 @@ func TestLink(t *testing.T) {
 		}
 	})
 
+	var barKeys *test_pb.BarKeys
+
 	flow.Step("Hook should have pushed to Bar", func(ctx context.Context, t flowtest.Asserter) {
 
 		res, err := uu.BarQuery.BarList(ctx, &test_spb.BarListRequest{})
@@ -300,6 +302,27 @@ func TestLink(t *testing.T) {
 
 		if bar.Data.Name != "updated Phoenix" {
 			t.Fatalf("expected name updated, got %s", bar.Data.Name)
+		}
+
+		barKeys = bar.Keys
+
+	})
+
+	flow.Step("Get Bar (Date Key Test)", func(ctx context.Context, t flowtest.Asserter) {
+
+		res, err := uu.BarQuery.BarGet(ctx, &test_spb.BarGetRequest{
+			BarId:      barKeys.BarId,
+			DateKey:    barKeys.DateKey,
+			BarOtherId: barKeys.BarOtherId,
+		})
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		t.Log(protojson.Format(res))
+
+		if res.Bar.Keys.BarOtherId != foo1ID {
+			t.Fatalf("expected BarOtherId to match FooId")
 		}
 
 	})
