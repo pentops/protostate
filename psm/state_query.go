@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/protostate/pquery"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -124,12 +125,26 @@ func BuildStateQuerySet[
 		unmappedRequestFields[field.Name()] = field
 	}
 
-	pkFields := map[string]protoreflect.FieldDescriptor{}
+	pkFields := map[string]func(req protoreflect.Message) any{} //protoreflect.FieldDescriptor{}
 	for _, keyColumn := range smSpec.KeyColumns {
 		matchingRequestField, ok := unmappedRequestFields[keyColumn.ProtoName]
 		if ok {
 			delete(unmappedRequestFields, keyColumn.ProtoName)
-			pkFields[keyColumn.ColumnName] = matchingRequestField
+			var callback func(req protoreflect.Message) any
+			switch keyColumn.Schema.Type.(type) {
+			case *schema_j5pb.Field_String_, *schema_j5pb.Field_Key:
+				callback = func(req protoreflect.Message) any {
+					return req.Get(matchingRequestField).String()
+				}
+			case *schema_j5pb.Field_Date:
+				callback = func(req protoreflect.Message) any {
+					return req.Get(matchingRequestField).Message().Interface()
+				}
+			default:
+				return nil, fmt.Errorf("unsupported key type '%T' for column '%s'", keyColumn.Schema.Type, keyColumn.ColumnName)
+			}
+
+			pkFields[keyColumn.ColumnName] = callback
 		}
 
 		if keyColumn.Primary {
@@ -166,7 +181,7 @@ func BuildStateQuerySet[
 		refl := req.ProtoReflect()
 		out := map[string]any{}
 		for k, v := range pkFields {
-			out[k] = refl.Get(v).Interface()
+			out[k] = v(refl)
 		}
 		return out, nil
 	}

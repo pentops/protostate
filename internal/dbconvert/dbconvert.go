@@ -1,10 +1,12 @@
 package dbconvert
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"reflect"
 
 	sq "github.com/elgris/sqrl"
+	"github.com/pentops/j5/j5types/date_j5t"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -39,9 +41,18 @@ func FieldsToEqMap(ofTable string, m map[string]any) (sq.Eq, error) {
 }
 
 func interfaceToDBValue(i any) (any, error) {
+	fmt.Printf("interfaceToDBValue: %T\n", i)
 	switch v := i.(type) {
 	case *timestamppb.Timestamp:
 		return v.AsTime(), nil
+
+	case *date_j5t.Date:
+		fmt.Printf("date: %v\n", v)
+		return v.DateString(), nil
+
+	case driver.Valuer:
+		return v, nil
+
 	case proto.Message:
 		i, err := MarshalProto(v)
 		if err != nil {
