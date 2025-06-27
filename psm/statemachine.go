@@ -37,12 +37,12 @@ func MustSystemActor(id string) struct{} {
 // StateMachine is a database wrapper around the eventer. Using sane defaults
 // with overrides for table configuration.
 type StateMachine[
-K IKeyset,
-S IState[K, ST, SD], // Outer State Entity
-ST IStatusEnum,      // Status Enum in State Entity
-SD IStateData,
-E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
-IE IInnerEvent,             // Inner Event, the typed event
+	K IKeyset,
+	S IState[K, ST, SD], // Outer State Entity
+	ST IStatusEnum, // Status Enum in State Entity
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
+	IE IInnerEvent, // Inner Event, the typed event
 ] struct {
 	transitionSet[K, S, ST, SD, E, IE]
 
@@ -56,12 +56,12 @@ IE IInnerEvent,             // Inner Event, the typed event
 }
 
 func NewStateMachine[
-K IKeyset,
-S IState[K, ST, SD],
-ST IStatusEnum,
-SD IStateData,
-E IEvent[K, S, ST, SD, IE],
-IE IInnerEvent,
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ](
 	cb *StateMachineConfig[K, S, ST, SD, E, IE],
 ) (*StateMachine[K, S, ST, SD, E, IE], error) {
@@ -130,12 +130,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) WithDB(db Transactor) *DBStateMachi
 // DBStateMachine adds the 'Transaction' method to the state machine, which
 // runs the transition in a new transaction from the state machine's database
 type DBStateMachine[
-K IKeyset,
-S IState[K, ST, SD],
-ST IStatusEnum,
-SD IStateData,
-E IEvent[K, S, ST, SD, IE],
-IE IInnerEvent,
+	K IKeyset,
+	S IState[K, ST, SD],
+	ST IStatusEnum,
+	SD IStateData,
+	E IEvent[K, S, ST, SD, IE],
+	IE IInnerEvent,
 ] struct {
 	*StateMachine[K, S, ST, SD, E, IE]
 	db Transactor
