@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/pentops/j5/j5types/date_j5t"
 	"time"
 
 	"buf.build/go/protovalidate"
@@ -36,12 +37,12 @@ func MustSystemActor(id string) struct{} {
 // StateMachine is a database wrapper around the eventer. Using sane defaults
 // with overrides for table configuration.
 type StateMachine[
-	K IKeyset,
-	S IState[K, ST, SD], // Outer State Entity
-	ST IStatusEnum, // Status Enum in State Entity
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
-	IE IInnerEvent, // Inner Event, the typed event
+K IKeyset,
+S IState[K, ST, SD], // Outer State Entity
+ST IStatusEnum,      // Status Enum in State Entity
+SD IStateData,
+E IEvent[K, S, ST, SD, IE], // Event Wrapper, with IDs and Metadata
+IE IInnerEvent,             // Inner Event, the typed event
 ] struct {
 	transitionSet[K, S, ST, SD, E, IE]
 
@@ -55,12 +56,12 @@ type StateMachine[
 }
 
 func NewStateMachine[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
+K IKeyset,
+S IState[K, ST, SD],
+ST IStatusEnum,
+SD IStateData,
+E IEvent[K, S, ST, SD, IE],
+IE IInnerEvent,
 ](
 	cb *StateMachineConfig[K, S, ST, SD, E, IE],
 ) (*StateMachine[K, S, ST, SD, E, IE], error) {
@@ -129,12 +130,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) WithDB(db Transactor) *DBStateMachi
 // DBStateMachine adds the 'Transaction' method to the state machine, which
 // runs the transition in a new transaction from the state machine's database
 type DBStateMachine[
-	K IKeyset,
-	S IState[K, ST, SD],
-	ST IStatusEnum,
-	SD IStateData,
-	E IEvent[K, S, ST, SD, IE],
-	IE IInnerEvent,
+K IKeyset,
+S IState[K, ST, SD],
+ST IStatusEnum,
+SD IStateData,
+E IEvent[K, S, ST, SD, IE],
+IE IInnerEvent,
 ] struct {
 	*StateMachine[K, S, ST, SD, E, IE]
 	db Transactor
@@ -528,8 +529,16 @@ func assertPresentKeysMatch[K IKeyset](existing, event K) error {
 		if !ok {
 			return fmt.Errorf("event key %s is not present in existing keys", key)
 		}
-		if existingValue != eventValue {
-			return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+
+		switch v := existingValue.(type) {
+		case *date_j5t.Date:
+			if eventValueAsDate, ok := eventValue.(*date_j5t.Date); !ok || !v.Equals(eventValueAsDate) {
+				return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+			}
+		default:
+			if existingValue != eventValue {
+				return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+			}
 		}
 	}
 
