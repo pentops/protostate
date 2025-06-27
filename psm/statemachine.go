@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/pentops/j5/j5types/date_j5t"
 	"time"
 
 	"buf.build/go/protovalidate"
@@ -528,8 +529,16 @@ func assertPresentKeysMatch[K IKeyset](existing, event K) error {
 		if !ok {
 			return fmt.Errorf("event key %s is not present in existing keys", key)
 		}
-		if existingValue != eventValue {
-			return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+
+		switch v := existingValue.(type) {
+		case *date_j5t.Date:
+			if eventValueAsDate, ok := eventValue.(*date_j5t.Date); !ok || !v.Equals(eventValueAsDate) {
+				return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+			}
+		default:
+			if existingValue != eventValue {
+				return status.Errorf(codes.FailedPrecondition, "event key %s value %s does not match existing value %s", key, eventValue, existingValue)
+			}
 		}
 	}
 
