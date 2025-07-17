@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -19,7 +20,7 @@ func (ss sortSpec) errorName() string {
 	return ss.Path.JSONPathQuery()
 }
 
-func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor, arrayField protoreflect.MessageDescriptor, fallback []ProtoField) ([]sortSpec, error) {
+func buildTieBreakerFields(dataColumn string, req *j5schema.ObjectSchema, arrayField *j5schema.ObjectSchema, fallback []ProtoField) ([]sortSpec, error) {
 	listRequestAnnotation, ok := proto.GetExtension(req.Options().(*descriptorpb.MessageOptions), list_j5pb.E_ListRequest).(*list_j5pb.ListRequestMessage)
 	if ok && listRequestAnnotation != nil && len(listRequestAnnotation.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(listRequestAnnotation.SortTiebreaker))
@@ -66,7 +67,7 @@ func buildTieBreakerFields(dataColumn string, req protoreflect.MessageDescriptor
 	return tieBreakerFields, nil
 }
 
-func buildDefaultSorts(columnName string, message protoreflect.MessageDescriptor) ([]sortSpec, error) {
+func buildDefaultSorts(columnName string, message *j5schema.ObjectSchema) ([]sortSpec, error) {
 	var defaultSortFields []sortSpec
 
 	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
@@ -191,9 +192,8 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sor
 	return results, nil
 }
 
-func validateSortsAnnotations(fields protoreflect.FieldDescriptors) error {
-	for i := range fields.Len() {
-		field := fields.Get(i)
+func validateSortsAnnotations(fields []*j5schema.ObjectProperty) error {
+	for _, field := range fields {
 
 		if field.Kind() == protoreflect.MessageKind {
 			subFields := field.Message().Fields()
@@ -294,7 +294,7 @@ func isSortingAnnotated(opts *list_j5pb.FieldConstraint) bool {
 	return annotated
 }
 
-func validateQueryRequestSorts(message protoreflect.MessageDescriptor, sorts []*list_j5pb.Sort) error {
+func validateQueryRequestSorts(message *j5schema.ObjectSchema, sorts []*list_j5pb.Sort) error {
 	for _, sort := range sorts {
 		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
 		spec, err := pgstore.NewJSONPath(message, pathSpec)

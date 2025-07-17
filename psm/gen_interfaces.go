@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
+	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/proto"
 )
 
 /*
@@ -42,9 +42,14 @@ K, S, ST, E, and IE are set to one single type for the entire state machine
 SE is set to a single type for each transition.
 */
 
+type J5Message interface {
+	J5Reflect() j5reflect.Root
+}
+
 // IGenericProtoMessage is the base extensions shared by all message entities in the PSM generated code
 type IPSMMessage interface {
-	proto.Message
+	//proto.Message
+	J5Message
 	PSMIsSet() bool
 }
 
@@ -87,7 +92,8 @@ type IEvent[
 	SD IStateData,
 	Inner any,
 ] interface {
-	proto.Message
+	//proto.Message
+	J5Message
 	UnwrapPSMEvent() Inner
 	SetPSMEvent(Inner) error
 	PSMKeys() K
@@ -137,7 +143,7 @@ type TransitionMutation[
 func (f TransitionMutation[K, S, ST, SD, E, IE, SE]) runMutation(state S, event E) error { // nolint:unused // Used by genereted code.
 	asType, ok := any(event.UnwrapPSMEvent()).(SE)
 	if !ok {
-		name := event.ProtoReflect().Descriptor().FullName()
+		name := event.J5Reflect().SchemaName()
 		return fmt.Errorf("unexpected event type in transition: %s [IE] does not match [SE] (%T)", name, new(SE))
 	}
 

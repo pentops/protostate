@@ -5,16 +5,17 @@ import (
 	"fmt"
 
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
+	"github.com/pentops/j5/lib/j5reflect"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/pquery"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // QueryTableSpec the TableMap with descriptors for the messages, without using
 // generic parameters.
 type QueryTableSpec struct {
-	EventType protoreflect.MessageDescriptor
-	StateType protoreflect.MessageDescriptor
+	EventType *j5schema.ObjectSchema
+	StateType *j5schema.ObjectSchema
 	TableMap
 }
 
@@ -75,7 +76,7 @@ func (gc *StateQuerySet[
 	GetREQ, GetRES,
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
-]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+]) List(ctx context.Context, db Transactor, reqMsg *j5reflect.Object, resMsg *j5reflect.Object) error {
 	return gc.MainLister.List(ctx, db, reqMsg, resMsg)
 }
 
@@ -83,7 +84,7 @@ func (gc *StateQuerySet[
 	GetREQ, GetRES,
 	ListREQ, ListRES,
 	ListEventsREQ, ListEventsRES,
-]) ListEvents(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+]) ListEvents(ctx context.Context, db Transactor, reqMsg *j5reflect.Object, resMsg *j5reflect.Object) error {
 	return gc.EventLister.List(ctx, db, reqMsg, resMsg)
 }
 

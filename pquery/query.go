@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pentops/j5/lib/j5reflect"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type aliasSet int
@@ -43,16 +43,16 @@ type LeftJoin struct {
 }
 
 // MethodDescriptor is the RequestResponse pair in the gRPC Method
-type methodDescriptor[REQ proto.Message, RES proto.Message] struct {
-	request  protoreflect.MessageDescriptor
-	response protoreflect.MessageDescriptor
+type methodDescriptor[REQ j5reflect.Object, RES j5reflect.Object] struct {
+	request  *j5schema.ObjectSchema
+	response *j5schema.ObjectSchema
 }
 
-func newMethodDescriptor[REQ proto.Message, RES proto.Message]() *methodDescriptor[REQ, RES] {
+func newMethodDescriptor[REQ j5reflect.Object, RES j5reflect.Object]() *methodDescriptor[REQ, RES] {
 	req := *new(REQ)
 	res := *new(RES)
 	return &methodDescriptor[REQ, RES]{
-		request:  req.ProtoReflect().Descriptor(),
-		response: res.ProtoReflect().Descriptor(),
+		request:  req.ObjectSchema(),
+		response: res.ObjectSchema(),
 	}
 }

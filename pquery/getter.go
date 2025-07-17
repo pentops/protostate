@@ -7,24 +7,24 @@ import (
 	"fmt"
 	"strings"
 
-	"buf.build/go/protovalidate"
 	sq "github.com/elgris/sqrl"
 	"github.com/lib/pq"
+	"github.com/pentops/j5/lib/j5codec"
+	"github.com/pentops/j5/lib/j5reflect"
+	"github.com/pentops/j5/lib/j5schema"
+	"github.com/pentops/j5/lib/j5validate"
 	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type GetRequest interface {
-	proto.Message
+	j5reflect.Object
 }
 
 type GetResponse interface {
-	proto.Message
+	j5reflect.Object
 }
 
 type GetSpec[
@@ -38,7 +38,7 @@ type GetSpec[
 
 	PrimaryKey func(REQ) (map[string]any, error)
 
-	StateResponseField protoreflect.Name
+	StateResponseField string
 
 	Join *GetJoinSpec
 }
@@ -81,7 +81,7 @@ type GetJoinSpec struct {
 	TableName     string
 	DataColumn    string
 	On            JoinFields
-	FieldInParent protoreflect.Name
+	FieldInParent string
 }
 
 func (gc GetJoinSpec) validate() error {
@@ -100,9 +100,9 @@ func (gc GetJoinSpec) validate() error {
 
 type Getter[
 	REQ GetRequest,
-	RES proto.Message,
+	RES j5reflect.Object,
 ] struct {
-	stateField protoreflect.FieldDescriptor
+	stateField *j5schema.ObjectProperty
 
 	dataColumn string
 	tableName  string
@@ -112,7 +112,7 @@ type Getter[
 
 	queryLogger QueryLogger
 
-	validator protovalidate.Validator
+	validator *j5validate.Validator
 
 	join *getJoin
 }
@@ -120,7 +120,7 @@ type Getter[
 type getJoin struct {
 	dataColumn    string
 	tableName     string
-	fieldInParent protoreflect.FieldDescriptor // wraps the ListFooEventResponse type
+	fieldInParent *j5schema.ObjectProperty // wraps the ListFooEventResponse type
 	on            JoinFields
 }
 
@@ -143,9 +143,9 @@ func NewGetter[
 	defaultState := false
 	if spec.StateResponseField == "" {
 		defaultState = true
-		spec.StateResponseField = protoreflect.Name("state")
+		spec.StateResponseField = "state"
 	}
-	sc.stateField = resDesc.Fields().ByName(spec.StateResponseField)
+	sc.stateField = resDesc.Properties.ByJSONName(spec.StateResponseField)
 	if sc.stateField == nil {
 		if defaultState {
 			return nil, fmt.Errorf("no 'state' field in proto message - did you mean to override StateResponseField?")
@@ -163,12 +163,12 @@ func NewGetter[
 			return nil, fmt.Errorf("invalid join spec: %w", err)
 		}
 
-		joinField := resDesc.Fields().ByName(protoreflect.Name(spec.Join.FieldInParent))
+		joinField := resDesc.Properties.ByJSONName(spec.Join.FieldInParent)
 		if joinField == nil {
 			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
 		}
 
-		if !joinField.IsList() {
+		if _, ok := joinField.Schema.(*j5schema.ArrayField); !ok {
 			return nil, fmt.Errorf("field %s, in join spec, is not a list", spec.Join.FieldInParent)
 		}
 
@@ -180,11 +180,7 @@ func NewGetter[
 		}
 	}
 
-	var err error
-	sc.validator, err = protovalidate.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize validator: %w", err)
-	}
+	sc.validator = j5validate.Global
 
 	return sc, nil
 }
@@ -197,8 +193,6 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 
 	as := newAliasSet()
 	rootAlias := as.Next(gc.tableName)
-
-	resReflect := resMsg.ProtoReflect()
 
 	if err := gc.validator.Validate(reqMsg); err != nil {
 		return err
@@ -316,24 +310,40 @@ func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, 
 		return status.Error(codes.NotFound, "not found")
 	}
 
-	stateMsg := resReflect.NewField(gc.stateField)
-	if err := protojson.Unmarshal(foundJSON, stateMsg.Message().Interface()); err != nil {
+	stateMsg, err := resMsg.GetOrCreateValue(gc.stateField.JSONName)
+	if err != nil {
 		return err
 	}
-	resReflect.Set(gc.stateField, stateMsg)
+
+	stateObj, ok := stateMsg.AsObject()
+	if !ok {
+		return fmt.Errorf("field %s in response message is not an object", gc.stateField.JSONName)
+	}
+
+	err = j5codec.Global.JSONToReflect(foundJSON, stateObj)
+	if err != nil {
+		return err
+	}
 
 	if gc.join != nil {
-		elementList := resReflect.Mutable(gc.join.fieldInParent).List()
+		element, err := resMsg.GetOrCreateValue(gc.join.fieldInParent.JSONName)
+		if err != nil {
+			return err
+		}
+		elementList, ok := element.AsArrayOfContainer()
+		if !ok {
+			return fmt.Errorf("field %s in response message is not an array of containers", gc.join.fieldInParent.JSONName)
+		}
+
 		for _, eventBytes := range joinedJSON {
 			if eventBytes == "" {
 				continue
 			}
 
-			rowMessage := elementList.NewElement().Message()
-			if err := protojson.Unmarshal([]byte(eventBytes), rowMessage.Interface()); err != nil {
-				return fmt.Errorf("joined unmarshal: %w", err)
+			rowMessage, _ := elementList.NewContainerElement()
+			if err := j5codec.Global.JSONToReflect([]byte(eventBytes), rowMessage); err != nil {
+				return fmt.Errorf("joined json to reflect: %w", err)
 			}
-			elementList.Append(protoreflect.ValueOf(rowMessage))
 		}
 
 	}

@@ -10,20 +10,19 @@ import (
 	"time"
 	"unicode"
 
-	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	"buf.build/go/protovalidate"
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/lib/j5codec"
+	"github.com/pentops/j5/lib/j5reflect"
+	"github.com/pentops/j5/lib/j5schema"
+	"github.com/pentops/j5/lib/j5validate"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -31,11 +30,11 @@ import (
 var dateRegex = regexp.MustCompile(`^\d{4}(-\d{2}(-\d{2})?)?$`)
 
 type ListRequest interface {
-	proto.Message
+	j5reflect.Object
 }
 
 type ListResponse interface {
-	proto.Message
+	j5reflect.Object
 }
 
 type TableSpec struct {
@@ -53,14 +52,14 @@ type TableSpec struct {
 // ProtoField represents a field within a the root data.
 type ProtoField struct {
 	// path from the root object to this field
-	pathInRoot pgstore.ProtoPathSpec
+	pathInRoot pgstore.JSONPathSpec
 
 	// optional column name when the field is also stored as a scalar directly
 	valueColumn *string
 }
 
 func NewProtoField(protoPath string, columnName *string) ProtoField {
-	pp := pgstore.ParseProtoPathSpec(protoPath)
+	pp := pgstore.ParseJSONPathSpec(protoPath)
 	return ProtoField{
 		valueColumn: columnName,
 		pathInRoot:  pp,
@@ -77,7 +76,7 @@ type Column struct {
 
 type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	TableSpec
-	RequestFilter func(REQ) (map[string]any, error)
+	RequestFilter func(j5reflect.Object) (map[string]any, error)
 }
 
 type QueryLogger func(sqrlx.Sqlizer)
@@ -85,18 +84,20 @@ type QueryLogger func(sqrlx.Sqlizer)
 type ListReflectionSet struct {
 	defaultPageSize uint64
 
-	arrayField        protoreflect.FieldDescriptor
-	pageResponseField protoreflect.FieldDescriptor
-	pageRequestField  protoreflect.FieldDescriptor
-	queryRequestField protoreflect.FieldDescriptor
+	arrayField  *j5schema.ObjectProperty
+	arrayObject *j5schema.ObjectSchema
+
+	pageResponseField *j5schema.ObjectProperty
+	pageRequestField  *j5schema.ObjectProperty
+	queryRequestField *j5schema.ObjectProperty
 
 	defaultSortFields []sortSpec
 	tieBreakerFields  []sortSpec
 
 	defaultFilterFields []filterSpec
-	RequestFilterFields []protoreflect.FieldDescriptor
+	RequestFilterFields []*j5schema.ObjectProperty
 
-	tsvColumnMap map[string]string
+	//tsvColumnMap map[string]string
 
 	// TODO: This should be an array/map of columns to data types, allowing
 	// multiple JSONB values, as well as cached field values direcrly on the
@@ -104,40 +105,44 @@ type ListReflectionSet struct {
 	dataColumn string
 }
 
-func BuildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, table TableSpec) (*ListReflectionSet, error) {
+func BuildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema, table TableSpec) (*ListReflectionSet, error) {
 	return buildListReflection(req, res, table)
 }
 
-func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.MessageDescriptor, table TableSpec) (*ListReflectionSet, error) {
+func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema, table TableSpec) (*ListReflectionSet, error) {
 	var err error
 	ll := ListReflectionSet{
 		defaultPageSize: uint64(20),
 		dataColumn:      table.DataColumn,
 	}
-	fields := res.Fields()
 
-	for i := range fields.Len() {
-		field := fields.Get(i)
-		msg := field.Message()
-		if msg == nil {
-			return nil, fmt.Errorf("field %s is a '%s', but should be a message", field.Name(), field.Kind())
-		}
+	for _, field := range res.Properties {
+		switch ft := field.Schema.(type) {
+		case *j5schema.ObjectField:
 
-		if msg.FullName() == "j5.list.v1.PageResponse" {
-			ll.pageResponseField = field
-			continue
-		}
+			if ft.FullName() == "j5.list.v1.PageResponse" {
+				ll.pageResponseField = field
+				continue
+			}
 
-		if field.Cardinality() == protoreflect.Repeated {
+		case *j5schema.ArrayField:
+
+			objectField, ok := ft.ItemSchema.(*j5schema.ObjectField)
+			if !ok {
+				return nil, fmt.Errorf("array field %s must be an object field, got %s", field.FullName(), ft.ItemSchema.FullName())
+			}
+
 			if ll.arrayField != nil {
-				return nil, fmt.Errorf("multiple repeated fields (%s and %s)", ll.arrayField.Name(), field.Name())
+				return nil, fmt.Errorf("multiple repeated fields (%s and %s)", ll.arrayField.FullName(), field.FullName())
 			}
 
 			ll.arrayField = field
+			ll.arrayObject = objectField.ObjectSchema()
 			continue
+
 		}
 
-		return nil, fmt.Errorf("unknown field in response: '%s' of type %s", field.Name(), field.Kind())
+		return nil, fmt.Errorf("unknown field in response: '%s' of type %s", field.FullName(), field.Schema.TypeName())
 	}
 
 	if ll.arrayField == nil {
@@ -148,62 +153,51 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no page field in response, %s must have a j5.list.v1.PageResponse", res.FullName())
 	}
 
-	err = validateListAnnotations(ll.arrayField.Message().Fields())
+	err = validateListAnnotations(ll.arrayObject.Properties)
 	if err != nil {
-		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.Message().FullName(), err)
+		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.FullName(), err)
 	}
 
-	ll.defaultSortFields, err = buildDefaultSorts(ll.dataColumn, ll.arrayField.Message())
+	ll.defaultSortFields, err = buildDefaultSorts(ll.dataColumn, ll.arrayObject)
 	if err != nil {
 		return nil, fmt.Errorf("default sorts: %w", err)
 	}
 
-	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, req, ll.arrayField.Message(), table.FallbackSortColumns)
+	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, req, ll.arrayObject, table.FallbackSortColumns)
 	if err != nil {
 		return nil, fmt.Errorf("tie breaker fields: %w", err)
 	}
 
 	if len(ll.defaultSortFields) == 0 && len(ll.tieBreakerFields) == 0 {
-		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.Message().FullName(), req.FullName())
+		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.FullName(), req.FullName())
 	}
 
-	f, err := buildDefaultFilters(ll.dataColumn, ll.arrayField.Message())
+	f, err := buildDefaultFilters(ll.dataColumn, ll.arrayObject)
 	if err != nil {
 		return nil, fmt.Errorf("default filters: %w", err)
 	}
 
 	ll.defaultFilterFields = f
 
-	ll.tsvColumnMap = buildTsvColumnMap(ll.arrayField.Message())
+	//ll.tsvColumnMap = buildTsvColumnMap(ll.arrayObject)
 
-	requestFields := req.Fields()
-	for i := range requestFields.Len() {
-		field := requestFields.Get(i)
-		msg := field.Message()
-		if msg != nil {
-			switch msg.FullName() {
+	for _, field := range req.Properties {
+		switch ft := field.Schema.(type) {
+		case *j5schema.ObjectField:
+			switch ft.FullName() {
 			case "j5.list.v1.PageRequest":
 				ll.pageRequestField = field
-				continue
 			case "j5.list.v1.QueryRequest":
 				ll.queryRequestField = field
-				continue
-			case "j5.types.date.v1.Date":
-				ll.RequestFilterFields = append(ll.RequestFilterFields, field)
-				continue
 			default:
-				return nil, fmt.Errorf("unknown field in request: '%s' of type %s", field.Name(), field.Kind())
+				return nil, fmt.Errorf("unknown field in request: '%s' of type %s", field.FullName(), field.Schema.TypeName())
 			}
-		}
 
-		// Assume this is a filter field
-		switch field.Kind() {
-		case protoreflect.StringKind:
+		case *j5schema.ScalarSchema:
 			ll.RequestFilterFields = append(ll.RequestFilterFields, field)
-		case protoreflect.BoolKind:
-			ll.RequestFilterFields = append(ll.RequestFilterFields, field)
+
 		default:
-			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.Name(), field.Kind())
+			return nil, fmt.Errorf("unsupported filter field in request: '%s' of type %s", field.FullName(), field.Schema.TypeName())
 		}
 	}
 
@@ -215,11 +209,10 @@ func buildListReflection(req protoreflect.MessageDescriptor, res protoreflect.Me
 		return nil, fmt.Errorf("no query field in request, %s must have a j5.list.v1.QueryRequest", req.FullName())
 	}
 
-	arrayFieldOpt := ll.arrayField.Options().(*descriptorpb.FieldOptions)
-	validateOpt := proto.GetExtension(arrayFieldOpt, validate.E_Field).(*validate.FieldRules)
-	if repeated := validateOpt.GetRepeated(); repeated != nil {
-		if repeated.MaxItems != nil {
-			ll.defaultPageSize = *repeated.MaxItems
+	arraySchema := ll.arrayField.Schema.(*j5schema.ArrayField)
+	if arraySchema.Rules != nil {
+		if arraySchema.Rules.MaxItems != nil {
+			ll.defaultPageSize = *arraySchema.Rules.MaxItems
 		}
 	}
 
@@ -236,9 +229,9 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	auth     AuthProvider
 	authJoin []*LeftJoin
 
-	requestFilter func(REQ) (map[string]any, error)
+	requestFilter func(j5reflect.Object) (map[string]any, error)
 
-	validator protovalidate.Validator
+	validator *j5validate.Validator
 }
 
 func NewLister[
@@ -261,10 +254,7 @@ func NewLister[
 
 	ll.requestFilter = spec.RequestFilter
 
-	ll.validator, err = protovalidate.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize validator: %w", err)
-	}
+	ll.validator = j5validate.Global
 
 	return ll, nil
 }
@@ -273,13 +263,10 @@ func (ll *Lister[REQ, RES]) SetQueryLogger(logger QueryLogger) {
 	ll.queryLogger = logger
 }
 
-func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
-	if err := ll.validator.Validate(reqMsg); err != nil {
-		return fmt.Errorf("validating request %s: %w", reqMsg.ProtoReflect().Descriptor().FullName(), err)
+func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5reflect.Object) error {
+	if err := ll.validator.Validate(req); err != nil {
+		return fmt.Errorf("validating request %s: %w", req.SchemaName(), err)
 	}
-
-	res := resMsg.ProtoReflect()
-	req := reqMsg.ProtoReflect()
 
 	pageSize, err := ll.getPageSize(req)
 	if err != nil {
@@ -326,16 +313,22 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 		ll.queryLogger(selectQuery)
 	}
 
-	list := res.Mutable(ll.arrayField).List()
-	res.Set(ll.arrayField, protoreflect.ValueOf(list))
+	listField, err := res.GetOrCreateValue(ll.arrayField.JSONName)
+	if err != nil {
+		return err
+	}
+	list, ok := listField.AsArrayOfContainer()
+	if !ok {
+		return fmt.Errorf("field %s in response is not an array", ll.arrayField.FullName())
+	}
 
 	var nextToken string
 	for idx, rowBytes := range jsonRows {
-		rowMessage := list.NewElement().Message()
+		rowMessage, _ := list.NewContainerElement()
 
-		err := protojson.Unmarshal(rowBytes, rowMessage.Interface())
+		err := j5codec.Global.JSONToReflect(rowBytes, rowMessage)
 		if err != nil {
-			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+			return fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.SchemaName(), string(rowBytes), err)
 		}
 
 		if idx >= int(pageSize) {
@@ -343,30 +336,40 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, reqMsg prot
 			// The eventual solution will need to look at
 			// the sorting and filtering of the query and either encode them
 			// directly, or encode a subset of the message as required.
-			lastBytes, err := proto.Marshal(rowMessage.Interface())
-			if err != nil {
-				return fmt.Errorf("marshalling final row: %w", err)
-			}
 
-			nextToken = base64.StdEncoding.EncodeToString(lastBytes)
+			nextToken = base64.StdEncoding.EncodeToString(rowBytes)
 			break
 		}
-
-		list.Append(protoreflect.ValueOf(rowMessage))
 	}
 
 	if nextToken != "" {
-		pageResponse := &list_j5pb.PageResponse{
-			NextToken: &nextToken,
+		pageRes, err := res.GetOrCreateValue(ll.pageResponseField.JSONName)
+		if err != nil {
+			return err
 		}
 
-		res.Set(ll.pageResponseField, protoreflect.ValueOf(pageResponse.ProtoReflect()))
+		cont, ok := pageRes.AsContainer()
+		if !ok {
+			return fmt.Errorf("field %s in response is not a container", ll.pageResponseField.FullName())
+		}
+
+		nextTokenVal, err := cont.GetOrCreateValue("nextToken")
+		if err != nil {
+			return fmt.Errorf("get nextToken field in response: %w", err)
+		}
+		nextTokenScalar, ok := nextTokenVal.AsScalar()
+		if !ok {
+			return fmt.Errorf("field %s in response is not a scalar", nextTokenVal.FullTypeName())
+		}
+		if err := nextTokenScalar.SetGoValue(nextToken); err != nil {
+			return fmt.Errorf("set nextToken field in response: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Message, res protoreflect.Message) (*sq.SelectBuilder, error) {
+func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object, res j5reflect.Object) (*sq.SelectBuilder, error) {
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
 
@@ -378,7 +381,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 
 	filterFields := []sq.Sqlizer{}
 	if ll.requestFilter != nil {
-		filter, err := ll.requestFilter(req.Interface().(REQ))
+		filter, err := ll.requestFilter(req)
 		if err != nil {
 			return nil, err
 		}
@@ -629,19 +632,30 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req protoreflect.Mes
 	return selectQuery, nil
 }
 
-func (ll *Lister[REQ, RES]) getPageSize(req protoreflect.Message) (uint64, error) {
-	pageSize := ll.defaultPageSize
-
-	pageReq, ok := req.Get(ll.pageRequestField).Message().Interface().(*list_j5pb.PageRequest)
-	if ok && pageReq != nil && pageReq.PageSize != nil {
-		pageSize = uint64(*pageReq.PageSize)
-
-		if pageSize > ll.defaultPageSize {
-			return 0, fmt.Errorf("page size exceeds the maximum allowed size of %d", ll.defaultPageSize)
-		}
+func (ll *Lister[REQ, RES]) getPageSize(req j5reflect.Object) (uint64, error) {
+	pageField, ok, err := req.GetField(ll.pageRequestField.JSONName, "pageSize")
+	if err != nil {
+		return 0, fmt.Errorf("get page request field %s: %w", ll.pageRequestField.JSONName, err)
+	}
+	if !ok {
+		return ll.defaultPageSize, nil
 	}
 
-	return pageSize, nil
+	val, ok := pageField.AsScalar()
+	if !ok {
+		return 0, fmt.Errorf("field %s in request is not a scalar", ll.pageRequestField.JSONName)
+	}
+	intVal, err := val.ToGoValue()
+	if err != nil {
+		return 0, fmt.Errorf("convert page request field %s to Go value: %w", ll.pageRequestField.JSONName, err)
+	}
+
+	int64Val, ok := intVal.(int64)
+	if !ok {
+		return 0, fmt.Errorf("field %s in request is not an int64", ll.pageRequestField.JSONName)
+	}
+
+	return uint64(int64Val), nil
 }
 
 func camelToSnake(jsonName string) string {
@@ -659,7 +673,7 @@ func camelToSnake(jsonName string) string {
 	return out.String()
 }
 
-func validateListAnnotations(fields protoreflect.FieldDescriptors) error {
+func validateListAnnotations(fields []*j5schema.ObjectProperty) error {
 	err := validateSortsAnnotations(fields)
 	if err != nil {
 		return fmt.Errorf("sort: %w", err)

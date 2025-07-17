@@ -3,28 +3,26 @@ package pquery
 import (
 	"fmt"
 
+	"maps"
+
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"maps"
 )
 
-func validateSearchesAnnotations(msg protoreflect.FieldDescriptors) error {
-	fields := make([]protoreflect.FieldDescriptor, msg.Len())
-	for i := range msg.Len() {
-		fields[i] = msg.Get(i)
-	}
-	_, err := validateSearchesAnnotationsInner(fields)
+func validateSearchesAnnotations(props []*j5schema.ObjectProperty) error {
+	_, err := validateSearchesAnnotationsInner(props)
 	if err != nil {
 		return fmt.Errorf("search validation: %w", err)
 	}
 	return nil
 }
 
-func validateSearchesAnnotationsInner(fields []protoreflect.FieldDescriptor) (map[string]protoreflect.Name, error) {
+func validateSearchesAnnotationsInner(fields []*j5schema.ObjectProperty) (map[string]protoreflect.Name, error) {
 	// search annotations have a 'field_identifier' which specifies the database column name to use for the text-search-vector.
 	// This function validates that the field_identifier is unique for the given field-set
 	// In cases where the field is a message, it will recurse into the message to validate the field identifiers
@@ -39,14 +37,13 @@ func validateSearchesAnnotationsInner(fields []protoreflect.FieldDescriptor) (ma
 	// Oneof fields, however, can have the same field identifier on different
 	// branches.
 
-	ids := make(map[string]protoreflect.Name)
-	oneofs := map[string][]protoreflect.FieldDescriptor{}
+	ids := make(map[string]string)
+	oneofs := map[string][]*j5schema.ObjectProperty{}
 
 	for _, field := range fields {
 
-		if oneof := field.ContainingOneof(); oneof != nil {
-			name := string(oneof.Name())
-			oneofs[name] = append(oneofs[name], field)
+		if oneof, ok := field.Schema.(*j5schema.OneofField); ok {
+			oneofs[field.JSONName] = append(oneofs[field.JSONName], oneof)
 			continue
 		}
 
@@ -63,13 +60,13 @@ func validateSearchesAnnotationsInner(fields []protoreflect.FieldDescriptor) (ma
 		//  - with existing parent keys
 		//  - with other oneofs
 
-		combinedBranchIDs := make(map[string]protoreflect.Name)
+		combinedBranchIDs := make(map[string]string)
 
 		for _, field := range oneofFields {
 
 			// collect a new set of IDs for this branch as if it is the root of
 			// the message.
-			branchIDs := make(map[string]protoreflect.Name)
+			branchIDs := make(map[string]string)
 			err := validateSearchAnnotationsField(branchIDs, field)
 			if err != nil {
 				return nil, err
@@ -99,7 +96,49 @@ func validateSearchesAnnotationsInner(fields []protoreflect.FieldDescriptor) (ma
 	return ids, nil
 }
 
-func validateSearchAnnotationsField(ids map[string]protoreflect.Name, field protoreflect.FieldDescriptor) error {
+func validateSearchAnnotationsField(ids map[string]string, field *j5schema.ObjectProperty) error {
+
+	switch bigType := field.Schema.(type) {
+	case *j5schema.ObjectField:
+		fields := bigType.ObjectSchema().Fields()
+		searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
+		if err != nil {
+			return fmt.Errorf("object search validation: %w", err)
+		}
+
+		for searchKey, usedIn := range searchIdentifiers {
+			if existing, ok := ids[searchKey]; ok {
+				return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+			}
+			ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
+		}
+
+	case *j5schema.OneofField:
+		fields := bigType.OneofSchema().Fields()
+		searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
+		if err != nil {
+			return fmt.Errorf("oneof search validation: %w", err)
+		}
+		for searchKey, usedIn := range searchIdentifiers {
+			if existing, ok := ids[searchKey]; ok {
+				return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+			}
+			ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
+		}
+
+	case *j5schema.MapField:
+		items := bigType.MapSchema()
+
+	case *j5schema.ArrayField:
+
+	case *j5schema.ScalarField:
+
+		schema := bigType
+
+	}
+}
+
+/*
 
 	switch field.Kind() {
 	case protoreflect.StringKind:
@@ -148,10 +187,9 @@ func validateSearchAnnotationsField(ids map[string]protoreflect.Name, field prot
 	}
 
 	return nil
+*/
 
-}
-
-func validateQueryRequestSearches(message protoreflect.MessageDescriptor, searches []*list_j5pb.Search) error {
+func validateQueryRequestSearches(message *j5schema.ObjectSchema, searches []*list_j5pb.Search) error {
 	for _, search := range searches {
 
 		spec, err := pgstore.NewJSONPath(message, pgstore.ParseJSONPathSpec(search.GetField()))
@@ -189,7 +227,7 @@ func validateQueryRequestSearches(message protoreflect.MessageDescriptor, search
 	return nil
 }
 
-func buildTsvColumnMap(message protoreflect.MessageDescriptor) map[string]string {
+func buildTsvColumnMap(message *j5schema.ObjectSchema) map[string]string {
 	out := make(map[string]string)
 
 	for i := range message.Fields().Len() {

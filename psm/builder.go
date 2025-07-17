@@ -2,6 +2,7 @@ package psm
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -66,8 +67,14 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) InitialStateFunc(cbFunc func
 
 func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) apply() error {
 	if smc.tableMap == nil {
-		state := (*new(S)).ProtoReflect().Descriptor()
-		event := (*new(E)).ProtoReflect().Descriptor()
+		state, ok := (*new(S)).J5Reflect().RootSchema()
+		if !ok {
+			return fmt.Errorf("invalid state type %T, must be a j5 root schema", new(S))
+		}
+		event, ok := (*new(E)).J5Reflect().RootSchema()
+		if !ok {
+			return fmt.Errorf("invalid event type %T, must be a j5 root schema", new(E))
+		}
 		tableMap, err := tableMapFromStateAndEvent(state, event)
 		if err != nil {
 			return err
@@ -94,8 +101,14 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) BuildQueryTableSpec() (*Quer
 		return nil, err
 	}
 
-	state := (*new(S)).ProtoReflect().Descriptor()
-	event := (*new(E)).ProtoReflect().Descriptor()
+	state, ok := (*new(S)).J5Reflect().RootSchema()
+	if !ok {
+		return nil, fmt.Errorf("invalid state type %T, must be a j5 root schema", new(S))
+	}
+	event, ok := (*new(E)).J5Reflect().RootSchema()
+	if !ok {
+		return nil, fmt.Errorf("invalid event type %T, must be a j5 root schema", new(E))
+	}
 
 	return &QueryTableSpec{
 		TableMap:  *smc.tableMap,

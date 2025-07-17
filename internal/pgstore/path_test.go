@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/pentops/flowtest/prototest"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,11 +23,15 @@ func TestFindFieldSpec(t *testing.T) {
 
 		message Profile {
 			int64 weight = 1;
+			ProfileType type = 2;
+		}
 
+		message ProfileType {
 			oneof type {
 				Card card = 2;
 			}
 		}
+
 
 		message Card {
 			int64 size = 1;
@@ -34,85 +39,80 @@ func TestFindFieldSpec(t *testing.T) {
 	`})
 
 	fooDesc := descFiles.MessageByName(t, "test.Foo")
-
-	tcs := []struct {
-		path     ProtoPathSpec
-		jsonPath JSONPathSpec
-	}{
-		{path: ProtoPathSpec{"id"}},
-		{path: ProtoPathSpec{"profile", "weight"}},
-		{path: ProtoPathSpec{"profile", "card", "size"}},
+	fooSchema, err := j5schema.Global.Schema(fooDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fooObject, ok := fooSchema.(*j5schema.ObjectSchema)
+	if !ok {
+		t.Fatal("expected Foo to be an ObjectSchema")
 	}
 
-	for _, tc := range tcs {
-		if tc.jsonPath == nil {
-			tc.jsonPath = JSONPathSpec(tc.path) // assume it's just lower case wingle word
+	t.Run("Find Field", func(t *testing.T) {
+
+		tcs := []struct {
+			path    JSONPathSpec
+			isOneof bool
+		}{
+			{path: JSONPathSpec{"id"}},
+			{path: JSONPathSpec{"profile", "weight"}},
+			{path: JSONPathSpec{"profile", "type"}},
+			{path: JSONPathSpec{"profile", "type", "type"}, isOneof: true},
+			{path: JSONPathSpec{"profile", "type", "card", "size"}},
 		}
-		t.Run(tc.path.String()+" Proto", func(t *testing.T) {
-			spec, err := NewProtoPath(fooDesc, tc.path)
-			if err != nil {
-				t.Fatal(err)
-			}
 
-			if spec.leafField == nil {
-				t.Fatal("expected field")
-			}
+		for _, tc := range tcs {
+			t.Run(tc.path.String()+" JSON", func(t *testing.T) {
+				spec, err := NewJSONPath(fooObject, tc.path)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			name := tc.path[len(tc.path)-1]
-			assert.Equal(t, string(spec.leafField.Name()), name)
-		})
-		t.Run(tc.jsonPath.String()+" JSON", func(t *testing.T) {
-			spec, err := NewJSONPath(fooDesc, tc.jsonPath)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if spec.leafField == nil {
-				t.Fatal("expected field")
-			}
-
-			name := tc.path[len(tc.path)-1]
-			assert.Equal(t, string(spec.leafField.Name()), name)
-		})
-	}
-
-	tcs = []struct {
-		path     ProtoPathSpec
-		jsonPath JSONPathSpec
-	}{
-		{path: ProtoPathSpec{"foo"}},
-		{path: ProtoPathSpec{"profile", "weight", "size"}},
-	}
-
-	for _, tc := range tcs {
-		if tc.jsonPath == nil {
-			tc.jsonPath = JSONPathSpec(tc.path) // assume it's just lower case wingle word
+				if tc.isOneof {
+					if spec.leafOneof == nil {
+						t.Fatal("missing oneof field")
+					}
+				} else {
+					if spec.leafField == nil {
+						t.Fatal("missing leaf field")
+					}
+					name := tc.path[len(tc.path)-1]
+					assert.Equal(t, string(spec.leafField.JSONName), name)
+				}
+			})
 		}
-		t.Run(tc.path.String()+" Proto Sad", func(t *testing.T) {
-			_, err := NewProtoPath(fooDesc, tc.path)
-			if err == nil {
-				t.Fatal("expected an error")
-			}
-		})
-		t.Run(tc.jsonPath.String()+" JSON Sad", func(t *testing.T) {
-			_, err := NewJSONPath(fooDesc, tc.jsonPath)
-			if err == nil {
-				t.Fatal("expected an error")
-			}
-		})
-	}
+	})
+
+	t.Run("Sad Path", func(t *testing.T) {
+		tcs := []struct {
+			path JSONPathSpec
+		}{
+			{path: JSONPathSpec{"foo"}},
+			{path: JSONPathSpec{"profile", "weight", "size"}},
+		}
+
+		for _, tc := range tcs {
+			t.Run(tc.path.String()+" JSON Sad", func(t *testing.T) {
+				_, err := NewJSONPath(fooObject, tc.path)
+				if err == nil {
+					t.Fatal("expected an error")
+				}
+			})
+		}
+	})
 
 	t.Run("Walk", func(t *testing.T) {
 
 		expectedNodes := map[string]struct{}{
-			"$.id":                {},
-			"$.profile":           {},
-			"$.profile.weight":    {},
-			"$.profile.card":      {},
-			"$.profile.card.size": {},
+			"$.id":                     {},
+			"$.profile":                {},
+			"$.profile.weight":         {},
+			"$.profile.type":           {},
+			"$.profile.type.card":      {},
+			"$.profile.type.card.size": {},
 		}
 
-		err := WalkPathNodes(fooDesc, func(node Path) error {
+		err := WalkPathNodes(fooObject, func(node Path) error {
 			pathQuery := node.JSONPathQuery()
 			t.Log(pathQuery)
 			_, ok := expectedNodes[pathQuery]
@@ -120,6 +120,7 @@ func TestFindFieldSpec(t *testing.T) {
 				t.Fatalf("unexpected node %s", pathQuery)
 			}
 			delete(expectedNodes, pathQuery)
+
 			return nil
 		})
 		if err != nil {

@@ -117,7 +117,7 @@ func safeTableName(name string) string {
 	}, name)
 }
 
-func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescriptor) (QueryTableSpec, error) {
+func BuildQueryTableSpec(stateMessage, eventMessage *j5schema.ObjectSchema) (QueryTableSpec, error) {
 	tableMap, err := tableMapFromStateAndEvent(stateMessage, eventMessage)
 	if err != nil {
 		return QueryTableSpec{}, err
@@ -213,14 +213,12 @@ func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescr
 	return kc, nil
 }
 
-func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*TableMap, error) {
+func tableMapFromStateAndEvent(stateMessage, eventMessage *j5schema.ObjectSchema) (*TableMap, error) {
 
 	var stateKeyField protoreflect.FieldDescriptor
 	var keyMessage protoreflect.MessageDescriptor
 
-	fields := stateMessage.Fields()
-	for idx := range fields.Len() {
-		field := fields.Get(idx)
+	for _, field := range stateMessage.Properties {
 		if field.Kind() != protoreflect.MessageKind {
 			continue
 		}
@@ -239,9 +237,7 @@ func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDe
 
 	var eventKeysField protoreflect.FieldDescriptor
 
-	fields = eventMessage.Fields()
-	for idx := range fields.Len() {
-		field := fields.Get(idx)
+	for _, field := range eventMessage.Properties {
 		if field.Kind() != protoreflect.MessageKind {
 			continue
 		}

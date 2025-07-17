@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/j5/lib/j5schema"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 type Table interface {
@@ -28,20 +25,7 @@ type NestedField struct {
 	ValueColumn *string
 }
 
-type ProtoFieldSpec struct {
-	// The column holding the data, either directly or JSONB from here using the
-	// path
-	ColumnName string
-
-	// The path from the column root to the node being specified (not the path
-	// of the node from a 'root node' of the table)
-	Path ProtoPathSpec
-
-	// The path from the nominal table root message to the node being specified
-	PathFromRoot ProtoPathSpec
-}
-
-func (nf *NestedField) ProtoChild(name protoreflect.Name) (*NestedField, error) {
+func (nf *NestedField) ProtoChild(name string) (*NestedField, error) {
 	pathChild, err := nf.Path.Child(name)
 	if err != nil {
 		return nil, err
@@ -63,67 +47,50 @@ func (nf *NestedField) Selector(inTable string) string {
 }
 
 type pathNode struct {
-	name  protoreflect.Name
-	field protoreflect.FieldDescriptor
-	oneof protoreflect.OneofDescriptor
+	name  string
+	field *j5schema.ObjectProperty
+	//oneof protoreflect.OneofDescriptor
 }
 
 type Path struct {
-	root protoreflect.MessageDescriptor
+	root *j5schema.ObjectSchema
 	path []pathNode
 
-	leafField protoreflect.FieldDescriptor
-	leafOneof protoreflect.OneofDescriptor
+	leafField *j5schema.ObjectProperty
+	leafOneof *j5schema.OneofSchema // If the leaf is a oneof, this is the oneof schema
 }
 
-func (pp Path) Root() protoreflect.MessageDescriptor {
+func (pp Path) Root() *j5schema.ObjectSchema {
 	return pp.root
 }
 
-func (pp Path) LeafField() protoreflect.FieldDescriptor {
+func (pp Path) LeafField() *j5schema.ObjectProperty {
 	return pp.leafField
 }
 
-func (pp Path) LeafOneof() protoreflect.OneofDescriptor {
+func (pp Path) LeafOneof() *j5schema.OneofSchema {
 	return pp.leafOneof
 }
 
-// LeafOneofWrapper handles the special case where the leaf is a oneof inside of
-// a oneof wrapper, then this returns the field definition of the object which
-// references the wrapper.
-func (pp Path) LeafOneofWrapper() protoreflect.FieldDescriptor {
-	if pp.leafOneof == nil {
-		return nil
-	}
-	parentMsg := pp.leafOneof.Parent().(protoreflect.MessageDescriptor)
-	if !j5schema.IsOneofWrapper(parentMsg) {
-		return nil
-	}
-
-	// The leaf is a proto oneof in a j5 oneof wrapper.
-	// path[-1] should be the message
-	// path[-2] should be the field
-	fieldNode := pp.path[len(pp.path)-2]
-	return fieldNode.field
-}
-
-func (pp Path) Leaf() protoreflect.Descriptor {
-	if pp.leafField != nil {
-		return pp.leafField
-	}
-	return pp.leafOneof
-}
-
-func (pp Path) Child(name protoreflect.Name) (*Path, error) {
+func (pp Path) Child(name string) (*Path, error) {
 	if pp.leafField == nil {
 		return nil, fmt.Errorf("child requires a message field")
 	}
-	if pp.leafField.Kind() != protoreflect.MessageKind {
+
+	var propSet j5schema.PropertySet
+
+	switch st := pp.leafField.Schema.(type) {
+	case *j5schema.ObjectField:
+		propSet = st.ObjectSchema().Properties
+	case *j5schema.OneofField:
+		propSet = st.OneofSchema().Properties
+	default:
 		return nil, fmt.Errorf("child requires a message field")
 	}
-	field := pp.leafField.Message().Fields().ByName(name)
+
+	field := propSet.ByJSONName(name)
 	if field == nil {
-		return nil, fmt.Errorf("field %s not found in message %s", name, pp.leafField.Message().FullName())
+		return nil, fmt.Errorf("field %s not found in message %s", name, pp.leafField.FullName())
 	}
 	return &Path{
 		root: pp.root,
@@ -155,30 +122,44 @@ func (pp *Path) JSONBArrowPath() string {
 	elements := make([]string, 0, len(pp.path))
 	end, path := pp.path[len(pp.path)-1], pp.path[:len(pp.path)-1]
 	for _, part := range path {
-		if part.oneof != nil {
-			continue // Ignore the node, it isn't in the JSONB tree
+		if obj, ok := part.field.Schema.(*j5schema.ObjectField); ok {
+			if obj.Flatten {
+				continue // Flattened fields are not in the JSONB tree
+			}
 		}
-		if part.field.IsList() {
-			panic("list fields not supported by JSONBArrowPath()")
+		if part.field == nil {
+			panic(fmt.Sprintf("invalid path: %v", pp.DebugName()))
 		}
-		elements = append(elements, fmt.Sprintf("->'%s'", part.field.JSONName()))
+
+		switch part.field.Schema.(type) {
+		case *j5schema.MapField:
+			panic("map fields not supported by JSONBArrowPath()")
+		case *j5schema.ArrayField:
+			panic("array fields not supported by JSONBArrowPath()")
+		}
+		elements = append(elements, fmt.Sprintf("->'%s'", part.field.JSONName))
 	}
 
-	return fmt.Sprintf("%s->>'%s'", strings.Join(elements, ""), end.field.JSONName())
+	return fmt.Sprintf("%s->>'%s'", strings.Join(elements, ""), end.field.JSONName)
 }
 
 func (pp *Path) JSONPathQuery() string {
 	elements := make([]string, 1, len(pp.path)+1)
 	elements[0] = "$" // Used sometimes, not always?
 	for _, part := range pp.path {
-		if part.oneof != nil {
-			continue // Ignore the node, it isn't in the JSONB tree
+		if obj, ok := part.field.Schema.(*j5schema.ObjectField); ok {
+			if obj.Flatten {
+				continue // Flattened fields are not in the JSONB tree
+			}
 		}
 		if part.field == nil {
 			panic(fmt.Sprintf("invalid path: %v", pp.DebugName()))
 		}
-		elements = append(elements, fmt.Sprintf(".%s", part.field.JSONName()))
-		if part.field.IsList() {
+		elements = append(elements, fmt.Sprintf(".%s", part.field.JSONName))
+		switch part.field.Schema.(type) {
+		case *j5schema.MapField:
+			panic("map fields not supported by JSONBArrowPath()")
+		case *j5schema.ArrayField:
 			elements = append(elements, "[*]")
 		}
 	}
@@ -188,20 +169,18 @@ func (pp *Path) JSONPathQuery() string {
 
 // WalkPathNodes visits every field in the message tree other than the root
 // message itself, calling the callback for each.
-func WalkPathNodes(rootMessage protoreflect.MessageDescriptor, callback func(Path) error) error {
+func WalkPathNodes(rootMessage *j5schema.ObjectSchema, callback func(Path) error) error {
 	root := &Path{
 		root: rootMessage,
 	}
-	return root.walk(rootMessage, callback)
+	return root.walk(rootMessage.Properties, callback)
 }
 
-func (pp Path) walk(msg protoreflect.MessageDescriptor, callback func(Path) error) error {
-	fields := msg.Fields()
+func (pp Path) walk(props j5schema.PropertySet, callback func(Path) error) error {
 	// walks only fields, not oneofs.
-	for i := range fields.Len() {
-		field := fields.Get(i)
+	for _, field := range props {
 		fieldPath := append(pp.path, pathNode{
-			name:  field.Name(),
+			name:  field.JSONName,
 			field: field,
 		})
 		fieldPathSpec := Path{
@@ -214,149 +193,21 @@ func (pp Path) walk(msg protoreflect.MessageDescriptor, callback func(Path) erro
 			return err
 		}
 
-		if field.Kind() != protoreflect.MessageKind {
-			continue
-		}
-		if err := fieldPathSpec.walk(field.Message(), callback); err != nil {
-			return fmt.Errorf("walking %s: %w", field.Name(), err)
-		}
-	}
-
-	return nil
-
-}
-
-// An element in a path from a root message to a leaf node
-// Messages use field name strings
-// Repeated uses index numbes as strings (1 = "1")
-// Maps use the map keys, which are always strings in J5 land.
-// OneOf is not included as it doesn't appear in the proto tree
-type ProtoPathSpec []string
-
-func ParseProtoPathSpec(path string) ProtoPathSpec {
-	return ProtoPathSpec(strings.Split(path, "."))
-}
-
-func (pp ProtoPathSpec) String() string {
-	return strings.Join(pp, ".")
-}
-
-func NewProtoPath(message protoreflect.MessageDescriptor, fieldPath ProtoPathSpec) (*Path, error) {
-
-	if len(fieldPath) == 0 {
-		return nil, fmt.Errorf("fieldPath must have at least one element")
-	}
-
-	pathSpec := &Path{
-		root: message,
-		path: make([]pathNode, 0, len(fieldPath)),
-	}
-
-	walkMessage := message
-	var pathElem string
-	walkPath := fieldPath
-	var inOneof *int
-
-	for {
-
-		pathElem, walkPath = walkPath[0], walkPath[1:]
-		node := pathNode{
-			name: protoreflect.Name(pathElem),
-		}
-		field := walkMessage.Fields().ByName(protoreflect.Name(pathElem))
-		if field != nil {
-			node.field = field
-			// Check that it isn't a oneof.
-			if inOneof != nil {
-				if field.ContainingOneof().Index() != *inOneof {
-					return nil, fmt.Errorf("field %s not in oneof %d", pathElem, *inOneof)
-				}
-				inOneof = nil
+		switch ft := field.Schema.(type) {
+		case *j5schema.ObjectField:
+			if err := fieldPathSpec.walk(ft.ObjectSchema().Properties, callback); err != nil {
+				return fmt.Errorf("walking %s: %w", field.JSONName, err)
 			}
-		} else {
-			if inOneof != nil {
-				return nil, fmt.Errorf("field %s not found in oneof %d", pathElem, *inOneof)
-			}
-			// Oneof needn't be specified as it doens't appear in the node tree,
-			// but if a oneof is named, this adds it as a node in the tree,
-			// hoping that the next element will be an actual field.
-			oneof := walkMessage.Oneofs().ByName(protoreflect.Name(pathElem))
-			if oneof != nil {
-				node.oneof = oneof
-			} else {
-				return nil, fmt.Errorf("no field named '%s' in message %s", pathElem, walkMessage.FullName())
-			}
-			idx := oneof.Index()
-			inOneof = &idx
 
-			pathSpec.path = append(pathSpec.path, node)
-			if len(walkPath) == 0 {
-				pathSpec.leafOneof = node.oneof
-				break
-			}
-			continue
-		}
-
-		if field.IsMap() {
-			return nil, fmt.Errorf("unimplemented: map fields in path spec")
-		}
-
-		pathSpec.path = append(pathSpec.path, node)
-
-		if len(walkPath) == 0 {
-			pathSpec.leafField = node.field
-			break
-		}
-
-		if field.Kind() != protoreflect.MessageKind {
-			return nil, fmt.Errorf("field %s is not a message, but path elements remain (%v)", pathElem, walkPath)
-		}
-
-		walkMessage = field.Message()
-
-	}
-
-	return pathSpec, nil
-}
-
-func findField(message protoreflect.MessageDescriptor, fieldPath string) []pathNode {
-	fields := message.Fields()
-	if field := fields.ByJSONName(fieldPath); field != nil {
-		return []pathNode{{
-			name:  protoreflect.Name(fieldPath),
-			field: field,
-		}}
-	}
-
-	for i := range fields.Len() {
-		field := fields.Get(i)
-		// Check for flattened fields
-		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), ext_j5pb.E_Field).(*ext_j5pb.FieldOptions)
-		if !ok {
-			continue
-		}
-
-		if fieldOpts != nil {
-			// TODO: remove the use of Message once everything has been moved over to Object
-			if (fieldOpts.GetMessage() != nil && fieldOpts.GetMessage().Flatten) ||
-				(fieldOpts.GetObject() != nil && fieldOpts.GetObject().Flatten) {
-				if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
-					return []pathNode{
-						{
-							name:  field.Name(),
-							field: field,
-						},
-						{
-							name:  protoreflect.Name(fieldPath),
-							field: flattenedField,
-						},
-					}
-				}
+		case *j5schema.OneofField:
+			if err := fieldPathSpec.walk(ft.OneofSchema().Properties, callback); err != nil {
+				return fmt.Errorf("walking %s: %w", field.JSONName, err)
 			}
 		}
 	}
 
 	return nil
+
 }
 
 // Like ProtoPathSpec but uses JSON field names
@@ -370,104 +221,130 @@ func (jp JSONPathSpec) String() string {
 	return strings.Join(jp, ".")
 }
 
-func NewJSONPath(message protoreflect.MessageDescriptor, fieldPath JSONPathSpec) (*Path, error) {
+func NewJSONPath(rootMessage *j5schema.ObjectSchema, fieldPath JSONPathSpec) (*Path, error) {
 
 	if len(fieldPath) == 0 {
 		return nil, fmt.Errorf("fieldPath must have at least one element")
 	}
 
 	pathSpec := &Path{
-		root: message,
+		root: rootMessage,
 		path: make([]pathNode, 0, len(fieldPath)),
 	}
 
-	walkMessage := message
+	var walkMessage j5schema.RootSchema
+	walkMessage = rootMessage
 	var pathElem string
 	walkPath := fieldPath
 	var nodes []pathNode
 
 	for {
 		pathElem, walkPath = walkPath[0], walkPath[1:]
-		nodes = findField(walkMessage, pathElem)
-		if nodes == nil {
+		var node pathNode
+		switch walkMessage := walkMessage.(type) {
+		case *j5schema.ObjectSchema:
+			field := walkMessage.ClientProperties().ByJSONName(pathElem)
+			if field == nil {
+				return nil, fmt.Errorf("field %s not found in object %s", pathElem, walkMessage.FullName())
+			}
+			node = pathNode{
+				name:  pathElem,
+				field: field,
+			}
+
+		case *j5schema.OneofSchema:
 			// Very Special Edge Case: Oneof wrapper types allow the client to
 			// filter based on the type of the oneof. So the oneof can be at the
 			// end of the path, and the field can be the oneof wrapper type.
-
 			if len(walkPath) == 0 && pathElem == "type" {
-				oneof := walkMessage.Oneofs().ByName(protoreflect.Name("type"))
-				if oneof != nil {
-					nodes = []pathNode{{
-						name:  protoreflect.Name(pathElem),
-						oneof: oneof,
-					}}
-					pathSpec.path = append(pathSpec.path, nodes...)
-					pathSpec.leafOneof = oneof
-					break
-				}
+				pathSpec.path = append(pathSpec.path, nodes...)
+				pathSpec.leafOneof = walkMessage
+				break
 			}
 
-			return nil, fmt.Errorf("JSON field '%s' not found in message %s", pathElem, walkMessage.FullName())
-		}
+			field := walkMessage.ClientProperties().ByJSONName(pathElem)
+			if field == nil {
 
-		for _, node := range nodes {
-			if node.field.IsMap() {
-				return nil, fmt.Errorf("unimplemented: map fields in path spec")
+				return nil, fmt.Errorf("field %s not found in oneof %s", pathElem, walkMessage.FullName())
+			}
+			node = pathNode{
+				name:  pathElem,
+				field: field,
 			}
 		}
 
-		pathSpec.path = append(pathSpec.path, nodes...)
+		pathSpec.path = append(pathSpec.path, node)
 		if len(walkPath) == 0 {
-			pathSpec.leafField = nodes[len(nodes)-1].field
+			pathSpec.leafField = node.field
 			break
 		}
 
-		if nodes[len(nodes)-1].field.Kind() != protoreflect.MessageKind {
+		switch nextType := node.field.Schema.(type) {
+		case *j5schema.ObjectField:
+			walkMessage = nextType.ObjectSchema()
+		case *j5schema.OneofField:
+			walkMessage = nextType.OneofSchema()
+		case j5schema.RootSchema:
+			walkMessage = nextType
+		default:
 			return nil, fmt.Errorf("field %s is not a message, but path elements remain", pathElem)
 		}
-
-		walkMessage = nodes[len(nodes)-1].field.Message()
 	}
 
 	return pathSpec, nil
 }
 
-func (pp *Path) GetValue(msg protoreflect.Message) (protoreflect.Value, error) {
+func (pp *Path) pathParts() []string {
+	parts := make([]string, 0, len(pp.path))
+	for _, node := range pp.path {
+		parts = append(parts, node.field.JSONName)
+	}
+	return parts
+}
+
+func (pp *Path) GetValue(msg j5reflect.Object) (any, bool, error) {
 	if len(pp.path) == 0 {
-		return protoreflect.Value{}, fmt.Errorf("empty path")
+		return nil, false, fmt.Errorf("empty path")
 	}
-	var val protoreflect.Value
 
-	var walkNode pathNode
-	walkMessage := msg
-
-	remainingPath := pp.path
-	for {
-		walkNode, remainingPath = remainingPath[0], remainingPath[1:]
-		if walkNode.oneof != nil {
-			// ignore the oneof
-			if len(remainingPath) == 0 {
-				return protoreflect.Value{}, fmt.Errorf("oneof at leaf")
-			}
-			continue
-		}
-
-		if walkNode.field == nil {
-			return protoreflect.Value{}, fmt.Errorf("no field or oneof")
-		}
-
-		// Has vs Get, Has returns false if the field is set to the default value for
-		// scalar types. We still want the fields if they are set to the default value,
-		// and can use validation of a field's existence before this point to ensure
-		// that the field is available.
-		val = walkMessage.Get(walkNode.field)
-		if len(remainingPath) == 0 {
-			return val, nil
-		}
-
-		if walkNode.field.Kind() != protoreflect.MessageKind {
-			return protoreflect.Value{}, fmt.Errorf("field %s is not a message", walkNode.field.Name())
-		}
-		walkMessage = val.Message()
+	lastField, ok, err := msg.GetField(pp.pathParts()...)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting field %s: %w", pp.pathNodeNames(), err)
 	}
+	if !ok {
+		return nil, false, nil
+	}
+
+	if pp.leafOneof != nil {
+		// this is a type filter.
+		oneof, ok := lastField.AsOneof()
+		if !ok {
+			return nil, false, fmt.Errorf("field %s is not a oneof", pp.pathNodeNames())
+		}
+
+		field, ok, err := oneof.GetOne()
+		if err != nil {
+			return nil, false, fmt.Errorf("getting oneof field %s: %w", pp.pathNodeNames(), err)
+		}
+		if !ok {
+			return nil, false, nil // No value set in the oneof
+		}
+
+		val := field.NameInParent()
+		return val, true, nil
+	}
+
+	scalar, ok := lastField.AsScalar()
+	if !ok {
+		return nil, false, fmt.Errorf("field %s is not a scalar", pp.pathNodeNames())
+	}
+
+	goVal, err := scalar.ToGoValue()
+	if err != nil {
+		return nil, false, fmt.Errorf("converting field %s to Go value: %w", pp.pathNodeNames(), err)
+	}
+	if goVal == nil {
+		return nil, false, nil // No value set in the scalar
+	}
+	return goVal, true, nil
 }

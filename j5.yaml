@@ -21,6 +21,7 @@ generate:
       - base: go-sugar
       - base: go-psm
       - base: go-o5-messaging
+      - base: go-j5
 
 managedPaths:
   - internal/testproto/gen
@@ -51,3 +52,13 @@ plugins:
     name: go-o5-messaging
     docker:
       image: ghcr.io/pentops/protoc-gen-go-o5-messaging:fba07334e9aa1affc26b34eae82254a36f955267
+
+  - base: go
+    name: go-j5
+    docker:
+      image: ghcr.io/pentops/protoc-gen-go-j5:latest
+
+pluginOverrides:
+  - name: go-j5
+    local:
+      cmd: protoc-gen-go-j5
