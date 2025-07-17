@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -76,7 +77,7 @@ type Column struct {
 
 type ListSpec[REQ ListRequest, RES ListResponse] struct {
 	TableSpec
-	RequestFilter func(j5reflect.Object) (map[string]any, error)
+	RequestFilter func(REQ) (map[string]any, error)
 }
 
 type QueryLogger func(sqrlx.Sqlizer)
@@ -97,7 +98,7 @@ type ListReflectionSet struct {
 	defaultFilterFields []filterSpec
 	RequestFilterFields []*j5schema.ObjectProperty
 
-	//tsvColumnMap map[string]string
+	tsvColumnMap map[string]string // map[JSON Path]PGColumName
 
 	// TODO: This should be an array/map of columns to data types, allowing
 	// multiple JSONB values, as well as cached field values direcrly on the
@@ -120,7 +121,7 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 		switch ft := field.Schema.(type) {
 		case *j5schema.ObjectField:
 
-			if ft.FullName() == "j5.list.v1.PageResponse" {
+			if ft.ObjectSchema().FullName() == "j5.list.v1.PageResponse" {
 				ll.pageResponseField = field
 				continue
 			}
@@ -153,7 +154,7 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 		return nil, fmt.Errorf("no page field in response, %s must have a j5.list.v1.PageResponse", res.FullName())
 	}
 
-	err = validateListAnnotations(ll.arrayObject.Properties)
+	err = validateListAnnotations(ll.arrayObject)
 	if err != nil {
 		return nil, fmt.Errorf("validate list annotations on %s: %w", ll.arrayField.FullName(), err)
 	}
@@ -179,12 +180,15 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 
 	ll.defaultFilterFields = f
 
-	//ll.tsvColumnMap = buildTsvColumnMap(ll.arrayObject)
+	ll.tsvColumnMap, err = buildTsvColumnMap(ll.arrayObject)
+	if err != nil {
+		return nil, fmt.Errorf("build tsv column map: %w", err)
+	}
 
 	for _, field := range req.Properties {
 		switch ft := field.Schema.(type) {
 		case *j5schema.ObjectField:
-			switch ft.FullName() {
+			switch ft.ObjectSchema().FullName() {
 			case "j5.list.v1.PageRequest":
 				ll.pageRequestField = field
 			case "j5.list.v1.QueryRequest":
@@ -229,7 +233,7 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	auth     AuthProvider
 	authJoin []*LeftJoin
 
-	requestFilter func(j5reflect.Object) (map[string]any, error)
+	requestFilter func(REQ) (map[string]any, error)
 
 	validator *j5validate.Validator
 }
@@ -369,6 +373,64 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5
 	return nil
 }
 
+func encodePageToken(rowMessage j5reflect.Object, sortFields []sortSpec) (string, error) {
+	vals := map[string]any{}
+	for _, sortField := range sortFields {
+		fieldVal, ok, err := sortField.Path.GetValue(rowMessage)
+		if err != nil {
+			return "", fmt.Errorf("sort field %s: %w", sortField.errorName(), err)
+		}
+		if !ok {
+			vals[sortField.Path.IDPath()] = nil
+			continue
+		}
+		vals[sortField.Path.IDPath()] = fieldVal
+
+	}
+	valJSON, err := json.Marshal(vals)
+	if err != nil {
+		return "", fmt.Errorf("marshal page token values: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(valJSON), nil
+}
+
+func decodePageToken(token string, sortFields []sortSpec) (map[string]any, error) {
+	vals := map[string]any{}
+	jsonBytes, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return nil, fmt.Errorf("decode page token: %w", err)
+	}
+	if err := json.Unmarshal(jsonBytes, &vals); err != nil {
+		return nil, fmt.Errorf("unmarshal page token: %w", err)
+	}
+	if len(vals) != len(sortFields) {
+		return nil, fmt.Errorf("page token has %d values, expected %d", len(vals), len(sortFields))
+	}
+
+	return vals, nil
+}
+
+func fieldAs[T any](obj j5reflect.Object, path ...string) (val T, ok bool, err error) {
+
+	endField, ok, err := obj.GetField(path...)
+	if err != nil || !ok {
+		return val, ok, err
+	}
+
+	objField, ok := endField.AsObject()
+	if !ok {
+		return val, false, fmt.Errorf("field %s in %s not an object", path, obj.SchemaName())
+	}
+
+	val, ok = objField.ProtoReflect().Interface().(T)
+	if !ok {
+		return val, false, fmt.Errorf("field %s in %s not of type %T", path, obj.SchemaName(), (*T)(nil))
+	}
+
+	return val, true, nil
+
+}
+
 func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object, res j5reflect.Object) (*sq.SelectBuilder, error) {
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
@@ -381,7 +443,12 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 
 	filterFields := []sq.Sqlizer{}
 	if ll.requestFilter != nil {
-		filter, err := ll.requestFilter(req)
+		reqVal, ok := req.ProtoReflect().Interface().(REQ)
+		if !ok {
+			return nil, fmt.Errorf("request is not of type %T", (*REQ)(nil))
+		}
+
+		filter, err := ll.requestFilter(reqVal)
 		if err != nil {
 			return nil, err
 		}
@@ -396,8 +463,11 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 		}
 	}
 
-	reqQuery, ok := req.Get(ll.queryRequestField).Message().Interface().(*list_j5pb.QueryRequest)
-	if ok && reqQuery != nil {
+	reqQuery, ok, err := fieldAs[*list_j5pb.QueryRequest](req, ll.queryRequestField.JSONName)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
 		if err := ll.validateQueryRequest(reqQuery); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "query validation: %s", err)
 		}
@@ -496,17 +566,11 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 
 	selectQuery.Limit(pageSize + 1)
 
-	reqPage, ok := req.Get(ll.pageRequestField).Message().Interface().(*list_j5pb.PageRequest)
-	if ok && reqPage != nil && reqPage.GetToken() != "" {
-		rowMessage := dynamicpb.NewMessage(ll.arrayField.Message())
-
-		rowBytes, err := base64.StdEncoding.DecodeString(reqPage.GetToken())
+	reqPage, ok, err := fieldAs[*list_j5pb.PageRequest](req, ll.pageRequestField.JSONName)
+	if ok && reqPage.GetToken() != "" {
+		pageFields, err := decodePageToken(reqPage.GetToken(), sortFields)
 		if err != nil {
-			return nil, fmt.Errorf("decode token: %w", err)
-		}
-
-		if err := proto.Unmarshal(rowBytes, rowMessage.Interface()); err != nil {
-			return nil, fmt.Errorf("unmarshal into %s from %s: %w", rowMessage.Descriptor().FullName(), string(rowBytes), err)
+			return nil, fmt.Errorf("decode page token: %w", err)
 		}
 
 		lhsFields := make([]string, 0, len(sortFields))
@@ -517,12 +581,11 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 			rowSelecter := sortField.Selector(tableAlias)
 			valuePlaceholder := "?"
 
-			fieldVal, err := sortField.Path.GetValue(rowMessage)
-			if err != nil {
-				return nil, fmt.Errorf("sort field %s: %w", sortField.errorName(), err)
+			dbVal, ok := pageFields[sortField.Path.IDPath()]
+			if !ok {
+				return nil, fmt.Errorf("page token missing value for sort field %s", sortField.errorName())
 			}
 
-			dbVal := fieldVal.Interface()
 			switch subType := dbVal.(type) {
 			case *dynamicpb.Message:
 				name := subType.Descriptor().FullName()
@@ -673,40 +736,38 @@ func camelToSnake(jsonName string) string {
 	return out.String()
 }
 
-func validateListAnnotations(fields []*j5schema.ObjectProperty) error {
-	err := validateSortsAnnotations(fields)
-	if err != nil {
-		return fmt.Errorf("sort: %w", err)
-	}
+func validateListAnnotations(object *j5schema.ObjectSchema) error {
+	/*
+		err := validateSortsAnnotations(object.Properties)
+		if err != nil {
+			return fmt.Errorf("sort: %w", err)
+		}*/
 
-	err = validateFiltersAnnotations(fields)
-	if err != nil {
-		return fmt.Errorf("filter: %w", err)
-	}
-
-	err = validateSearchesAnnotations(fields)
-	if err != nil {
-		return fmt.Errorf("search: %w", err)
-	}
+	/*
+		err = validateSearchesAnnotations(object)
+		if err != nil {
+			return fmt.Errorf("search: %w", err)
+		}*/
 
 	return nil
 }
 
 func (ll *Lister[REQ, RES]) validateQueryRequest(query *list_j5pb.QueryRequest) error {
-	err := validateQueryRequestSorts(ll.arrayField.Message(), query.GetSorts())
+	err := validateQueryRequestSorts(ll.arrayObject, query.GetSorts())
 	if err != nil {
 		return fmt.Errorf("sort validation: %w", err)
 	}
 
-	err = validateQueryRequestFilters(ll.arrayField.Message(), query.GetFilters())
+	err = validateQueryRequestFilters(ll.arrayObject, query.GetFilters())
 	if err != nil {
 		return fmt.Errorf("filter validation: %w", err)
 	}
 
-	err = validateQueryRequestSearches(ll.arrayField.Message(), query.GetSearches())
-	if err != nil {
-		return fmt.Errorf("search validation: %w", err)
-	}
+	/*
+		err = validateQueryRequestSearches(ll.arrayObject, query.GetSearches())
+		if err != nil {
+			return fmt.Errorf("search validation: %w", err)
+		}*/
 
 	return nil
 }

@@ -2,143 +2,93 @@ package pquery
 
 import (
 	"fmt"
-
-	"maps"
+	"regexp"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-func validateSearchesAnnotations(props []*j5schema.ObjectProperty) error {
-	_, err := validateSearchesAnnotationsInner(props)
-	if err != nil {
-		return fmt.Errorf("search validation: %w", err)
-	}
-	return nil
-}
-
-func validateSearchesAnnotationsInner(fields []*j5schema.ObjectProperty) (map[string]protoreflect.Name, error) {
-	// search annotations have a 'field_identifier' which specifies the database column name to use for the text-search-vector.
-	// This function validates that the field_identifier is unique for the given field-set
-	// In cases where the field is a message, it will recurse into the message to validate the field identifiers
-
-	// When the same message is used in multiple places, any field of that
-	// message or a child message will, by definition, have the same field
-	// identifier, and is therefore invalid.
-
-	// Search annotation cannot be used in repeated or map fields
-	// Recursion is already invalid.
-
-	// Oneof fields, however, can have the same field identifier on different
-	// branches.
-
-	ids := make(map[string]string)
-	oneofs := map[string][]*j5schema.ObjectProperty{}
-
-	for _, field := range fields {
-
-		if oneof, ok := field.Schema.(*j5schema.OneofField); ok {
-			oneofs[field.JSONName] = append(oneofs[field.JSONName], oneof)
-			continue
-		}
-
-		err := validateSearchAnnotationsField(ids, field)
+/*
+	func validateSearchesAnnotations(props []*j5schema.ObjectProperty) error {
+		_, err := validateSearchesAnnotationsInner(props)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("search validation: %w", err)
 		}
+		return nil
 	}
 
-	for _, oneofFields := range oneofs {
+	func validateSearchesAnnotationsInner(fields []*j5schema.ObjectProperty) (map[string]protoreflect.Name, error) {
+		// search annotations have a 'field_identifier' which specifies the database column name to use for the text-search-vector.
+		// This function validates that the field_identifier is unique for the given field-set
+		// In cases where the field is a message, it will recurse into the message to validate the field identifiers
 
-		// oneof fields can have the same field identifier on different branches but must be unique:
-		//  - within the branch, as before
-		//  - with existing parent keys
-		//  - with other oneofs
+		// When the same message is used in multiple places, any field of that
+		// message or a child message will, by definition, have the same field
+		// identifier, and is therefore invalid.
 
-		combinedBranchIDs := make(map[string]string)
+		// Search annotation cannot be used in repeated or map fields
+		// Recursion is already invalid.
 
-		for _, field := range oneofFields {
+		// Oneof fields, however, can have the same field identifier on different
+		// branches.
 
-			// collect a new set of IDs for this branch as if it is the root of
-			// the message.
-			branchIDs := make(map[string]string)
-			err := validateSearchAnnotationsField(branchIDs, field)
+		ids := make(map[string]string)
+
+		for _, field := range fields {
+
+			err := validateSearchAnnotationsField(ids, field)
 			if err != nil {
 				return nil, err
 			}
-
-			// Compare the branch IDs to the root IDs, if a branch conflicts
-			// with the root that is an error.
-			for searchKey, usedIn := range branchIDs {
-				if existing, ok := ids[searchKey]; ok {
-					return nil, fmt.Errorf("field identifier '%s' is used at %s and %s within the same oneof branch", searchKey, existing, usedIn)
-				}
-
-				// the latest wins here, this makes a worse error message but
-				// doesn't actually effect the outcome.
-				combinedBranchIDs[searchKey] = usedIn
-			}
-
 		}
 
-		// The IDs inside each branch are unique, and unique with the parent keys.
-
-		// We still need to ensure that the IDs are unique with other oneofs.
-		maps.Copy(ids, combinedBranchIDs)
-
+		return ids, nil
 	}
-
-	return ids, nil
-}
 
 func validateSearchAnnotationsField(ids map[string]string, field *j5schema.ObjectProperty) error {
 
-	switch bigType := field.Schema.(type) {
-	case *j5schema.ObjectField:
-		fields := bigType.ObjectSchema().Fields()
-		searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
-		if err != nil {
-			return fmt.Errorf("object search validation: %w", err)
-		}
-
-		for searchKey, usedIn := range searchIdentifiers {
-			if existing, ok := ids[searchKey]; ok {
-				return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+		switch bigType := field.Schema.(type) {
+		case *j5schema.ObjectField:
+			fields := bigType.ObjectSchema().Fields()
+			searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
+			if err != nil {
+				return fmt.Errorf("object search validation: %w", err)
 			}
-			ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
-		}
 
-	case *j5schema.OneofField:
-		fields := bigType.OneofSchema().Fields()
-		searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
-		if err != nil {
-			return fmt.Errorf("oneof search validation: %w", err)
-		}
-		for searchKey, usedIn := range searchIdentifiers {
-			if existing, ok := ids[searchKey]; ok {
-				return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+			for searchKey, usedIn := range searchIdentifiers {
+				if existing, ok := ids[searchKey]; ok {
+					return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+				}
+				ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
 			}
-			ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
+
+		case *j5schema.OneofField:
+			fields := bigType.OneofSchema().Fields()
+			searchIdentifiers, err := validateSearchesAnnotationsInner(fields)
+			if err != nil {
+				return fmt.Errorf("oneof search validation: %w", err)
+			}
+			for searchKey, usedIn := range searchIdentifiers {
+				if existing, ok := ids[searchKey]; ok {
+					return fmt.Errorf("field identifier '%s' is already used at %s", searchKey, existing)
+				}
+				ids[searchKey] = protoreflect.Name(fmt.Sprintf("%s.%s", field.JSONName, usedIn))
+			}
+
+		case *j5schema.MapField:
+			items := bigType.MapSchema()
+
+		case *j5schema.ArrayField:
+
+		case *j5schema.ScalarField:
+
+			schema := bigType
+
 		}
-
-	case *j5schema.MapField:
-		items := bigType.MapSchema()
-
-	case *j5schema.ArrayField:
-
-	case *j5schema.ScalarField:
-
-		schema := bigType
-
 	}
-}
-
-/*
 
 	switch field.Kind() {
 	case protoreflect.StringKind:
@@ -187,90 +137,84 @@ func validateSearchAnnotationsField(ids map[string]string, field *j5schema.Objec
 	}
 
 	return nil
-*/
 
-func validateQueryRequestSearches(message *j5schema.ObjectSchema, searches []*list_j5pb.Search) error {
-	for _, search := range searches {
+	func validateQueryRequestSearches(message *j5schema.ObjectSchema, searches []*list_j5pb.Search) error {
+		for _, search := range searches {
 
-		spec, err := pgstore.NewJSONPath(message, pgstore.ParseJSONPathSpec(search.GetField()))
-		if err != nil {
-			return fmt.Errorf("field spec: %w", err)
-		}
+			spec, err := pgstore.NewJSONPath(message, pgstore.ParseJSONPathSpec(search.GetField()))
+			if err != nil {
+				return fmt.Errorf("field spec: %w", err)
+			}
 
-		field := spec.LeafField()
-		if field == nil {
-			return fmt.Errorf("leaf '%s' is not a field", spec.JSONPathQuery())
-		}
+			field := spec.LeafField()
+			if field == nil {
+				return fmt.Errorf("leaf '%s' is not a field", spec.JSONPathQuery())
+			}
 
-		// validate the fields are annotated correctly for the request query
-		searchOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
-		if !ok {
-			return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
-		}
+			// validate the fields are annotated correctly for the request query
+			searchOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
+			if !ok {
+				return fmt.Errorf("requested search field '%s' does not have any searchable constraints defined", search.Field)
+			}
 
-		searchable := false
-		if searchOpts != nil {
-			switch field.Kind() {
-			case protoreflect.StringKind:
-				switch searchOpts.GetString_().WellKnown.(type) {
-				case *list_j5pb.StringRules_OpenText:
-					searchable = searchOpts.GetString_().GetOpenText().GetSearching().Searchable
+			searchable := false
+			if searchOpts != nil {
+				switch field.Kind() {
+				case protoreflect.StringKind:
+					switch searchOpts.GetString_().WellKnown.(type) {
+					case *list_j5pb.StringRules_OpenText:
+						searchable = searchOpts.GetString_().GetOpenText().GetSearching().Searchable
+					}
 				}
+			}
+
+			if !searchable {
+				return fmt.Errorf("requested search field '%s' is not searchable", search.Field)
 			}
 		}
 
-		if !searchable {
-			return fmt.Errorf("requested search field '%s' is not searchable", search.Field)
-		}
+		return nil
 	}
+*/
+var rePgUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
-	return nil
-}
-
-func buildTsvColumnMap(message *j5schema.ObjectSchema) map[string]string {
+func buildTsvColumnMap(message *j5schema.ObjectSchema) (map[string]string, error) {
 	out := make(map[string]string)
 
-	for i := range message.Fields().Len() {
-		field := message.Fields().Get(i)
+	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
+		field := path.LeafField()
+		switch bigSchema := field.Schema.(type) {
 
-		switch field.Kind() {
-		case protoreflect.StringKind:
-			fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
-			if !ok {
-				continue
-			}
-
-			switch fieldOpts.GetString_().GetWellKnown().(type) {
-			case *list_j5pb.StringRules_OpenText:
-				searchOpts := fieldOpts.GetString_().GetOpenText().GetSearching()
-				if searchOpts == nil || !searchOpts.Searchable {
-					continue
+		case *j5schema.ScalarSchema:
+			innerSchema := bigSchema.ToJ5Field()
+			switch ist := innerSchema.Type.(type) {
+			case *schema_j5pb.Field_String_:
+				if ist.String_.ListRules == nil || ist.String_.ListRules.Searching == nil || !ist.String_.ListRules.Searching.Searchable {
+					return nil // not searchable
 				}
 
-				out[field.TextName()] = searchOpts.GetFieldIdentifier()
-			}
-
-			continue
-		case protoreflect.MessageKind:
-			nestedMap := buildTsvColumnMap(field.Message())
-
-			for nk, nv := range nestedMap {
-				k := fmt.Sprintf("%s.%s", field.TextName(), nk)
-				out[k] = nv
+				idPath := path.IDPath()
+				columnName := rePgUnsafe.ReplaceAllString(idPath, "_")
+				out[idPath] = fmt.Sprintf("tsv_%s", columnName)
 			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return out
+	return out, nil
 }
 
 func (ll *Lister[REQ, RES]) buildDynamicSearches(tableAlias string, searches []*list_j5pb.Search) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range searches {
-		col, ok := ll.tsvColumnMap[camelToSnake(searches[i].GetField())]
+		col, ok := ll.tsvColumnMap[searches[i].GetField()]
 		if !ok {
-			return nil, fmt.Errorf("unknown field name '%s'", searches[i].GetField())
+			return nil, fmt.Errorf("unknown search field %q", searches[i].GetField())
 		}
 
 		out = append(out, sq.And{sq.Expr(fmt.Sprintf("%s.%s @@ phraseto_tsquery(?)", tableAlias, col), searches[i].GetValue())})

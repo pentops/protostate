@@ -49,7 +49,6 @@ func (nf *NestedField) Selector(inTable string) string {
 type pathNode struct {
 	name  string
 	field *j5schema.ObjectProperty
-	//oneof protoreflect.OneofDescriptor
 }
 
 type Path struct {
@@ -222,6 +221,48 @@ func (jp JSONPathSpec) String() string {
 }
 
 func NewJSONPath(rootMessage *j5schema.ObjectSchema, fieldPath JSONPathSpec) (*Path, error) {
+	return newPath(rootMessage, []string(fieldPath), clientPath)
+}
+
+func NewOuterPath(rootMessage *j5schema.ObjectSchema, fieldPath JSONPathSpec) (*Path, error) {
+	return newPath(rootMessage, []string(fieldPath), outerPath)
+}
+
+type pathType int
+
+const (
+	clientPath pathType = iota // the JSON path from the client side, flattened fields are anonymous
+	outerPath                  // flattened fields included with their name
+)
+
+type hasPropertySet interface {
+	AllProperties() j5schema.PropertySet
+	ClientProperties() j5schema.PropertySet
+	FullName() string
+}
+
+func objectProperty(obj hasPropertySet, pathElem string, pt pathType) (*j5schema.ObjectProperty, error) {
+	switch pt {
+	case clientPath:
+		prop := obj.ClientProperties().ByJSONName(pathElem)
+		if prop == nil {
+			return nil, fmt.Errorf("property %s not found in object %s", pathElem, obj.FullName())
+		}
+		return prop, nil
+	case outerPath:
+		prop := obj.AllProperties().ByJSONName(pathElem)
+		if prop == nil {
+			return nil, fmt.Errorf("property %s not found in object %s", pathElem, obj.FullName())
+		}
+		return prop, nil
+
+	default:
+		return nil, fmt.Errorf("unknown path type %d", pt)
+	}
+
+}
+
+func newPath(rootMessage *j5schema.ObjectSchema, fieldPath []string, pathType pathType) (*Path, error) {
 
 	if len(fieldPath) == 0 {
 		return nil, fmt.Errorf("fieldPath must have at least one element")
@@ -243,10 +284,11 @@ func NewJSONPath(rootMessage *j5schema.ObjectSchema, fieldPath JSONPathSpec) (*P
 		var node pathNode
 		switch walkMessage := walkMessage.(type) {
 		case *j5schema.ObjectSchema:
-			field := walkMessage.ClientProperties().ByJSONName(pathElem)
-			if field == nil {
-				return nil, fmt.Errorf("field %s not found in object %s", pathElem, walkMessage.FullName())
+			field, err := objectProperty(walkMessage, pathElem, pathType)
+			if err != nil {
+				return nil, err
 			}
+
 			node = pathNode{
 				name:  pathElem,
 				field: field,
@@ -262,11 +304,11 @@ func NewJSONPath(rootMessage *j5schema.ObjectSchema, fieldPath JSONPathSpec) (*P
 				break
 			}
 
-			field := walkMessage.ClientProperties().ByJSONName(pathElem)
-			if field == nil {
-
-				return nil, fmt.Errorf("field %s not found in oneof %s", pathElem, walkMessage.FullName())
+			field, err := objectProperty(walkMessage, pathElem, pathType)
+			if err != nil {
+				return nil, err
 			}
+
 			node = pathNode{
 				name:  pathElem,
 				field: field,

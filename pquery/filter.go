@@ -15,7 +15,6 @@ import (
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/shopspring/decimal"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -370,12 +369,6 @@ func validateQueryRequestFilters(message *j5schema.ObjectSchema, filters []*list
 		}
 	}
 
-	return nil
-}
-
-func validateFiltersAnnotations(_ protoreflect.FieldDescriptors) error {
-
-	// TODO: This existed pre refactor, check if it should do something.
 	return nil
 }
 

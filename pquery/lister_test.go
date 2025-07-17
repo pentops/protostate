@@ -6,8 +6,10 @@ import (
 
 	"github.com/pentops/flowtest/prototest"
 	"github.com/pentops/golib/gl"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -51,6 +53,10 @@ func (c composed) toString() string {
 	return out
 }
 
+type J5Proto struct {
+	proto.Message
+}
+
 func TestBuildListReflection(t *testing.T) {
 
 	type tableMod func(t testing.TB, spec *TableSpec, req, res protoreflect.MessageDescriptor)
@@ -70,18 +76,32 @@ func TestBuildListReflection(t *testing.T) {
 				import "j5/types/date/v1/date.proto";
 				import "buf/validate/validate.proto";
 				import "google/protobuf/timestamp.proto";
+
+				service FooService {
+					rpc FooList(FooListRequest) returns (FooListResponse) {}
+				}
+
 				` + input,
 		})
 
 		requestDesc := pdf.MessageByName(t, "test.FooListRequest")
 		responseDesc := pdf.MessageByName(t, "test.FooListResponse")
-
 		table := &TableSpec{}
 		if spec != nil {
 			spec(t, table, requestDesc, responseDesc)
 		}
 
-		return buildListReflection(requestDesc, responseDesc, *table)
+		schemaSet := j5schema.NewSchemaCache()
+		requestObj, err := schemaSet.Schema(requestDesc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		responseObj, err := schemaSet.Schema(responseDesc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return buildListReflection(requestObj.(*j5schema.ObjectSchema), responseObj.(*j5schema.ObjectSchema), *table)
 	}
 
 	runHappy := func(name string, input string, spec tableMod, callback func(*testing.T, *ListReflectionSet)) {
@@ -176,7 +196,7 @@ func TestBuildListReflection(t *testing.T) {
 		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
 			table.FallbackSortColumns = []ProtoField{{
 				valueColumn: gl.Ptr("id"),
-				pathInRoot:  pgstore.ProtoPathSpec{"id"},
+				pathInRoot:  pgstore.JSONPathSpec{"id"},
 			}}
 		},
 		func(t *testing.T, lr *ListReflectionSet) {
