@@ -62,6 +62,7 @@ func TestBuildListReflection(t *testing.T) {
 	type tableMod func(t testing.TB, spec *TableSpec, req, res protoreflect.MessageDescriptor)
 
 	build := func(t testing.TB, input string, spec tableMod) (*ListReflectionSet, error) {
+		t.Helper()
 		pdf := prototest.DescriptorsFromSource(t, map[string]string{
 			"test.proto": `
 				syntax = "proto3";
@@ -94,11 +95,11 @@ func TestBuildListReflection(t *testing.T) {
 		schemaSet := j5schema.NewSchemaCache()
 		requestObj, err := schemaSet.Schema(requestDesc)
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 		responseObj, err := schemaSet.Schema(responseDesc)
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 
 		return buildListReflection(requestObj.(*j5schema.ObjectSchema), responseObj.(*j5schema.ObjectSchema), *table)
@@ -349,7 +350,7 @@ func TestBuildListReflection(t *testing.T) {
 		`,
 	}.toString(),
 		nil,
-		"should be a message",
+		"unknown field in response",
 	)
 
 	runSad("extra array field in response", composed{
@@ -360,7 +361,7 @@ func TestBuildListReflection(t *testing.T) {
 		`,
 	}.toString(),
 		nil,
-		"multiple repeated fields")
+		"multiple repeated")
 
 	runSad("no array field in response", composed{
 		FooListResponse: `
@@ -368,7 +369,7 @@ func TestBuildListReflection(t *testing.T) {
 			`,
 	}.toString(),
 		nil,
-		"no repeated field in response",
+		"does not contain a repeated message field",
 	)
 
 	runSad("no page field in response", composed{
@@ -402,7 +403,7 @@ func TestBuildListReflection(t *testing.T) {
 			`,
 	}.toString(),
 		nil,
-		"no field named 'missing'",
+		`unknown proto field "missing"`,
 	)
 
 	runSad("no page field", composed{
@@ -449,32 +450,35 @@ func TestBuildListReflection(t *testing.T) {
 		}
 		`,
 		nil,
-		"sorting not allowed on repeated field",
+		"list constraints not supported for arrays",
 	)
 
-	runSad("repeated sub field sort", `
-		message FooListRequest {
-			j5.list.v1.PageRequest page = 1;
-			j5.list.v1.QueryRequest query = 2;
-		}
+	/*
+		Test Change: Repeated isn't walked for sorting, but isn't invalid in case Profile is used in another non-array context.
+		runSad("repeated sub field sort", `
+			message FooListRequest {
+				j5.list.v1.PageRequest page = 1;
+				j5.list.v1.QueryRequest query = 2;
+			}
 
-		message FooListResponse {
-			repeated Foo foos = 1;
-			j5.list.v1.PageResponse page = 2;
-		}
+			message FooListResponse {
+				repeated Foo foos = 1;
+				j5.list.v1.PageResponse page = 2;
+			}
 
-		message Foo {
-			string id = 1;
-			int64 seq = 2 [(j5.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
-			repeated Profile profiles = 3;
-		}
+			message Foo {
+				string id = 1;
+				int64 seq = 2 [(j5.list.v1.field).int64.sorting = {sortable: true, default_sort: true}];
+				repeated Profile profiles = 3;
+			}
 
-		message Profile {
-			string name = 1;
-			int64 weight = 2 [(j5.list.v1.field).int64.sorting.sortable = true];
-		}
-		`,
-		nil,
-		"sorting not allowed on subfield of repeated parent",
-	)
+			message Profile {
+				string name = 1;
+				int64 weight = 2 [(j5.list.v1.field).int64.sorting.sortable = true];
+			}
+			`,
+			nil,
+			"sorting not allowed on subfield of repeated parent",
+		)
+	*/
 }

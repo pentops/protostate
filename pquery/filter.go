@@ -190,9 +190,6 @@ func filtersForField(field *j5schema.ObjectProperty) ([]any, error) {
 				vals = append(vals, t)
 			}
 			return vals, nil
-		case *schema_j5pb.Field_String_:
-			// no filters definable
-			return nil, nil
 
 		case *schema_j5pb.Field_Decimal:
 			if st.Decimal.ListRules == nil || st.Decimal.ListRules.Filtering == nil || !st.Decimal.ListRules.Filtering.Filterable {
@@ -208,10 +205,28 @@ func filtersForField(field *j5schema.ObjectProperty) ([]any, error) {
 				vals = append(vals, v)
 			}
 			return vals, nil
+		case *schema_j5pb.Field_String_:
+			// no filters definable
+			return nil, nil
+		case *schema_j5pb.Field_Bytes:
+			return nil, nil
 
 		default:
 			return nil, fmt.Errorf("unknown scalar type for default filter (%s): %T", field.JSONName, st)
 		}
+	case *j5schema.ObjectField:
+		// none
+		return nil, nil
+	case *j5schema.AnyField:
+		// none
+		return nil, nil
+	case *j5schema.MapField:
+		// none
+		return nil, nil
+	case *j5schema.ArrayField:
+		// none
+		return nil, nil
+
 	default:
 		return nil, fmt.Errorf("unknown field type for filter rules %T", bigType)
 	}
