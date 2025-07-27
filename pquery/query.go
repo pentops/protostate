@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/j5/lib/j5reflect"
-	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
@@ -40,19 +38,4 @@ func (f AuthProviderFunc) AuthFilter(ctx context.Context) (map[string]string, er
 type LeftJoin struct {
 	TableName string
 	On        JoinFields
-}
-
-// MethodDescriptor is the RequestResponse pair in the gRPC Method
-type methodDescriptor[REQ j5reflect.Object, RES j5reflect.Object] struct {
-	request  *j5schema.ObjectSchema
-	response *j5schema.ObjectSchema
-}
-
-func newMethodDescriptor[REQ j5reflect.Object, RES j5reflect.Object]() *methodDescriptor[REQ, RES] {
-	req := *new(REQ)
-	res := *new(RES)
-	return &methodDescriptor[REQ, RES]{
-		request:  req.ObjectSchema(),
-		response: res.ObjectSchema(),
-	}
 }

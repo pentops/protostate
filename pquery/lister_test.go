@@ -6,8 +6,8 @@ import (
 
 	"github.com/pentops/flowtest/prototest"
 	"github.com/pentops/golib/gl"
+	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -57,14 +57,12 @@ type J5Proto struct {
 	proto.Message
 }
 
-func TestBuildListReflection(t *testing.T) {
+type tableMod func(t testing.TB, spec *TableSpec, req, res protoreflect.MessageDescriptor)
 
-	type tableMod func(t testing.TB, spec *TableSpec, req, res protoreflect.MessageDescriptor)
-
-	build := func(t testing.TB, input string, spec tableMod) (*ListReflectionSet, error) {
-		t.Helper()
-		pdf := prototest.DescriptorsFromSource(t, map[string]string{
-			"test.proto": `
+func testListReflection(t testing.TB, input string, spec tableMod) (*ListReflectionSet, error) {
+	t.Helper()
+	pdf := prototest.DescriptorsFromSource(t, map[string]string{
+		"test.proto": `
 				syntax = "proto3";
 
 				package test;
@@ -83,32 +81,41 @@ func TestBuildListReflection(t *testing.T) {
 				}
 
 				` + input,
-		})
+	})
 
-		requestDesc := pdf.MessageByName(t, "test.FooListRequest")
-		responseDesc := pdf.MessageByName(t, "test.FooListResponse")
-		table := &TableSpec{}
-		if spec != nil {
-			spec(t, table, requestDesc, responseDesc)
-		}
-
-		schemaSet := j5schema.NewSchemaCache()
-		requestObj, err := schemaSet.Schema(requestDesc)
-		if err != nil {
-			return nil, err
-		}
-		responseObj, err := schemaSet.Schema(responseDesc)
-		if err != nil {
-			return nil, err
-		}
-
-		return buildListReflection(requestObj.(*j5schema.ObjectSchema), responseObj.(*j5schema.ObjectSchema), *table)
+	requestDesc := pdf.MessageByName(t, "test.FooListRequest")
+	responseDesc := pdf.MessageByName(t, "test.FooListResponse")
+	table := &TableSpec{
+		DataColumn: "data",
+	}
+	if spec != nil {
+		spec(t, table, requestDesc, responseDesc)
 	}
 
+	schemaSet := j5schema.NewSchemaCache()
+	requestObj, err := schemaSet.Schema(requestDesc)
+	if err != nil {
+		return nil, err
+	}
+	responseObj, err := schemaSet.Schema(responseDesc)
+	if err != nil {
+		return nil, err
+	}
+	ms := &j5schema.MethodSchema{
+		Request:  requestObj.(*j5schema.ObjectSchema),
+		Response: responseObj.(*j5schema.ObjectSchema),
+	}
+
+	return buildListReflection(ms, *table)
+}
+
+func TestBuildListReflection(t *testing.T) {
+
 	runHappy := func(name string, input string, spec tableMod, callback func(*testing.T, *ListReflectionSet)) {
+		t.Helper()
 		t.Run(name, func(t *testing.T) {
 			t.Helper()
-			set, err := build(t, input, spec)
+			set, err := testListReflection(t, input, spec)
 
 			if err != nil {
 				t.Fatal(err)
@@ -120,7 +127,7 @@ func TestBuildListReflection(t *testing.T) {
 		t.Helper()
 		t.Run(name, func(t *testing.T) {
 			t.Helper()
-			_, err := build(t, input, spec)
+			_, err := testListReflection(t, input, spec)
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -162,6 +169,59 @@ func TestBuildListReflection(t *testing.T) {
 			assert.Equal(t, uint64(20), lr.defaultPageSize)
 		})
 
+	runHappy("dynamic filter", `
+		message FooListRequest {
+			j5.list.v1.PageRequest page = 1;
+			j5.list.v1.QueryRequest query = 2;
+			option (j5.list.v1.list_request) = {
+				sort_tiebreaker: ["val"]
+			};
+		}
+
+		message FooListResponse {
+			repeated Foo foos = 1;
+			j5.list.v1.PageResponse page = 2;
+		}
+
+		message Foo {
+			int64 val = 1 [(j5.list.v1.field).int64.filtering.filterable = true];
+		}
+		`, nil, func(t *testing.T, lr *ListReflectionSet) {
+
+		statements, err := lr.buildDynamicFilter("ALIAS", []*list_j5pb.Filter{{
+			Type: &list_j5pb.Filter_Field{
+				Field: &list_j5pb.Field{
+					Name: "val",
+					Type: &list_j5pb.FieldType{
+						Type: &list_j5pb.FieldType_Value{
+							Value: "e10",
+						},
+					},
+				},
+			},
+		}})
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(statements) != 1 {
+			t.Fatal("expected one statement, got", len(statements))
+		}
+		statement := statements[0]
+
+		txt, params, err := statement.ToSql()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("SQL: %s, Params: %v", txt, params)
+		want := "(jsonb_path_query_array(ALIAS.data, '$.val') @> ?::jsonb)"
+		if txt != want {
+			t.Errorf("SQL mismatch:\n got: %s\nwant: %s", txt, want)
+		}
+
+	})
+
 	runHappy("override default page size by validation", `
 		message FooListRequest {
 			j5.list.v1.PageRequest page = 1;
@@ -197,7 +257,7 @@ func TestBuildListReflection(t *testing.T) {
 		func(t testing.TB, table *TableSpec, req, res protoreflect.MessageDescriptor) {
 			table.FallbackSortColumns = []ProtoField{{
 				valueColumn: gl.Ptr("id"),
-				pathInRoot:  pgstore.JSONPathSpec{"id"},
+				pathInRoot:  JSONPathSpec{"id"},
 			}}
 		},
 		func(t *testing.T, lr *ListReflectionSet) {

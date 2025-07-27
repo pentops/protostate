@@ -26,7 +26,7 @@ func silenceLogger() func() {
 	}
 }
 
-func printQuery(t flowtest.TB, query *sqrl.SelectBuilder) {
+func printQuery(t flowtest.TB, query sqrl.Sqlizer) {
 	stmt, args, err := query.ToSql()
 	if err != nil {
 		t.Fatal(err.Error())

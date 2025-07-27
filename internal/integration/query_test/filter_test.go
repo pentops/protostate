@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func TestDefaultFiltering(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -119,7 +120,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -187,7 +188,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -212,23 +213,21 @@ func TestDynamicFiltering(t *testing.T) {
 		})
 	})
 
-	t.Run("Min Range Filter", func(t *testing.T) {
-		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.FooListRequest{
-				Page: &list_j5pb.PageRequest{
-					PageSize: proto.Int64(5),
-				},
-				Query: &list_j5pb.QueryRequest{
-					Filters: []*list_j5pb.Filter{
-						{
-							Type: &list_j5pb.Filter_Field{
-								Field: &list_j5pb.Field{
-									Name: "data.characteristics.weight",
-									Type: &list_j5pb.FieldType{
-										Type: &list_j5pb.FieldType_Range{
-											Range: &list_j5pb.Range{
-												Min: "12",
-											},
+	ss.Step("Min Range Filter", func(ctx context.Context, t flowtest.Asserter) {
+		req := &test_spb.FooListRequest{
+			Page: &list_j5pb.PageRequest{
+				PageSize: proto.Int64(5),
+			},
+			Query: &list_j5pb.QueryRequest{
+				Filters: []*list_j5pb.Filter{
+					{
+						Type: &list_j5pb.Filter_Field{
+							Field: &list_j5pb.Field{
+								Name: "data.characteristics.weight",
+								Type: &list_j5pb.FieldType{
+									Type: &list_j5pb.FieldType_Range{
+										Range: &list_j5pb.Range{
+											Min: "12",
 										},
 									},
 								},
@@ -236,47 +235,48 @@ func TestDynamicFiltering(t *testing.T) {
 						},
 					},
 				},
-			}
-			res := &test_spb.FooListResponse{}
+			},
+		}
+		res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
-			if err != nil {
-				t.Fatal(err.Error())
-			}
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
+		if err != nil {
+			t.Fatal(err.Error())
+		}
 
-			if len(res.Foo) != 5 {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
+		if len(res.Foo) != 5 {
+			for _, foo := range res.Foo {
+				t.Logf("Foo: %s, Weight: %d", foo.Data.Field, foo.Data.Characteristics.Weight)
 			}
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
+		}
 
-			for ii, state := range res.Foo {
-				t.Logf("%d: %s", ii, state.Data.Field)
-			}
+		for ii, state := range res.Foo {
+			t.Logf("%d: %s", ii, state.Data.Field)
+		}
 
-			for _, state := range res.Foo {
-				if state.Data.Characteristics.Weight < int64(12) {
-					t.Fatalf("expected weights greater than or equal to %d, got %d", 12, state.Data.Characteristics.Weight)
-				}
+		for _, state := range res.Foo {
+			if state.Data.Characteristics.Weight < int64(12) {
+				t.Fatalf("expected weights greater than or equal to %d, got %d", 12, state.Data.Characteristics.Weight)
 			}
-		})
+		}
 	})
 
-	t.Run("Max Range Filter", func(t *testing.T) {
-		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
-			req := &test_spb.FooListRequest{
-				Page: &list_j5pb.PageRequest{
-					PageSize: proto.Int64(5),
-				},
-				Query: &list_j5pb.QueryRequest{
-					Filters: []*list_j5pb.Filter{
-						{
-							Type: &list_j5pb.Filter_Field{
-								Field: &list_j5pb.Field{
-									Name: "data.characteristics.weight",
-									Type: &list_j5pb.FieldType{
-										Type: &list_j5pb.FieldType_Range{
-											Range: &list_j5pb.Range{
-												Max: "15",
-											},
+	ss.Step("Max Range Filter", func(ctx context.Context, t flowtest.Asserter) {
+		req := &test_spb.FooListRequest{
+			Page: &list_j5pb.PageRequest{
+				PageSize: proto.Int64(5),
+			},
+			Query: &list_j5pb.QueryRequest{
+				Filters: []*list_j5pb.Filter{
+					{
+						Type: &list_j5pb.Filter_Field{
+							Field: &list_j5pb.Field{
+								Name: "data.characteristics.weight",
+								Type: &list_j5pb.FieldType{
+									Type: &list_j5pb.FieldType_Range{
+										Range: &list_j5pb.Range{
+											Max: "15",
 										},
 									},
 								},
@@ -284,83 +284,84 @@ func TestDynamicFiltering(t *testing.T) {
 						},
 					},
 				},
-			}
-			res := &test_spb.FooListResponse{}
+			},
+		}
+		res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
-			if err != nil {
-				t.Fatal(err.Error())
-			}
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
+		if err != nil {
+			t.Fatal(err.Error())
+		}
 
-			if len(res.Foo) != 5 {
-				t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
-			}
+		if len(res.Foo) != 5 {
+			t.Fatalf("expected %d states, got %d", 5, len(res.Foo))
+		}
 
-			for ii, state := range res.Foo {
-				t.Logf("%d: %s", ii, state.Data.Field)
-			}
+		for ii, state := range res.Foo {
+			t.Logf("%d: %s", ii, state.Data.Field)
+		}
 
-			for _, state := range res.Foo {
-				if state.Data.Characteristics.Weight > int64(15) {
-					t.Fatalf("expected weight less than or equal to %d, got %d", 15, state.Data.Characteristics.Weight)
-				}
+		for _, state := range res.Foo {
+			if state.Data.Characteristics.Weight > int64(15) {
+				t.Fatalf("expected weight less than or equal to %d, got %d", 15, state.Data.Characteristics.Weight)
 			}
-		})
+		}
 	})
 
 	t.Run("Multi Range Filter", func(t *testing.T) {
 		nextToken := ""
+		query := &list_j5pb.QueryRequest{
+			Filters: []*list_j5pb.Filter{
+				{
+					Type: &list_j5pb.Filter_Or{
+						Or: &list_j5pb.Or{
+							Filters: []*list_j5pb.Filter{
+								{
+									Type: &list_j5pb.Filter_Field{
+										Field: &list_j5pb.Field{
+											Name: "data.characteristics.weight",
+											Type: &list_j5pb.FieldType{
+												Type: &list_j5pb.FieldType_Range{
+													Range: &list_j5pb.Range{
+														Min: "12",
+														Max: "20",
+													},
+												},
+											},
+										},
+									},
+								},
+								{
+									Type: &list_j5pb.Filter_Field{
+										Field: &list_j5pb.Field{
+											Name: "data.characteristics.height",
+											Type: &list_j5pb.FieldType{
+												Type: &list_j5pb.FieldType_Range{
+													Range: &list_j5pb.Range{
+														Min: "16",
+														Max: "18",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 				},
-				Query: &list_j5pb.QueryRequest{
-					Filters: []*list_j5pb.Filter{
-						{
-							Type: &list_j5pb.Filter_Or{
-								Or: &list_j5pb.Or{
-									Filters: []*list_j5pb.Filter{
-										{
-											Type: &list_j5pb.Filter_Field{
-												Field: &list_j5pb.Field{
-													Name: "data.characteristics.weight",
-													Type: &list_j5pb.FieldType{
-														Type: &list_j5pb.FieldType_Range{
-															Range: &list_j5pb.Range{
-																Min: "12",
-																Max: "20",
-															},
-														},
-													},
-												},
-											},
-										},
-										{
-											Type: &list_j5pb.Filter_Field{
-												Field: &list_j5pb.Field{
-													Name: "data.characteristics.height",
-													Type: &list_j5pb.FieldType{
-														Type: &list_j5pb.FieldType_Range{
-															Range: &list_j5pb.Range{
-																Min: "16",
-																Max: "18",
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Query: query,
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -395,60 +396,25 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 
 			nextToken = pageResp.GetNextToken()
+
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+			dec, err := base64.StdEncoding.DecodeString(nextToken)
+			if err != nil {
+				t.Fatalf("failed to decode next token: %v", err)
+			}
+			t.Log(string(dec))
 			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(10),
 					Token:    &nextToken,
 				},
-				Query: &list_j5pb.QueryRequest{
-					Filters: []*list_j5pb.Filter{
-						{
-							Type: &list_j5pb.Filter_Or{
-								Or: &list_j5pb.Or{
-									Filters: []*list_j5pb.Filter{
-										{
-											Type: &list_j5pb.Filter_Field{
-												Field: &list_j5pb.Field{
-													Name: "data.characteristics.weight",
-													Type: &list_j5pb.FieldType{
-														Type: &list_j5pb.FieldType_Range{
-															Range: &list_j5pb.Range{
-																Min: "12",
-																Max: "20",
-															},
-														},
-													},
-												},
-											},
-										},
-										{
-											Type: &list_j5pb.Filter_Field{
-												Field: &list_j5pb.Field{
-													Name: "data.characteristics.height",
-													Type: &list_j5pb.FieldType{
-														Type: &list_j5pb.FieldType_Range{
-															Range: &list_j5pb.Range{
-																Min: "16",
-																Max: "18",
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Query: query,
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -498,7 +464,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -540,7 +506,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -561,7 +527,7 @@ func TestDynamicFiltering(t *testing.T) {
 									Name: "status",
 									Type: &list_j5pb.FieldType{
 										Type: &list_j5pb.FieldType_Value{
-											Value: "active",
+											Value: "ACTIVE",
 										},
 									},
 								},
@@ -572,7 +538,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err := queryer.List(ctx, db, req, res)
+			err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -616,7 +582,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err := queryer.List(ctx, db, req, res)
+			err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -660,7 +626,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err := queryer.List(ctx, db, req, res)
+			err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -696,7 +662,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -763,7 +729,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -804,7 +770,15 @@ func TestDynamicFiltering(t *testing.T) {
 						{
 							Type: &list_j5pb.Filter_Field{
 								Field: &list_j5pb.Field{
-									Name: "event.type",
+									// match the JSON encoding
+									// {
+									//   "event": {
+									//     "!type": "created"
+									//     "created": {...}
+									//   }
+									//   ...
+									// }
+									Name: "event.!type",
 									Type: &list_j5pb.FieldType{
 										Type: &list_j5pb.FieldType_Value{
 											Value: "created",
@@ -818,7 +792,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooEventsResponse{}
 
-			err := queryer.EventLister.List(ctx, db, req, res)
+			err := queryer.EventLister.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -863,7 +837,7 @@ func TestDynamicFiltering(t *testing.T) {
 			}
 			res := &test_spb.FooEventsResponse{}
 
-			err := queryer.EventLister.List(ctx, db, req, res)
+			err := queryer.EventLister.List(ctx, db, req.J5Object(), res.J5Object())
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}

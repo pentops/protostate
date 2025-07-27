@@ -9,6 +9,7 @@ import (
 	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/o5-messaging/o5msg"
 	"github.com/pentops/sqrlx.go/sqrlx"
+	"google.golang.org/protobuf/proto"
 )
 
 /*
@@ -44,6 +45,13 @@ SE is set to a single type for each transition.
 
 type J5Message interface {
 	J5Reflect() j5reflect.Root
+	Clone() any // returns the same type
+	proto.Message
+}
+
+func newJ5Message[T J5Message]() T {
+	val := (*new(T)).ProtoReflect().New().Interface().(T)
+	return val
 }
 
 // IGenericProtoMessage is the base extensions shared by all message entities in the PSM generated code

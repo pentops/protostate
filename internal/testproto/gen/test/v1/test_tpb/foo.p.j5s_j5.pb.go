@@ -4,8 +4,17 @@ package test_tpb
 
 import (
 	j5reflect "github.com/pentops/j5/lib/j5reflect"
+	proto "google.golang.org/protobuf/proto"
 )
 
 func (msg *FooEventMessage) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEventMessage) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooEventMessage) Clone() any {
+	return proto.Clone(msg).(*FooEventMessage)
 }

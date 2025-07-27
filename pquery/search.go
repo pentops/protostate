@@ -3,12 +3,12 @@ package pquery
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/internal/pgstore"
 )
 
 /*
@@ -141,7 +141,7 @@ func validateSearchAnnotationsField(ids map[string]string, field *j5schema.Objec
 	func validateQueryRequestSearches(message *j5schema.ObjectSchema, searches []*list_j5pb.Search) error {
 		for _, search := range searches {
 
-			spec, err := pgstore.NewJSONPath(message, pgstore.ParseJSONPathSpec(search.GetField()))
+			spec, err := NewJSONPath(message, ParseJSONPathSpec(search.GetField()))
 			if err != nil {
 				return fmt.Errorf("field spec: %w", err)
 			}
@@ -178,10 +178,35 @@ func validateSearchAnnotationsField(ids map[string]string, field *j5schema.Objec
 */
 var rePgUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
+func TSVColumns(message *j5schema.ObjectSchema) ([]*TSVColumn, error) {
+	return tsvColumns(message)
+}
+
 func buildTsvColumnMap(message *j5schema.ObjectSchema) (map[string]string, error) {
 	out := make(map[string]string)
+	paths, err := tsvColumns(message)
+	if err != nil {
+		return nil, fmt.Errorf("build tsv column map: %w", err)
+	}
 
-	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
+	for _, path := range paths {
+		out[path.IDPath()] = path.ColumnName
+	}
+
+	return out, nil
+}
+
+type TSVColumn struct {
+	Path
+	ColumnName string
+}
+
+func tsvColumns(message *j5schema.ObjectSchema) ([]*TSVColumn, error) {
+
+	usedColNames := make(map[string]struct{})
+	out := []*TSVColumn{}
+
+	err := WalkPathNodes(message, func(path Path) error {
 		field := path.LeafField()
 		switch bigSchema := field.Schema.(type) {
 
@@ -195,7 +220,22 @@ func buildTsvColumnMap(message *j5schema.ObjectSchema) (map[string]string, error
 
 				idPath := path.IDPath()
 				columnName := rePgUnsafe.ReplaceAllString(idPath, "_")
-				out[idPath] = fmt.Sprintf("tsv_%s", columnName)
+				columnName = strings.ToLower(columnName)
+				if _, exists := usedColNames[columnName]; exists {
+					// the character set isn't sufficient to guarantee
+					// uniqueness when dropping the casing, e.g., `foo_d`
+					// becomes `fooD`, which becomes `food`, and `food` itself
+					// could also be valid.
+					// It's unlikely to come up, but better throw here than
+					// behave unexpectedly later.
+					return fmt.Errorf("duplicate tsv column name %q for path %q", columnName, idPath)
+				}
+				usedColNames[columnName] = struct{}{}
+
+				out = append(out, &TSVColumn{
+					Path:       path,
+					ColumnName: fmt.Sprintf("tsv_%s", columnName),
+				})
 			}
 		}
 
@@ -208,7 +248,7 @@ func buildTsvColumnMap(message *j5schema.ObjectSchema) (map[string]string, error
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicSearches(tableAlias string, searches []*list_j5pb.Search) ([]sq.Sqlizer, error) {
+func (ll *Lister) buildDynamicSearches(tableAlias string, searches []*list_j5pb.Search) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range searches {

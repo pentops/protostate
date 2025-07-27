@@ -42,7 +42,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 
 	stateSets, err := state.WalkFile(file)
 	if err != nil {
-		gen.Error(err)
+
+		gen.Error(fmt.Errorf("walkFile: %w", err))
 		return
 	}
 

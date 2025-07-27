@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,7 +51,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -88,6 +89,12 @@ func TestSortingWithAuthScope(t *testing.T) {
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
 		ctx = tkn.WithToken(ctx)
 
+		pageTokenBytes, err := base64.StdEncoding.DecodeString(nextToken)
+		if err != nil {
+			t.Fatalf("failed to decode next token: %v", err)
+		}
+		t.Logf("Page Token: %s", string(pageTokenBytes))
+
 		req := &test_spb.FooListRequest{
 			Page: &list_j5pb.PageRequest{
 				PageSize: proto.Int64(5),
@@ -101,7 +108,7 @@ func TestSortingWithAuthScope(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -164,7 +171,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -211,7 +218,7 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err = queryer.List(ctx, db, req, res)
+		err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -242,17 +249,17 @@ func TestSortingWithAuthNoScope(t *testing.T) {
 }
 
 func TestDynamicSorting(t *testing.T) {
-	ss, uu := NewFooUniverse(t)
-	sm := uu.SM
-	db := uu.DB
-	queryer := uu.Query
-	var err error
-	defer ss.RunSteps(t)
-
-	tenants := []string{uuid.NewString()}
-	setupFooListableData(ss, sm, tenants, 30)
 
 	t.Run("Top Level Field", func(t *testing.T) {
+		ss, uu := NewFooUniverse(t)
+		sm := uu.SM
+		db := uu.DB
+		queryer := uu.Query
+		var err error
+		defer ss.RunSteps(t)
+
+		tenants := []string{uuid.NewString()}
+		setupFooListableData(ss, sm, tenants, 30)
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.FooListRequest{
@@ -267,7 +274,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -312,7 +319,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -343,6 +350,15 @@ func TestDynamicSorting(t *testing.T) {
 	})
 
 	t.Run("Nested Field", func(t *testing.T) {
+		ss, uu := NewFooUniverse(t)
+		sm := uu.SM
+		db := uu.DB
+		queryer := uu.Query
+		var err error
+		defer ss.RunSteps(t)
+
+		tenants := []string{uuid.NewString()}
+		setupFooListableData(ss, sm, tenants, 30)
 		nextToken := ""
 		ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.FooListRequest{
@@ -357,7 +373,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -402,7 +418,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -433,6 +449,15 @@ func TestDynamicSorting(t *testing.T) {
 	})
 
 	t.Run("Multiple Nested Fields", func(t *testing.T) {
+		ss, uu := NewFooUniverse(t)
+		sm := uu.SM
+		db := uu.DB
+		queryer := uu.Query
+		var err error
+		defer ss.RunSteps(t)
+
+		tenants := []string{uuid.NewString()}
+		setupFooListableData(ss, sm, tenants, 30)
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.FooListRequest{
@@ -448,7 +473,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -484,6 +509,12 @@ func TestDynamicSorting(t *testing.T) {
 		})
 
 		ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
+
+			pageTokenBytes, err := base64.StdEncoding.DecodeString(nextToken)
+			if err != nil {
+				t.Fatalf("failed to decode next token: %v", err)
+			}
+			t.Logf("Page Token: %s", string(pageTokenBytes))
 			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),
@@ -498,7 +529,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -533,6 +564,15 @@ func TestDynamicSorting(t *testing.T) {
 	})
 
 	t.Run("Descending", func(t *testing.T) {
+		ss, uu := NewFooUniverse(t)
+		sm := uu.SM
+		db := uu.DB
+		queryer := uu.Query
+		var err error
+		defer ss.RunSteps(t)
+
+		tenants := []string{uuid.NewString()}
+		setupFooListableData(ss, sm, tenants, 30)
 		nextToken := ""
 		ss.Step("List Page", func(ctx context.Context, t flowtest.Asserter) {
 			req := &test_spb.FooListRequest{
@@ -550,7 +590,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -598,7 +638,7 @@ func TestDynamicSorting(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err = queryer.List(ctx, db, req, res)
+			err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}

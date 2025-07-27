@@ -6,14 +6,11 @@ import (
 	"strings"
 
 	sq "github.com/elgris/sqrl"
-	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
-	"github.com/pentops/protostate/internal/pgstore"
+	"github.com/pentops/j5/lib/j5schema"
+	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 func BuildStateMachineMigrations(specs ...psm.QueryTableSpec) ([]byte, error) {
@@ -92,7 +89,7 @@ type searchSpec struct {
 	tsvColumn  string
 	tableName  string
 	columnName string
-	path       pgstore.Path
+	path       pquery.Path
 }
 
 func (ss searchSpec) ToSQL() (string, error) {
@@ -131,39 +128,23 @@ func AddIndexes(ctx context.Context, conn sqrlx.Connection, specs ...psm.QueryTa
 	return writeIndexes(ctx, conn, allIndexes)
 }
 
-func buildIndexes(tableName string, columnName string, rootType protoreflect.MessageDescriptor) ([]searchSpec, error) {
+func buildIndexes(tableName string, columnName string, rootType *j5schema.ObjectSchema) ([]searchSpec, error) {
+
+	cols, err := pquery.TSVColumns(rootType)
+	if err != nil {
+		return nil, err
+	}
 
 	specs := []searchSpec{}
 
-	if err := pgstore.WalkPathNodes(rootType, func(node pgstore.Path) error {
-		field := node.LeafField()
-		if field == nil || field.Kind() != protoreflect.StringKind {
-			return nil
-		}
+	for _, col := range cols {
+		specs = append(specs, searchSpec{
+			tsvColumn:  col.ColumnName,
+			tableName:  tableName,
+			columnName: columnName,
+			path:       col.Path,
+		})
 
-		fieldOpts, ok := proto.GetExtension(field.Options().(*descriptorpb.FieldOptions), list_j5pb.E_Field).(*list_j5pb.FieldConstraint)
-		if !ok {
-			return nil
-		}
-
-		switch fieldOpts.GetString_().GetWellKnown().(type) {
-		case *list_j5pb.StringRules_OpenText:
-			searchOpts := fieldOpts.GetString_().GetOpenText().GetSearching()
-			if searchOpts == nil || !searchOpts.Searchable {
-				return nil
-			}
-
-			specs = append(specs, searchSpec{
-				tsvColumn:  searchOpts.GetFieldIdentifier(),
-				tableName:  tableName,
-				columnName: columnName,
-				path:       node,
-			})
-		}
-
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	return specs, nil

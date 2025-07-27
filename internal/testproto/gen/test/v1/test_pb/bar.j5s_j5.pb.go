@@ -4,20 +4,90 @@ package test_pb
 
 import (
 	j5reflect "github.com/pentops/j5/lib/j5reflect"
+	proto "google.golang.org/protobuf/proto"
 )
 
 func (msg *BarKeys) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarKeys) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarKeys) Clone() any {
+	return proto.Clone(msg).(*BarKeys)
 }
 func (msg *BarData) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarData) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarData) Clone() any {
+	return proto.Clone(msg).(*BarData)
 }
 func (msg *BarState) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarState) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarState) Clone() any {
+	return proto.Clone(msg).(*BarState)
 }
 func (msg *BarEventType) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventType) Clone() any {
+	return proto.Clone(msg).(*BarEventType)
+}
+func (msg *BarEventType_Created) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventType_Created) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEventType_Created) Clone() any {
+	return proto.Clone(msg).(*BarEventType_Created)
+}
+func (msg *BarEventType_Updated) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventType_Updated) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEventType_Updated) Clone() any {
+	return proto.Clone(msg).(*BarEventType_Updated)
+}
+func (msg *BarEventType_Deleted) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventType_Deleted) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEventType_Deleted) Clone() any {
+	return proto.Clone(msg).(*BarEventType_Deleted)
 }
 func (msg *BarEvent) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEvent) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEvent) Clone() any {
+	return proto.Clone(msg).(*BarEvent)
 }

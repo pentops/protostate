@@ -13,13 +13,12 @@ import (
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/j5/lib/id62"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/shopspring/decimal"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type filterSpec struct {
-	*pgstore.NestedField
+	*NestedField
 	filterVals []any
 }
 
@@ -235,7 +234,7 @@ func filtersForField(field *j5schema.ObjectProperty) ([]any, error) {
 func buildDefaultFilters(columnName string, message *j5schema.ObjectSchema) ([]filterSpec, error) {
 	var filters []filterSpec
 
-	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
+	err := WalkPathNodes(message, func(path Path) error {
 		field := path.LeafField()
 		if field == nil {
 			return nil
@@ -248,7 +247,7 @@ func buildDefaultFilters(columnName string, message *j5schema.ObjectSchema) ([]f
 
 		if len(vals) > 0 {
 			filters = append(filters, filterSpec{
-				NestedField: &pgstore.NestedField{
+				NestedField: &NestedField{
 					Path:       path,
 					RootColumn: columnName,
 				},
@@ -264,19 +263,19 @@ func buildDefaultFilters(columnName string, message *j5schema.ObjectSchema) ([]f
 	return filters, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*list_j5pb.Filter) ([]sq.Sqlizer, error) {
+func (ll *ListReflectionSet) buildDynamicFilter(tableAlias string, filters []*list_j5pb.Filter) ([]sq.Sqlizer, error) {
 	out := []sq.Sqlizer{}
 
 	for i := range filters {
 		switch filters[i].GetType().(type) {
 		case *list_j5pb.Filter_Field:
-			pathSpec := pgstore.ParseJSONPathSpec(filters[i].GetField().GetName())
-			spec, err := pgstore.NewJSONPath(ll.arrayObject, pathSpec)
+			pathSpec := ParseJSONPathSpec(filters[i].GetField().GetName())
+			spec, err := NewJSONPath(ll.arrayObject, pathSpec)
 			if err != nil {
 				return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 			}
 
-			biggerSpec := &pgstore.NestedField{
+			biggerSpec := &NestedField{
 				Path:       *spec,
 				RootColumn: ll.dataColumn,
 			}
@@ -311,7 +310,7 @@ func (ll *Lister[REQ, RES]) buildDynamicFilter(tableAlias string, filters []*lis
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
+func (ll *ListReflectionSet) buildDynamicFilterField(tableAlias string, spec *NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
 	var out sq.And
 
 	if filter.GetField() == nil {
@@ -321,6 +320,15 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 	switch ft := filter.GetField().GetType().Type.(type) {
 	case *list_j5pb.FieldType_Value:
 		val := ft.Value
+
+		switch schema := spec.Path.LeafField().Schema.(type) {
+		case *j5schema.EnumField:
+			option := schema.Schema().OptionByName(val)
+			if option == nil {
+				return nil, fmt.Errorf("enum value '%s' not found in field '%s'", val, spec.Path.LeafField().JSONName)
+			}
+			val = option.Name() // Use the name of the option, not the value
+		}
 
 		out = sq.And{sq.Expr(
 			fmt.Sprintf("jsonb_path_query_array(%s.%s, '%s') @> ?",
@@ -349,29 +357,6 @@ func (ll *Lister[REQ, RES]) buildDynamicFilterField(tableAlias string, spec *pgs
 	return out, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicFilterOneof(tableAlias string, ospec *pgstore.NestedField, filter *list_j5pb.Filter) (sq.Sqlizer, error) {
-	var out sq.And
-
-	if filter.GetField() == nil {
-		return nil, fmt.Errorf("dynamic filter: field is nil")
-	}
-
-	switch ft := filter.GetField().GetType().Type.(type) {
-	case *list_j5pb.FieldType_Value:
-		val := ft.Value
-
-		// Val is used directly here instead of passed in as an expression
-		// parameter. It has been sanitized by validation against the oneof
-		// field names.
-		exprStr := fmt.Sprintf("jsonb_array_length(jsonb_path_query_array(%s.%s, '%s ?? (exists(@.%s))')) > 0", tableAlias, ospec.RootColumn, ospec.Path.JSONPathQuery(), val)
-		out = sq.And{sq.Expr(exprStr)}
-	case *list_j5pb.FieldType_Range:
-		return nil, fmt.Errorf("oneofs cannot be filtered by range")
-	}
-
-	return out, nil
-}
-
 func validateQueryRequestFilters(message *j5schema.ObjectSchema, filters []*list_j5pb.Filter) error {
 	for i := range filters {
 		switch filters[i].GetType().(type) {
@@ -389,30 +374,25 @@ func validateQueryRequestFilters(message *j5schema.ObjectSchema, filters []*list
 
 func validateQueryRequestFilterField(message *j5schema.ObjectSchema, filterField *list_j5pb.Field) error {
 
-	jsonPath := pgstore.ParseJSONPathSpec(filterField.GetName())
-	spec, err := pgstore.NewJSONPath(message, jsonPath)
+	jsonPath := ParseJSONPathSpec(filterField.GetName())
+	spec, err := NewJSONPath(message, jsonPath)
 	if err != nil {
 		return fmt.Errorf("find field: %w", err)
 	}
 
-	fieldSpec := spec.LeafField()
-	if !schemaIsFilterable(fieldSpec) {
-		return fmt.Errorf("requested filter field '%s' is not filterable", filterField.Name)
-	}
-
 	switch filterField.Type.Type.(type) {
 	case *list_j5pb.FieldType_Value:
-		err := validateFilterFieldValue(fieldSpec, filterField.Type.GetValue())
+		err := validateFilterFieldValue(spec, filterField.Type.GetValue())
 		if err != nil {
 			return fmt.Errorf("filter value: %w", err)
 		}
 	case *list_j5pb.FieldType_Range:
-		err := validateFilterFieldValue(fieldSpec, filterField.Type.GetRange().GetMin())
+		err := validateFilterFieldValue(spec, filterField.Type.GetRange().GetMin())
 		if err != nil {
 			return fmt.Errorf("filter min value: %w", err)
 		}
 
-		err = validateFilterFieldValue(fieldSpec, filterField.Type.GetRange().GetMax())
+		err = validateFilterFieldValue(spec, filterField.Type.GetRange().GetMax())
 		if err != nil {
 			return fmt.Errorf("filter max value: %w", err)
 		}
@@ -421,44 +401,12 @@ func validateQueryRequestFilterField(message *j5schema.ObjectSchema, filterField
 	return nil
 }
 
-func schemaIsFilterable(prop *j5schema.ObjectProperty) bool {
-
-	switch bigSchema := prop.Schema.(type) {
-	case *j5schema.EnumField:
-		return bigSchema.ListRules != nil && bigSchema.ListRules.Filtering != nil && bigSchema.ListRules.Filtering.Filterable
-	case *j5schema.OneofField:
-		return bigSchema.ListRules != nil && bigSchema.ListRules.Filtering != nil && bigSchema.ListRules.Filtering.Filterable
-	case *j5schema.ScalarSchema:
-		j5Field := bigSchema.ToJ5Field()
-		switch st := j5Field.Type.(type) {
-		case *schema_j5pb.Field_Float:
-			return st.Float.ListRules != nil && st.Float.ListRules.Filtering != nil && st.Float.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Integer:
-			return st.Integer.ListRules != nil && st.Integer.ListRules.Filtering != nil && st.Integer.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Bool:
-			return st.Bool.ListRules != nil && st.Bool.ListRules.Filtering != nil && st.Bool.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Key:
-			return st.Key.ListRules != nil && st.Key.ListRules.Filtering != nil && st.Key.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Timestamp:
-			return st.Timestamp.ListRules != nil && st.Timestamp.ListRules.Filtering != nil && st.Timestamp.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Date:
-			return st.Date.ListRules != nil && st.Date.ListRules.Filtering != nil && st.Date.ListRules.Filtering.Filterable
-		case *schema_j5pb.Field_Decimal:
-			return st.Decimal.ListRules != nil && st.Decimal.ListRules.Filtering != nil && st.Decimal.ListRules.Filtering.Filterable
-		default:
-			// If we don't know the type, we assume it's not filterable
-			return false
-		}
-	default:
-		// If we don't know the type, we assume it's not filterable
-		return false
-	}
-}
-
-func validateFilterFieldValue(prop *j5schema.ObjectProperty, value string) error {
+func validateFilterFieldValue(path *Path, value string) error {
 	if value == "" {
 		return nil
 	}
+
+	prop := path.LeafField()
 
 	switch bigType := prop.Schema.(type) {
 	case *j5schema.EnumField:
@@ -471,7 +419,7 @@ func validateFilterFieldValue(prop *j5schema.ObjectProperty, value string) error
 		}
 	case *j5schema.OneofField:
 		if bigType.ListRules == nil || bigType.ListRules.Filtering == nil || !bigType.ListRules.Filtering.Filterable {
-			return fmt.Errorf("oneof field '%s' is not filterable", prop.JSONName)
+			return fmt.Errorf("oneof field %q is not filterable", prop.FullName())
 		}
 		oneof := bigType.OneofSchema()
 		if oneof.Properties.ByJSONName(value) == nil {
@@ -485,17 +433,18 @@ func validateFilterFieldValue(prop *j5schema.ObjectProperty, value string) error
 			if st.Float.ListRules == nil || st.Float.ListRules.Filtering == nil || !st.Float.ListRules.Filtering.Filterable {
 				return fmt.Errorf("float field '%s' is not filterable", prop.JSONName)
 			}
-			if st.Float.Format == schema_j5pb.FloatField_FORMAT_FLOAT32 {
+			switch st.Float.Format {
+			case schema_j5pb.FloatField_FORMAT_FLOAT32:
 				_, err := strconv.ParseFloat(value, 32)
 				if err != nil {
 					return fmt.Errorf("parsing float32 value '%s' for field '%s': %w", value, prop.JSONName, err)
 				}
-			} else if st.Float.Format == schema_j5pb.FloatField_FORMAT_FLOAT64 {
+			case schema_j5pb.FloatField_FORMAT_FLOAT64:
 				_, err := strconv.ParseFloat(value, 64)
 				if err != nil {
 					return fmt.Errorf("parsing float64 value '%s' for field '%s': %w", value, prop.JSONName, err)
 				}
-			} else {
+			default:
 				return fmt.Errorf("unknown float format '%s' for field '%s'", st.Float.Format, prop.JSONName)
 			}
 		case *schema_j5pb.Field_Integer:

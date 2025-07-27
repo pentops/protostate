@@ -38,7 +38,7 @@ func TestDynamicSearching(t *testing.T) {
 			}
 			res := &test_spb.FooListResponse{}
 
-			err := queryer.List(ctx, db, req, res)
+			err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -91,7 +91,7 @@ func TestDynamicSearching(t *testing.T) {
 				}
 				res := &test_spb.FooListResponse{}
 
-				err = queryer.List(ctx, db, req, res)
+				err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 				if err != nil {
 					t.Fatal(err.Error())
 				}
@@ -156,7 +156,7 @@ func TestDynamicSearching(t *testing.T) {
 				}
 				res := &test_spb.FooListResponse{}
 
-				err = queryer.List(ctx, db, req, res)
+				err = queryer.List(ctx, db, req.J5Object(), res.J5Object())
 				if err != nil {
 					t.Fatal(err.Error())
 				}

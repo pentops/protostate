@@ -21,7 +21,6 @@ func TestBuildTsvColumnMap(t *testing.T) {
 			string unoptioned_field = 1;
 			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
-				field_identifier: "optioned_field"
 			}];
 			Bar bar = 3;
 		}
@@ -30,13 +29,13 @@ func TestBuildTsvColumnMap(t *testing.T) {
 			string unoptioned_field = 1;
 			string optioned_field = 2 [(j5.list.v1.field).string.open_text.searching = {
 				searchable: true,
-				field_identifier: "bar_optioned_field"
 			}];
 		}
 	`})
 
 	fooDesc := descFiles.MessageByName(t, "test.Foo")
-	fooObj, err := j5schema.Global.ObjectSchema(fooDesc)
+	schemaSet := j5schema.NewSchemaCache()
+	fooObj, err := schemaSet.ObjectSchema(fooDesc)
 	if err != nil {
 		t.Fatalf("failed to get schema for Foo: %v", err)
 	}
@@ -47,9 +46,21 @@ func TestBuildTsvColumnMap(t *testing.T) {
 	}
 	assert.Len(t, columnMap, 2)
 
+	want := map[string]string{
+		"optionedField":     "tsv_optionedfield",
+		"bar.optionedField": "tsv_bar_optionedfield",
+	}
 	for f, c := range columnMap {
 		t.Log("field: ", f, "\tcolumn: ", c)
+		if want[f] != c {
+			t.Errorf("expected column %s to map to field %s, but got %s", f, want[f], c)
+		}
+		delete(want, f)
 	}
+	for k, v := range want {
+		t.Errorf("expected column %s to map to field %s, but it was not found", v, k)
+	}
+
 }
 
 /*

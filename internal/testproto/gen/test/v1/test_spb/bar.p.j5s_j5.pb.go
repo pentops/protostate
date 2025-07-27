@@ -4,23 +4,72 @@ package test_spb
 
 import (
 	j5reflect "github.com/pentops/j5/lib/j5reflect"
+	proto "google.golang.org/protobuf/proto"
 )
 
 func (msg *BarGetRequest) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarGetRequest) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarGetRequest) Clone() any {
+	return proto.Clone(msg).(*BarGetRequest)
 }
 func (msg *BarGetResponse) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarGetResponse) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarGetResponse) Clone() any {
+	return proto.Clone(msg).(*BarGetResponse)
 }
 func (msg *BarListRequest) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarListRequest) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarListRequest) Clone() any {
+	return proto.Clone(msg).(*BarListRequest)
 }
 func (msg *BarListResponse) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarListResponse) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarListResponse) Clone() any {
+	return proto.Clone(msg).(*BarListResponse)
 }
 func (msg *BarEventsRequest) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventsRequest) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEventsRequest) Clone() any {
+	return proto.Clone(msg).(*BarEventsRequest)
 }
 func (msg *BarEventsResponse) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *BarEventsResponse) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *BarEventsResponse) Clone() any {
+	return proto.Clone(msg).(*BarEventsResponse)
 }

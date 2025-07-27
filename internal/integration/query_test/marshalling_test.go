@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/pentops/golib/gl"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"k8s.io/utils/ptr"
@@ -39,7 +40,7 @@ func TestMarshaling(t *testing.T) {
 
 			res := &test_spb.FooGetResponse{}
 
-			err = queryer.Get(ctx, db, req, res)
+			err = queryer.Get(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -59,6 +60,11 @@ func TestMarshaling(t *testing.T) {
 
 			if !strings.Contains(stateJSON, `"description": ""`) {
 				t.Fatalf("expected description to be present, but empty: %s", stateJSON)
+			}
+
+			t.Log("Event Count:", len(res.Events))
+			if len(res.Events) == 0 {
+				t.Fatal("expected at least one event")
 			}
 
 			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
@@ -87,7 +93,7 @@ func TestMarshaling(t *testing.T) {
 
 			res := &test_spb.FooGetResponse{}
 
-			err = queryer.Get(ctx, db, req, res)
+			err = queryer.Get(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -107,6 +113,11 @@ func TestMarshaling(t *testing.T) {
 
 			if !strings.Contains(stateJSON, `"description": "non blank description"`) {
 				t.Fatalf("expected description to be present, and not empty: %s", stateJSON)
+			}
+
+			t.Log("Event Count:", len(res.Events))
+			if len(res.Events) == 0 {
+				t.Fatal("expected at least one event")
 			}
 
 			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
@@ -136,7 +147,7 @@ func TestMarshaling(t *testing.T) {
 
 			res := &test_spb.FooGetResponse{}
 
-			err = queryer.Get(ctx, db, req, res)
+			err = queryer.Get(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -150,8 +161,8 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if strings.Contains(stateJSON, `"description":`) {
-				t.Fatalf("expected description to not be present: %s", stateJSON)
+			if !strings.Contains(stateJSON, `"description": null`) {
+				t.Fatalf("expected 'description' to be present as null in state: %s", stateJSON)
 			}
 
 			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
@@ -159,8 +170,8 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if strings.Contains(eventJSON, `"description":`) {
-				t.Fatalf("expected description to not be present: %s", eventJSON)
+			if !strings.Contains(eventJSON, `"description": null`) {
+				t.Fatalf("expected 'description' to be present as null in event: %s", stateJSON)
 			}
 		})
 	})
@@ -171,8 +182,7 @@ func TestMarshaling(t *testing.T) {
 
 		t.Run("Get with empty", func(t *testing.T) {
 			event := newFooCreatedEvent(fooID, tenantID, func(c *test_pb.FooEventType_Created) {
-				c.Field = ""
-				c.Description = nil
+				c.Description = gl.Ptr("")
 			})
 
 			_, err := sm.Transition(ctx, event)
@@ -186,13 +196,13 @@ func TestMarshaling(t *testing.T) {
 
 			res := &test_spb.FooGetResponse{}
 
-			err = queryer.Get(ctx, db, req, res)
+			err = queryer.Get(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
 
-			if res.Foo.Data.Field != "" {
-				t.Fatalf("expected description to be empty")
+			if res.Foo.Data.Description == nil && *res.Foo.Data.Description != "" {
+				t.Errorf("expected description to be not nill but empty")
 			}
 
 			stateJSON, err := getRawState(db, fooID)
@@ -200,8 +210,8 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if !strings.Contains(stateJSON, `"field": ""`) {
-				t.Fatalf("expected field to be present, but empty: %s", stateJSON)
+			if !strings.Contains(stateJSON, `"description": ""`) {
+				t.Fatalf("expected 'description' to be present as empty in: %s", stateJSON)
 			}
 
 			eventJSON, err := getRawEvent(db, res.Events[len(res.Events)-1].Metadata.EventId)
@@ -209,8 +219,8 @@ func TestMarshaling(t *testing.T) {
 				t.Fatal(err.Error())
 			}
 
-			if !strings.Contains(eventJSON, `"field": ""`) {
-				t.Fatalf("expected field to be present, but empty: %s", eventJSON)
+			if !strings.Contains(eventJSON, `"description": ""`) {
+				t.Fatalf("expected 'description' to be present, but empty, in: %s", eventJSON)
 			}
 		})
 
@@ -232,7 +242,7 @@ func TestMarshaling(t *testing.T) {
 
 			res := &test_spb.FooGetResponse{}
 
-			err = queryer.Get(ctx, db, req, res)
+			err = queryer.Get(ctx, db, req.J5Object(), res.J5Object())
 			if err != nil {
 				t.Fatal(err.Error())
 			}
@@ -256,7 +266,7 @@ func TestMarshaling(t *testing.T) {
 			}
 
 			if !strings.Contains(eventJSON, `"field":`) {
-				t.Fatalf("expected field to be present: %s", eventJSON)
+				t.Fatalf("expected 'field' to be present in: %s", eventJSON)
 			}
 		})
 	})

@@ -6,29 +6,23 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	sq "github.com/elgris/sqrl"
 	"github.com/elgris/sqrl/pg"
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
+	"github.com/pentops/j5/j5types/date_j5t"
 	"github.com/pentops/j5/lib/j5codec"
 	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/j5/lib/j5validate"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/protostate/internal/pgstore"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/dynamicpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-var dateRegex = regexp.MustCompile(`^\d{4}(-\d{2}(-\d{2})?)?$`)
 
 type ListRequest interface {
 	j5reflect.Object
@@ -53,14 +47,14 @@ type TableSpec struct {
 // ProtoField represents a field within a the root data.
 type ProtoField struct {
 	// path from the root object to this field
-	pathInRoot pgstore.JSONPathSpec
+	pathInRoot JSONPathSpec
 
 	// optional column name when the field is also stored as a scalar directly
 	valueColumn *string
 }
 
-func NewProtoField(protoPath string, columnName *string) ProtoField {
-	pp := pgstore.ParseJSONPathSpec(protoPath)
+func NewJSONField(protoPath string, columnName *string) ProtoField {
+	pp := ParseJSONPathSpec(protoPath)
 	return ProtoField{
 		valueColumn: columnName,
 		pathInRoot:  pp,
@@ -72,17 +66,20 @@ type Column struct {
 
 	// The point within the root element which is stored in the column. An empty
 	// path means this stores the root element,
-	MountPoint *pgstore.Path
+	MountPoint *Path
 }
 
-type ListSpec[REQ ListRequest, RES ListResponse] struct {
+type ListSpec struct {
+	Method *j5schema.MethodSchema
+
 	TableSpec
-	RequestFilter func(REQ) (map[string]any, error)
+	RequestFilter func(j5reflect.Object) (map[string]any, error)
 }
 
 type QueryLogger func(sqrlx.Sqlizer)
 
 type ListReflectionSet struct {
+	method          *j5schema.MethodSchema
 	defaultPageSize uint64
 
 	arrayField  *j5schema.ObjectProperty
@@ -106,18 +103,20 @@ type ListReflectionSet struct {
 	dataColumn string
 }
 
-func BuildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema, table TableSpec) (*ListReflectionSet, error) {
-	return buildListReflection(req, res, table)
+func BuildListReflection(method *j5schema.MethodSchema, table TableSpec) (*ListReflectionSet, error) {
+	return buildListReflection(method, table)
 }
 
-func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema, table TableSpec) (*ListReflectionSet, error) {
+func buildListReflection(method *j5schema.MethodSchema, table TableSpec) (*ListReflectionSet, error) {
+
 	var err error
 	ll := ListReflectionSet{
+		method:          method,
 		defaultPageSize: uint64(20),
 		dataColumn:      table.DataColumn,
 	}
 
-	for _, field := range res.Properties {
+	for _, field := range method.Response.Properties {
 		switch ft := field.Schema.(type) {
 		case *j5schema.ObjectField:
 
@@ -147,11 +146,11 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 	}
 
 	if ll.arrayField == nil {
-		return nil, fmt.Errorf("no repeated field in response, %s must have a repeated message", res.FullName())
+		return nil, fmt.Errorf("no repeated field in response, %s must have a repeated message", method.Response.FullName())
 	}
 
 	if ll.pageResponseField == nil {
-		return nil, fmt.Errorf("no page field in response, %s must have a j5.list.v1.PageResponse", res.FullName())
+		return nil, fmt.Errorf("no page field in response, %s must have a j5.list.v1.PageResponse", method.Response.FullName())
 	}
 
 	err = validateListAnnotations(ll.arrayObject)
@@ -164,13 +163,13 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 		return nil, fmt.Errorf("default sorts: %w", err)
 	}
 
-	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, req, ll.arrayObject, table.FallbackSortColumns)
+	ll.tieBreakerFields, err = buildTieBreakerFields(ll.dataColumn, method.Request, ll.arrayObject, table.FallbackSortColumns)
 	if err != nil {
 		return nil, fmt.Errorf("tie breaker fields: %w", err)
 	}
 
 	if len(ll.defaultSortFields) == 0 && len(ll.tieBreakerFields) == 0 {
-		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.FullName(), req.FullName())
+		return nil, fmt.Errorf("no default sort field found, %s must have at least one field annotated as default sort, or specify a tie breaker in %s", ll.arrayField.FullName(), method.Request.FullName())
 	}
 
 	f, err := buildDefaultFilters(ll.dataColumn, ll.arrayObject)
@@ -185,7 +184,7 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 		return nil, fmt.Errorf("build tsv column map: %w", err)
 	}
 
-	for _, field := range req.Properties {
+	for _, field := range method.Request.Properties {
 		switch ft := field.Schema.(type) {
 		case *j5schema.ObjectField:
 			switch ft.ObjectSchema().FullName() {
@@ -206,11 +205,11 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 	}
 
 	if ll.pageRequestField == nil {
-		return nil, fmt.Errorf("no page field in request, %s must have a j5.list.v1.PageRequest", req.FullName())
+		return nil, fmt.Errorf("no page field in request, %s must have a j5.list.v1.PageRequest", method.Request.FullName())
 	}
 
 	if ll.queryRequestField == nil {
-		return nil, fmt.Errorf("no query field in request, %s must have a j5.list.v1.QueryRequest", req.FullName())
+		return nil, fmt.Errorf("no query field in request, %s must have a j5.list.v1.QueryRequest", method.Request.FullName())
 	}
 
 	arraySchema := ll.arrayField.Schema.(*j5schema.ArrayField)
@@ -223,7 +222,7 @@ func buildListReflection(req *j5schema.ObjectSchema, res *j5schema.ObjectSchema,
 	return &ll, nil
 }
 
-type Lister[REQ ListRequest, RES ListResponse] struct {
+type Lister struct {
 	ListReflectionSet
 
 	tableName string
@@ -233,24 +232,19 @@ type Lister[REQ ListRequest, RES ListResponse] struct {
 	auth     AuthProvider
 	authJoin []*LeftJoin
 
-	requestFilter func(REQ) (map[string]any, error)
+	requestFilter func(j5reflect.Object) (map[string]any, error)
 
 	validator *j5validate.Validator
 }
 
-func NewLister[
-	REQ ListRequest,
-	RES ListResponse,
-](spec ListSpec[REQ, RES]) (*Lister[REQ, RES], error) {
-	ll := &Lister[REQ, RES]{
+func NewLister(spec ListSpec) (*Lister, error) {
+	ll := &Lister{
 		tableName: spec.TableName,
 		auth:      spec.Auth,
 		authJoin:  spec.AuthJoin,
 	}
 
-	descriptors := newMethodDescriptor[REQ, RES]()
-
-	listFields, err := buildListReflection(descriptors.request, descriptors.response, spec.TableSpec)
+	listFields, err := buildListReflection(spec.Method, spec.TableSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -263,11 +257,11 @@ func NewLister[
 	return ll, nil
 }
 
-func (ll *Lister[REQ, RES]) SetQueryLogger(logger QueryLogger) {
+func (ll *Lister) SetQueryLogger(logger QueryLogger) {
 	ll.queryLogger = logger
 }
 
-func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5reflect.Object) error {
+func (ll *Lister) List(ctx context.Context, db Transactor, req, res j5reflect.Object) error {
 	if err := ll.validator.Validate(req); err != nil {
 		return fmt.Errorf("validating request %s: %w", req.SchemaName(), err)
 	}
@@ -321,14 +315,14 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5
 	if err != nil {
 		return err
 	}
-	list, ok := listField.AsArrayOfContainer()
+	list, ok := listField.AsArrayOfObject()
 	if !ok {
 		return fmt.Errorf("field %s in response is not an array", ll.arrayField.FullName())
 	}
 
 	var nextToken string
 	for idx, rowBytes := range jsonRows {
-		rowMessage, _ := list.NewContainerElement()
+		rowMessage, _ := list.NewObjectElement()
 
 		err := j5codec.Global.JSONToReflect(rowBytes, rowMessage)
 		if err != nil {
@@ -341,9 +335,19 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5
 			// the sorting and filtering of the query and either encode them
 			// directly, or encode a subset of the message as required.
 
-			nextToken = base64.StdEncoding.EncodeToString(rowBytes)
+			nextToken, err = encodePageToken(rowMessage, selectQuery.sortFields)
+			if err != nil {
+				return fmt.Errorf("encode page token: %w", err)
+			}
 			break
 		}
+	}
+
+	// TODO: This drops the pagination token from the list.
+	// Consider adding support to J5Reflect to create the object element without
+	// attaching it to the array
+	if list.Length() > int(pageSize) {
+		list.Truncate(int(pageSize))
 	}
 
 	if nextToken != "" {
@@ -376,14 +380,11 @@ func (ll *Lister[REQ, RES]) List(ctx context.Context, db Transactor, req, res j5
 func encodePageToken(rowMessage j5reflect.Object, sortFields []sortSpec) (string, error) {
 	vals := map[string]any{}
 	for _, sortField := range sortFields {
-		fieldVal, ok, err := sortField.Path.GetValue(rowMessage)
+		fieldVal, _, err := sortField.Path.GetValue(rowMessage)
 		if err != nil {
 			return "", fmt.Errorf("sort field %s: %w", sortField.errorName(), err)
 		}
-		if !ok {
-			vals[sortField.Path.IDPath()] = nil
-			continue
-		}
+		fmt.Printf("Set Sort Field %s to %v\n", sortField.errorName(), fieldVal)
 		vals[sortField.Path.IDPath()] = fieldVal
 
 	}
@@ -400,7 +401,10 @@ func decodePageToken(token string, sortFields []sortSpec) (map[string]any, error
 	if err != nil {
 		return nil, fmt.Errorf("decode page token: %w", err)
 	}
-	if err := json.Unmarshal(jsonBytes, &vals); err != nil {
+	dec := json.NewDecoder(strings.NewReader(string(jsonBytes)))
+	dec.UseNumber()
+	err = dec.Decode(&vals)
+	if err != nil {
 		return nil, fmt.Errorf("unmarshal page token: %w", err)
 	}
 	if len(vals) != len(sortFields) {
@@ -422,6 +426,10 @@ func fieldAs[T any](obj j5reflect.Object, path ...string) (val T, ok bool, err e
 		return val, false, fmt.Errorf("field %s in %s not an object", path, obj.SchemaName())
 	}
 
+	if !objField.IsSet() {
+		return val, false, nil
+	}
+
 	val, ok = objField.ProtoReflect().Interface().(T)
 	if !ok {
 		return val, false, fmt.Errorf("field %s in %s not of type %T", path, obj.SchemaName(), (*T)(nil))
@@ -431,7 +439,18 @@ func fieldAs[T any](obj j5reflect.Object, path ...string) (val T, ok bool, err e
 
 }
 
-func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object, res j5reflect.Object) (*sq.SelectBuilder, error) {
+type Query struct {
+	*sq.SelectBuilder
+	sortFields []sortSpec
+}
+
+func (ll *Lister) BuildQuery(ctx context.Context, req j5reflect.Object, res j5reflect.Object) (*Query, error) {
+
+	err := assertObjectsMatch(ll.method, req, res)
+	if err != nil {
+		return nil, err
+	}
+
 	as := newAliasSet()
 	tableAlias := as.Next(ll.tableName)
 
@@ -443,12 +462,7 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 
 	filterFields := []sq.Sqlizer{}
 	if ll.requestFilter != nil {
-		reqVal, ok := req.ProtoReflect().Interface().(REQ)
-		if !ok {
-			return nil, fmt.Errorf("request is not of type %T", (*REQ)(nil))
-		}
-
-		filter, err := ll.requestFilter(reqVal)
+		filter, err := ll.requestFilter(req)
 		if err != nil {
 			return nil, err
 		}
@@ -567,55 +581,58 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 	selectQuery.Limit(pageSize + 1)
 
 	reqPage, ok, err := fieldAs[*list_j5pb.PageRequest](req, ll.pageRequestField.JSONName)
+	if err != nil {
+		return nil, fmt.Errorf("get page request field: %w", err)
+	}
 	if ok && reqPage.GetToken() != "" {
-		pageFields, err := decodePageToken(reqPage.GetToken(), sortFields)
+
+		filter, err := ll.addPageFilter(reqPage.GetToken(), sortFields, tableAlias)
 		if err != nil {
-			return nil, fmt.Errorf("decode page token: %w", err)
+			return nil, err
+		}
+		selectQuery.Where(filter)
+
+	}
+
+	return &Query{
+		SelectBuilder: selectQuery,
+		sortFields:    sortFields,
+	}, nil
+}
+
+func (ll *Lister) addPageFilter(token string, sortFields []sortSpec, tableAlias string) (sq.Sqlizer, error) {
+
+	lhsFields := make([]string, 0, len(sortFields))
+	rhsValues := make([]any, 0, len(sortFields))
+	rhsPlaceholders := make([]string, 0, len(sortFields))
+
+	pageFields, err := decodePageToken(token, sortFields)
+	if err != nil {
+		return nil, fmt.Errorf("decode page token: %w", err)
+	}
+
+	for _, sortField := range sortFields {
+		rowSelecter := sortField.Selector(tableAlias)
+		valuePlaceholder := "?"
+
+		dbVal, ok := pageFields[sortField.Path.IDPath()]
+		if !ok {
+			return nil, fmt.Errorf("page token missing value for sort field %s", sortField.errorName())
 		}
 
-		lhsFields := make([]string, 0, len(sortFields))
-		rhsValues := make([]any, 0, len(sortFields))
-		rhsPlaceholders := make([]string, 0, len(sortFields))
+		switch schema := sortField.Path.leafField.Schema.(type) {
+		//case *j5schema.EnumField:
 
-		for _, sortField := range sortFields {
-			rowSelecter := sortField.Selector(tableAlias)
-			valuePlaceholder := "?"
+		case *j5schema.ScalarSchema:
 
-			dbVal, ok := pageFields[sortField.Path.IDPath()]
-			if !ok {
-				return nil, fmt.Errorf("page token missing value for sort field %s", sortField.errorName())
-			}
+			ft := schema.ToJ5Field()
 
-			switch subType := dbVal.(type) {
-			case *dynamicpb.Message:
-				name := subType.Descriptor().FullName()
-				msgBytes, err := proto.Marshal(subType)
-				if err != nil {
-					return nil, fmt.Errorf("marshal %s: %w", name, err)
+			switch ft := ft.Type.(type) {
+			case *schema_j5pb.Field_String_, *schema_j5pb.Field_Key:
+				dbVal, ok = dbVal.(string)
+				if !ok {
+					return nil, fmt.Errorf("sort field %s is a string, but value is not a string", sortField.errorName())
 				}
-
-				switch name {
-				case "google.protobuf.Timestamp":
-					ts := timestamppb.Timestamp{}
-					if err := proto.Unmarshal(msgBytes, &ts); err != nil {
-						return nil, fmt.Errorf("unmarshal %s: %w", name, err)
-					}
-					intVal := ts.AsTime().Round(time.Microsecond).UnixMicro()
-					// Go rounds half-up.
-					// Postgres is undocumented, but can only handle
-					// microseconds.
-					rowSelecter = fmt.Sprintf("(EXTRACT(epoch FROM (%s)::timestamp) * 1000000)::bigint", rowSelecter)
-					if sortField.desc {
-						intVal = intVal * -1
-						rowSelecter = fmt.Sprintf("-1 * %s", rowSelecter)
-					}
-					dbVal = intVal
-				default:
-					return nil, fmt.Errorf("sort field %s is a message of type %s", sortField.errorName(), name)
-				}
-
-			case string:
-				dbVal = subType
 				if sortField.desc {
 					// String fields aren't valid for sorting, they can only be used
 					// for the tie-breaker so the order itself is not important, only
@@ -623,79 +640,159 @@ func (ll *Lister[REQ, RES]) BuildQuery(ctx context.Context, req j5reflect.Object
 					return nil, fmt.Errorf("sort field %s is a string, strings cannot be sorted DESC", sortField.errorName())
 				}
 
-			case int64:
-				if sortField.desc {
-					dbVal = dbVal.(int64) * -1
-					rowSelecter = fmt.Sprintf("-1 * (%s)::bigint", rowSelecter)
+			case *schema_j5pb.Field_Integer:
+				number, ok := dbVal.(json.Number)
+				if !ok {
+					stringVal, ok := dbVal.(string)
+					if !ok {
+						return nil, fmt.Errorf("sort field %s is an integer, but value is %+v", sortField.errorName(), dbVal)
+					}
+					number = json.Number(stringVal)
 				}
-			case int32:
-				if sortField.desc {
-					dbVal = dbVal.(int32) * -1
-					rowSelecter = fmt.Sprintf("-1 * (%s)::integer", rowSelecter)
+				int64val, err := number.Int64()
+				if err != nil {
+					return nil, fmt.Errorf("sort field %s is an integer, but value is not a valid integer: %w", sortField.errorName(), err)
 				}
-			case float32:
-				if sortField.desc {
-					dbVal = dbVal.(float32) * -1
-					rowSelecter = fmt.Sprintf("-1 * (%s)::real", rowSelecter)
+
+				switch ft.Integer.Format {
+				case schema_j5pb.IntegerField_FORMAT_INT32, schema_j5pb.IntegerField_FORMAT_UINT32:
+
+					if sortField.desc {
+						int64val = int64val * -1
+						rowSelecter = fmt.Sprintf("-1 * (%s)::integer", rowSelecter)
+					}
+
+				case schema_j5pb.IntegerField_FORMAT_INT64, schema_j5pb.IntegerField_FORMAT_UINT64:
+
+					if sortField.desc {
+						int64val = int64val * -1
+						rowSelecter = fmt.Sprintf("-1 * (%s)::bigint", rowSelecter)
+					}
+
+				default:
+					panic(fmt.Sprintf("unknown integer format %s for field %s", ft.Integer.Format, sortField.errorName()))
 				}
-			case float64:
-				if sortField.desc {
-					dbVal = dbVal.(float64) * -1
-					rowSelecter = fmt.Sprintf("-1 * (%s)::double precision", rowSelecter)
+				dbVal = int64val
+
+			case *schema_j5pb.Field_Float:
+				number, ok := dbVal.(json.Number)
+				if !ok {
+					stringVal, ok := dbVal.(string)
+					if !ok {
+						return nil, fmt.Errorf("sort field %s is a float, but value is not a number", sortField.errorName())
+					}
+					number = json.Number(stringVal)
 				}
-			case bool:
+				float64val, err := number.Float64()
+				if err != nil {
+					return nil, fmt.Errorf("sort field %s is a float, but value is not a valid float: %w", sortField.errorName(), err)
+				}
+				switch ft.Float.Format {
+				case schema_j5pb.FloatField_FORMAT_FLOAT32:
+					if sortField.desc {
+						float64val = float64val * -1
+						rowSelecter = fmt.Sprintf("-1 * (%s)::real", rowSelecter)
+					}
+
+				case schema_j5pb.FloatField_FORMAT_FLOAT64:
+					if sortField.desc {
+						float64val = float64val * -1
+						rowSelecter = fmt.Sprintf("-1 * (%s)::double precision", rowSelecter)
+					}
+				}
+				dbVal = float64val
+
+			case *schema_j5pb.Field_Bool:
 				if sortField.desc {
 					dbVal = !dbVal.(bool)
 					rowSelecter = fmt.Sprintf("NOT (%s)::boolean", rowSelecter)
 				}
 
-			// TODO: Reversals for the other types that are sortable
+			case *schema_j5pb.Field_Timestamp:
 
-			default:
-				return nil, fmt.Errorf("sort field %s is of type %T", sortField.errorName(), dbVal)
+				stringVal, ok := dbVal.(string)
+				if !ok {
+					return nil, fmt.Errorf("sort field %s is a timestamp, but value is not a string", sortField.errorName())
+				}
+				ts, err := time.Parse(time.RFC3339, stringVal)
+				if err != nil {
+					return nil, fmt.Errorf("sort field %s is a timestamp, but value is not a valid timestamp: %w", sortField.errorName(), err)
+				}
+
+				intVal := ts.Round(time.Microsecond).UnixMicro()
+				// Go rounds half-up.
+				// Postgres is undocumented, but can only handle
+				// microseconds.
+				rowSelecter = fmt.Sprintf("(EXTRACT(epoch FROM (%s)::timestamp) * 1000000)::bigint", rowSelecter)
+				if sortField.desc {
+					intVal = intVal * -1
+					rowSelecter = fmt.Sprintf("-1 * %s", rowSelecter)
+				}
+				dbVal = intVal
+
+			case *schema_j5pb.Field_Date:
+				stringVal, ok := dbVal.(string)
+				if !ok {
+					return nil, fmt.Errorf("sort field %s is a date, but value is not a string", sortField.errorName())
+				}
+
+				date, err := date_j5t.DateFromString(stringVal)
+				if err != nil {
+					return nil, fmt.Errorf("sort field %s is a date, but value is not a valid date: %w", sortField.errorName(), err)
+				}
+				intVal := date.AsTime(time.UTC).Round(time.Microsecond).Unix()
+
+				rowSelecter = fmt.Sprintf("(EXTRACT(epoch FROM (%s)::date))::bigint", rowSelecter)
+				if sortField.desc {
+					intVal = intVal * -1
+					rowSelecter = fmt.Sprintf("-1 * %s", rowSelecter)
+				}
+				dbVal = intVal
+
 			}
 
-			lhsFields = append(lhsFields, rowSelecter)
-			rhsValues = append(rhsValues, dbVal)
-			rhsPlaceholders = append(rhsPlaceholders, valuePlaceholder)
+		default:
+			return nil, fmt.Errorf("sort field %s is not a scalar or enum", sortField.errorName())
 		}
 
-		// From https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
-		// >> for the <, <=, > and >= cases, the row elements are compared left-to-right, stopping as soon
-		// >> as an unequal or null pair of elements is found. If either of this pair of elements is null,
-		// >> the result of the row comparison is unknown (null); otherwise comparison of this pair of elements
-		// >> determines the result. For example, ROW(1,2,NULL) < ROW(1,3,0) yields true, not null, because the
-		// >> third pair of elements are not considered.
-		//
-		// This means that we can use the row comparison with the same fields as
-		// the sort fields to exclude the exact record we want, rather than the
-		// filter being applied to all fields equally which takes out valid
-		// records.
-		// `(1, 30) >= (1, 20)` is true, so is `1 >= 1 AND 30 >= 20`
-		// `(2, 10) >= (1, 20)` is also true, but `2 >= 1 AND 10 >= 20` is false
-		// Since the tuple comparison starts from the left and stops at the first term.
-		//
-		// The downside is that we have to negate the values to sort in reverse
-		// order, as we don't get an operator per term. This gets strange for
-		// some data types and will create some crazy indexes.
-		//
-		// TODO: Optimize the cases when the order is ASC and therefore we don't
-		// need to flip, but also the cases where we can just reverse the whole
-		// comparison and reverse all flips to simplify, noting again that it
-		// does not actually matter in which order the string field is sorted...
-		// or don't because indexes.
-
-		selectQuery = selectQuery.Where(
-			fmt.Sprintf("(%s) >= (%s)",
-				strings.Join(lhsFields, ","),
-				strings.Join(rhsPlaceholders, ","),
-			), rhsValues...)
+		lhsFields = append(lhsFields, rowSelecter)
+		rhsValues = append(rhsValues, dbVal)
+		rhsPlaceholders = append(rhsPlaceholders, valuePlaceholder)
 	}
 
-	return selectQuery, nil
-}
+	// From https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
+	// >> for the <, <=, > and >= cases, the row elements are compared left-to-right, stopping as soon
+	// >> as an unequal or null pair of elements is found. If either of this pair of elements is null,
+	// >> the result of the row comparison is unknown (null); otherwise comparison of this pair of elements
+	// >> determines the result. For example, ROW(1,2,NULL) < ROW(1,3,0) yields true, not null, because the
+	// >> third pair of elements are not considered.
+	//
+	// This means that we can use the row comparison with the same fields as
+	// the sort fields to exclude the exact record we want, rather than the
+	// filter being applied to all fields equally which takes out valid
+	// records.
+	// `(1, 30) >= (1, 20)` is true, so is `1 >= 1 AND 30 >= 20`
+	// `(2, 10) >= (1, 20)` is also true, but `2 >= 1 AND 10 >= 20` is false
+	// Since the tuple comparison starts from the left and stops at the first term.
+	//
+	// The downside is that we have to negate the values to sort in reverse
+	// order, as we don't get an operator per term. This gets strange for
+	// some data types and will create some crazy indexes.
+	//
+	// TODO: Optimize the cases when the order is ASC and therefore we don't
+	// need to flip, but also the cases where we can just reverse the whole
+	// comparison and reverse all flips to simplify, noting again that it
+	// does not actually matter in which order the string field is sorted...
+	// or don't because indexes.
 
-func (ll *Lister[REQ, RES]) getPageSize(req j5reflect.Object) (uint64, error) {
+	return sq.Expr(
+		fmt.Sprintf("(%s) >= (%s)",
+			strings.Join(lhsFields, ","),
+			strings.Join(rhsPlaceholders, ","),
+		), rhsValues...), nil
+
+}
+func (ll *Lister) getPageSize(req j5reflect.Object) (uint64, error) {
 	pageField, ok, err := req.GetField(ll.pageRequestField.JSONName, "pageSize")
 	if err != nil {
 		return 0, fmt.Errorf("get page request field %s: %w", ll.pageRequestField.JSONName, err)
@@ -715,25 +812,14 @@ func (ll *Lister[REQ, RES]) getPageSize(req j5reflect.Object) (uint64, error) {
 
 	int64Val, ok := intVal.(int64)
 	if !ok {
-		return 0, fmt.Errorf("field %s in request is not an int64", ll.pageRequestField.JSONName)
+		return 0, fmt.Errorf("field %s in request is not an int64, got %T", ll.pageRequestField.JSONName, intVal)
 	}
 
-	return uint64(int64Val), nil
-}
-
-func camelToSnake(jsonName string) string {
-	var out strings.Builder
-	for i, r := range jsonName {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				out.WriteRune('_')
-			}
-			out.WriteRune(unicode.ToLower(r))
-		} else {
-			out.WriteRune(r)
-		}
+	returnVal := uint64(int64Val)
+	if returnVal > ll.defaultPageSize {
+		return 0, fmt.Errorf("page size %d exceeds maximum of %d", val, ll.defaultPageSize)
 	}
-	return out.String()
+	return returnVal, nil
 }
 
 func validateListAnnotations(object *j5schema.ObjectSchema) error {
@@ -752,7 +838,7 @@ func validateListAnnotations(object *j5schema.ObjectSchema) error {
 	return nil
 }
 
-func (ll *Lister[REQ, RES]) validateQueryRequest(query *list_j5pb.QueryRequest) error {
+func (ll *Lister) validateQueryRequest(query *list_j5pb.QueryRequest) error {
 	err := validateQueryRequestSorts(ll.arrayObject, query.GetSorts())
 	if err != nil {
 		return fmt.Errorf("sort validation: %w", err)

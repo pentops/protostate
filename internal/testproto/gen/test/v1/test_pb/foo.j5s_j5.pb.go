@@ -4,26 +4,112 @@ package test_pb
 
 import (
 	j5reflect "github.com/pentops/j5/lib/j5reflect"
+	proto "google.golang.org/protobuf/proto"
 )
 
 func (msg *FooKeys) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooKeys) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooKeys) Clone() any {
+	return proto.Clone(msg).(*FooKeys)
 }
 func (msg *FooData) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooData) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooData) Clone() any {
+	return proto.Clone(msg).(*FooData)
 }
 func (msg *FooState) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooState) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooState) Clone() any {
+	return proto.Clone(msg).(*FooState)
 }
 func (msg *FooEventType) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEventType) Clone() any {
+	return proto.Clone(msg).(*FooEventType)
+}
+func (msg *FooEventType_Created) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEventType_Created) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooEventType_Created) Clone() any {
+	return proto.Clone(msg).(*FooEventType_Created)
+}
+func (msg *FooEventType_Updated) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEventType_Updated) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooEventType_Updated) Clone() any {
+	return proto.Clone(msg).(*FooEventType_Updated)
+}
+func (msg *FooEventType_Deleted) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEventType_Deleted) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooEventType_Deleted) Clone() any {
+	return proto.Clone(msg).(*FooEventType_Deleted)
 }
 func (msg *FooEvent) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooEvent) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooEvent) Clone() any {
+	return proto.Clone(msg).(*FooEvent)
 }
 func (msg *FooCharacteristics) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooCharacteristics) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooCharacteristics) Clone() any {
+	return proto.Clone(msg).(*FooCharacteristics)
 }
 func (msg *FooProfile) J5Reflect() j5reflect.Root {
-	return j5reflect.MustReflect(msg)
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooProfile) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooProfile) Clone() any {
+	return proto.Clone(msg).(*FooProfile)
 }

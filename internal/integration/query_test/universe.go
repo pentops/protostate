@@ -86,7 +86,7 @@ func (uu *Universe) ListFoo(t flowtest.Asserter, req *test_spb.FooListRequest) *
 	ctx := context.Background()
 
 	resp := &test_spb.FooListResponse{}
-	err := uu.Query.List(ctx, uu.DB, req, resp)
+	err := uu.Query.List(ctx, uu.DB, req.J5Object(), resp.J5Object())
 	if err != nil {
 		t.Fatal(err.Error())
 	}

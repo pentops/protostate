@@ -7,9 +7,8 @@ import (
 
 	sq "github.com/elgris/sqrl"
 	"github.com/pentops/j5/j5types/date_j5t"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"github.com/pentops/j5/lib/j5codec"
+	"github.com/pentops/j5/lib/j5reflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -40,6 +39,10 @@ func FieldsToEqMap(ofTable string, m map[string]any) (sq.Eq, error) {
 	return out, nil
 }
 
+type j5message interface {
+	J5Reflect() j5reflect.Root
+}
+
 func interfaceToDBValue(i any) (any, error) {
 	switch v := i.(type) {
 	case *timestamppb.Timestamp:
@@ -51,8 +54,8 @@ func interfaceToDBValue(i any) (any, error) {
 	case driver.Valuer:
 		return v, nil
 
-	case proto.Message:
-		i, err := MarshalProto(v)
+	case j5message:
+		i, err := marshalJ5(v)
 		if err != nil {
 			return nil, fmt.Errorf("interface values: %w", err)
 		}
@@ -75,6 +78,34 @@ func interfaceToDBValue(i any) (any, error) {
 	return i, nil
 }
 
+var codec *j5codec.Codec
+
+func init() {
+	codec = j5codec.NewCodec(j5codec.WithIncludeEmpty())
+}
+
+func MarshalJ5(msg j5reflect.Root) ([]byte, error) {
+	return codec.ReflectToJSON(msg)
+}
+
+func UnmarshalJ5(b []byte, msg j5reflect.Root) error {
+	return codec.JSONToReflect(b, msg)
+}
+
+func marshalJ5(msg j5message) (any, error) {
+	if msg == nil {
+		return nil, nil
+	}
+
+	j5r := msg.J5Reflect()
+	if j5r == nil {
+		return nil, fmt.Errorf("j5reflect is nil for %T", msg)
+	}
+
+	return MarshalJ5(j5r)
+}
+
+/*
 func MarshalProto(state protoreflect.ProtoMessage) ([]byte, error) {
 	// EmitDefaultValues behaves similarly to EmitUnpopulated, but does not emit "null"-value fields,
 	// i.e. presence-sensing fields that are omitted will remain omitted to preserve presence-sensing.
@@ -83,4 +114,4 @@ func MarshalProto(state protoreflect.ProtoMessage) ([]byte, error) {
 		return b, fmt.Errorf("custom protomarshal: %w", err)
 	}
 	return b, nil
-}
+}*/

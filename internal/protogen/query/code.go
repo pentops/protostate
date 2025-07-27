@@ -7,10 +7,13 @@ import (
 )
 
 var (
-	protoPackage        = protogen.GoImportPath("google.golang.org/protobuf/proto")
+	//protoPackage        = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	stateMachinePackage = protogen.GoImportPath("github.com/pentops/protostate/psm")
 	sqrlxPkg            = protogen.GoImportPath("github.com/pentops/sqrlx.go/sqrlx")
+	j5ReflectPackage    = protogen.GoImportPath("github.com/pentops/j5/lib/j5reflect")
+	j5SchemaPackage     = protogen.GoImportPath("github.com/pentops/j5/lib/j5schema")
 	contextPkg          = protogen.GoImportPath("context")
+	fmtPackage          = protogen.GoImportPath("fmt")
 )
 
 func quoteString(s string) string {
@@ -57,24 +60,30 @@ func (qs PSMQuerySet) Write(g *protogen.GeneratedFile) {
 func (qs PSMQuerySet) writeQuerySet(g *protogen.GeneratedFile) {
 	qs.genericTypeAlias(g, qs.GoName+"PSMQuerySet", "StateQuerySet")
 	g.P("func New", qs.GoName, "PSMQuerySet(")
-	g.P("smSpec ", stateMachinePackage.Ident("QuerySpec"), "[")
-	qs.writeGenericTypeSet(g)
-	g.P("],")
+	g.P("smSpec ", stateMachinePackage.Ident("QuerySpec"), ",")
 	g.P("options ", stateMachinePackage.Ident("StateQueryOptions"), ",")
 	g.P(") (*", qs.GoName, "PSMQuerySet, error) {")
-	g.P("return ", stateMachinePackage.Ident("BuildStateQuerySet"), "[")
-	qs.writeGenericTypeSet(g)
-	g.P("](smSpec, options)")
+	g.P("return ", stateMachinePackage.Ident("BuildStateQuerySet"), "(smSpec, options)")
 	g.P("}")
+}
+
+func j5Method(g *protogen.GeneratedFile, m protogen.Method, name string) {
+	g.P("  ", name, ": &", j5SchemaPackage.Ident("MethodSchema"), "{")
+	g.P("    Request: ", j5SchemaPackage.Ident("MustObjectSchema"), "((&", m.Input.GoIdent, "{}).ProtoReflect().Descriptor()),")
+	g.P("    Response: ", j5SchemaPackage.Ident("MustObjectSchema"), "((&", m.Output.GoIdent, "{}).ProtoReflect().Descriptor()),")
+	g.P("  },")
 }
 
 func (qs PSMQuerySet) writeQuerySpec(g *protogen.GeneratedFile) {
 	qs.genericTypeAlias(g, qs.GoName+"PSMQuerySpec", "QuerySpec")
 	g.P()
 	g.P("func Default", qs.GoName, "PSMQuerySpec(tableSpec ", stateMachinePackage.Ident("QueryTableSpec"), ") ", qs.GoName, "PSMQuerySpec {")
-	g.P("  return ", stateMachinePackage.Ident("QuerySpec"), "[")
-	qs.writeGenericTypeSet(g)
-	g.P("  ]{")
+	g.P("  return ", stateMachinePackage.Ident("QuerySpec"), "{")
+	j5Method(g, qs.GetMethod, "GetMethod")
+	j5Method(g, qs.ListMethod, "ListMethod")
+	if qs.ListEventsMethod != nil {
+		j5Method(g, *qs.ListEventsMethod, "ListEventsMethod")
+	}
 	g.P("    QueryTableSpec: tableSpec,")
 	qs.listFilter(g, qs.ListREQ, "ListRequestFilter", qs.ListRequestFilter)
 	qs.listFilter(g, *qs.ListEventsREQ, "ListEventsRequestFilter", qs.ListEventsRequestFilter)
@@ -102,7 +111,7 @@ func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
 	g.P()
 	g.P("func (s *", serviceName, ") ", qs.GetMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", qs.GetREQ.GoName, ") (*", qs.GetRES.GoName, ", error) {")
 	g.P("  resObject := &", qs.GetRES.GoName, "{}")
-	g.P("  err := s.querySet.Get(ctx, s.db, req, resObject)")
+	g.P("  err := s.querySet.Get(ctx, s.db, req.J5Object(), resObject.J5Object())")
 	g.P("  if err != nil {")
 	g.P("    return nil, err")
 	g.P("  }")
@@ -111,7 +120,7 @@ func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
 	g.P()
 	g.P("func (s *", serviceName, ") ", qs.ListMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", qs.ListREQ.GoName, ") (*", qs.ListRES.GoName, ", error) {")
 	g.P("  resObject := &", qs.ListRES.GoName, "{}")
-	g.P("  err := s.querySet.List(ctx, s.db, req, resObject)")
+	g.P("  err := s.querySet.List(ctx, s.db, req.J5Object(), resObject.J5Object())")
 	g.P("  if err != nil {")
 	g.P("    return nil, err")
 	g.P("  }")
@@ -123,7 +132,7 @@ func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
 	g.P()
 	g.P("func (s *", serviceName, ") ", qs.ListEventsMethod.GoName, "(ctx ", contextPkg.Ident("Context"), ", req *", *qs.ListEventsREQ, ") (*", *qs.ListEventsRES, ", error) {")
 	g.P("  resObject := &", *qs.ListEventsRES, "{}")
-	g.P("  err := s.querySet.ListEvents(ctx, s.db, req, resObject)")
+	g.P("  err := s.querySet.ListEvents(ctx, s.db, req.J5Object(), resObject.J5Object())")
 	g.P("  if err != nil {")
 	g.P("    return nil, err")
 	g.P("  }")
@@ -131,6 +140,7 @@ func (qs PSMQuerySet) writeDefaultService(g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
+/*
 func (qs PSMQuerySet) writeGenericTypeSet(g *protogen.GeneratedFile) {
 	g.P("*", qs.GetREQ, ",")
 	g.P("*", qs.GetRES, ",")
@@ -144,17 +154,23 @@ func (qs PSMQuerySet) writeGenericTypeSet(g *protogen.GeneratedFile) {
 		g.P(protoPackage.Ident("Message"), ",")
 	}
 }
+*/
 
 func (qs PSMQuerySet) genericTypeAlias(g *protogen.GeneratedFile, typedName string, psmName string) {
-	g.P("type ", typedName, " = ", stateMachinePackage.Ident(psmName), "[")
+	g.P("type ", typedName, " = ", stateMachinePackage.Ident(psmName))
+	/*"[")
 	qs.writeGenericTypeSet(g)
 	g.P("]")
-	g.P()
+	g.P()*/
 }
 
 func (qs PSMQuerySet) listFilter(g *protogen.GeneratedFile, reqType protogen.GoIdent, name string, fields []ListFilterField) {
 	// ListRequestFilter       func(ListREQ) (map[string]interface{}, error)
-	g.P(name, ": func(req *", reqType, ") (map[string]interface{}, error) {")
+	g.P(name, ": func(reqReflect ", j5ReflectPackage.Ident("Object"), ") (map[string]interface{}, error) {")
+	g.P("  req, ok := reqReflect.Interface().(*", reqType, ")")
+	g.P("  if !ok {")
+	g.P("    return nil, ", fmtPackage.Ident("Errorf"), "(\"expected *", reqType, " but got %T\", req)")
+	g.P("  }")
 	g.P("  filter := map[string]interface{}{}")
 	for _, field := range fields {
 		if field.Optional {

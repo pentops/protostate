@@ -1,4 +1,4 @@
-package pgstore
+package pquery
 
 import (
 	"testing"
@@ -57,7 +57,7 @@ func TestFindFieldSpec(t *testing.T) {
 			{path: JSONPathSpec{"id"}},
 			{path: JSONPathSpec{"profile", "weight"}},
 			{path: JSONPathSpec{"profile", "type"}},
-			{path: JSONPathSpec{"profile", "type", "type"}, isOneof: true},
+			{path: JSONPathSpec{"profile", "type", "!type"}, isOneof: true},
 			{path: JSONPathSpec{"profile", "type", "card", "size"}},
 		}
 
@@ -71,6 +71,9 @@ func TestFindFieldSpec(t *testing.T) {
 				if tc.isOneof {
 					if spec.leafOneof == nil {
 						t.Fatal("missing oneof field")
+					}
+					if spec.leafField == nil {
+						t.Fatal("missing leaf field in oneof.type")
 					}
 				} else {
 					if spec.leafField == nil {

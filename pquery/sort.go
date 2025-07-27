@@ -6,11 +6,10 @@ import (
 	"github.com/pentops/j5/gen/j5/list/v1/list_j5pb"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/internal/pgstore"
 )
 
 type sortSpec struct {
-	*pgstore.NestedField
+	*NestedField
 	desc bool
 }
 
@@ -23,13 +22,13 @@ func buildTieBreakerFields(dataColumn string, req *j5schema.ObjectSchema, arrayF
 	if req.ListRequest != nil && len(req.ListRequest.SortTiebreaker) > 0 {
 		tieBreakerFields := make([]sortSpec, 0, len(req.ListRequest.SortTiebreaker))
 		for _, tieBreaker := range req.ListRequest.SortTiebreaker {
-			spec, err := pgstore.NewOuterPath(arrayField, tieBreaker)
+			spec, err := NewJSONPath(arrayField, tieBreaker)
 			if err != nil {
 				return nil, fmt.Errorf("field %s in annotated sort tiebreaker for %s: %w", tieBreaker, req.FullName(), err)
 			}
 
 			tieBreakerFields = append(tieBreakerFields, sortSpec{
-				NestedField: &pgstore.NestedField{
+				NestedField: &NestedField{
 					RootColumn: dataColumn,
 					Path:       *spec,
 				},
@@ -47,13 +46,13 @@ func buildTieBreakerFields(dataColumn string, req *j5schema.ObjectSchema, arrayF
 	tieBreakerFields := make([]sortSpec, 0, len(fallback))
 	for _, tieBreaker := range fallback {
 
-		path, err := pgstore.NewOuterPath(arrayField, tieBreaker.pathInRoot)
+		path, err := NewJSONPath(arrayField, tieBreaker.pathInRoot)
 		if err != nil {
 			return nil, fmt.Errorf("field %s in fallback sort tiebreaker for %s: %w", tieBreaker.pathInRoot, req.FullName(), err)
 		}
 
 		tieBreakerFields = append(tieBreakerFields, sortSpec{
-			NestedField: &pgstore.NestedField{
+			NestedField: &NestedField{
 				Path:        *path,
 				RootColumn:  dataColumn,
 				ValueColumn: tieBreaker.valueColumn,
@@ -102,7 +101,7 @@ func getFieldSorting(field *j5schema.ObjectProperty) *list_j5pb.SortingConstrain
 func buildDefaultSorts(columnName string, message *j5schema.ObjectSchema) ([]sortSpec, error) {
 	var defaultSortFields []sortSpec
 
-	err := pgstore.WalkPathNodes(message, func(path pgstore.Path) error {
+	err := WalkPathNodes(message, func(path Path) error {
 		field := path.LeafField()
 		if field == nil {
 			return nil // oneof or something
@@ -114,7 +113,7 @@ func buildDefaultSorts(columnName string, message *j5schema.ObjectSchema) ([]sor
 		}
 		if sortConstraint.DefaultSort {
 			defaultSortFields = append(defaultSortFields, sortSpec{
-				NestedField: &pgstore.NestedField{
+				NestedField: &NestedField{
 					RootColumn: columnName,
 					Path:       path,
 				},
@@ -130,17 +129,17 @@ func buildDefaultSorts(columnName string, message *j5schema.ObjectSchema) ([]sor
 	return defaultSortFields, nil
 }
 
-func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sortSpec, error) {
+func (ll *Lister) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sortSpec, error) {
 	results := []sortSpec{}
 	direction := ""
 	for _, sort := range sorts {
-		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
-		spec, err := pgstore.NewJSONPath(ll.arrayObject, pathSpec)
+		pathSpec := ParseJSONPathSpec(sort.Field)
+		spec, err := NewJSONPath(ll.arrayObject, pathSpec)
 		if err != nil {
 			return nil, fmt.Errorf("dynamic filter: find field: %w", err)
 		}
 
-		biggerSpec := &pgstore.NestedField{
+		biggerSpec := &NestedField{
 			Path:       *spec,
 			RootColumn: ll.dataColumn,
 		}
@@ -167,73 +166,10 @@ func (ll *Lister[REQ, RES]) buildDynamicSortSpec(sorts []*list_j5pb.Sort) ([]sor
 	return results, nil
 }
 
-func isSortingAnnotated(opts *list_j5pb.FieldConstraint) bool {
-	annotated := false
-
-	if opts != nil {
-		switch opts.Type.(type) {
-		case *list_j5pb.FieldConstraint_Double:
-			if opts.GetDouble().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Fixed32:
-			if opts.GetFixed32().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Fixed64:
-			if opts.GetFixed64().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Float:
-			if opts.GetFloat().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Int32:
-			if opts.GetInt32().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Int64:
-			if opts.GetInt64().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Sfixed32:
-			if opts.GetSfixed32().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Sfixed64:
-			if opts.GetSfixed64().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Sint32:
-			if opts.GetSint32().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Sint64:
-			if opts.GetSint64().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Uint32:
-			if opts.GetUint32().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Uint64:
-			if opts.GetUint64().Sorting != nil {
-				annotated = true
-			}
-		case *list_j5pb.FieldConstraint_Timestamp:
-			if opts.GetTimestamp().Sorting != nil {
-				annotated = true
-			}
-		}
-	}
-
-	return annotated
-}
-
 func validateQueryRequestSorts(message *j5schema.ObjectSchema, sorts []*list_j5pb.Sort) error {
 	for _, sort := range sorts {
-		pathSpec := pgstore.ParseJSONPathSpec(sort.Field)
-		spec, err := pgstore.NewJSONPath(message, pathSpec)
+		pathSpec := ParseJSONPathSpec(sort.Field)
+		spec, err := NewJSONPath(message, pathSpec)
 		if err != nil {
 			return fmt.Errorf("find field %s: %w", sort.Field, err)
 		}

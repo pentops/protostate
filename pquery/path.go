@@ -1,4 +1,4 @@
-package pgstore
+package pquery
 
 import (
 	"fmt"
@@ -117,6 +117,14 @@ func (pp Path) pathNodeNames() string {
 	return strings.Join(names, ".")
 }
 
+func (pp *Path) pathParts() []string {
+	parts := make([]string, 0, len(pp.path))
+	for _, node := range pp.path {
+		parts = append(parts, node.field.JSONName)
+	}
+	return parts
+}
+
 func (pp *Path) JSONBArrowPath() string {
 	elements := make([]string, 0, len(pp.path))
 	end, path := pp.path[len(pp.path)-1], pp.path[:len(pp.path)-1]
@@ -161,6 +169,11 @@ func (pp *Path) JSONPathQuery() string {
 		case *j5schema.ArrayField:
 			elements = append(elements, "[*]")
 		}
+	}
+
+	if pp.leafOneof != nil {
+		// Can't use quotes, must escape the !
+		elements = append(elements, `.\!type`)
 	}
 
 	return strings.Join(elements, "")
@@ -246,13 +259,13 @@ func objectProperty(obj hasPropertySet, pathElem string, pt pathType) (*j5schema
 	case clientPath:
 		prop := obj.ClientProperties().ByJSONName(pathElem)
 		if prop == nil {
-			return nil, fmt.Errorf("property %s not found in object %s", pathElem, obj.FullName())
+			return nil, fmt.Errorf("client property %q not found in %s", pathElem, obj.FullName())
 		}
 		return prop, nil
 	case outerPath:
 		prop := obj.AllProperties().ByJSONName(pathElem)
 		if prop == nil {
-			return nil, fmt.Errorf("property %s not found in object %s", pathElem, obj.FullName())
+			return nil, fmt.Errorf("property %q not found in %s", pathElem, obj.FullName())
 		}
 		return prop, nil
 
@@ -277,7 +290,6 @@ func newPath(rootMessage *j5schema.ObjectSchema, fieldPath []string, pathType pa
 	walkMessage = rootMessage
 	var pathElem string
 	walkPath := fieldPath
-	var nodes []pathNode
 
 	for {
 		pathElem, walkPath = walkPath[0], walkPath[1:]
@@ -288,20 +300,19 @@ func newPath(rootMessage *j5schema.ObjectSchema, fieldPath []string, pathType pa
 			if err != nil {
 				return nil, err
 			}
-
 			node = pathNode{
 				name:  pathElem,
 				field: field,
 			}
 
 		case *j5schema.OneofSchema:
-			// Very Special Edge Case: Oneof wrapper types allow the client to
-			// filter based on the type of the oneof. So the oneof can be at the
-			// end of the path, and the field can be the oneof wrapper type.
-			if len(walkPath) == 0 && pathElem == "type" {
-				pathSpec.path = append(pathSpec.path, nodes...)
+
+			if len(walkPath) == 0 && pathElem == "!type" {
+				// Very Special Edge Case: Oneof wrapper types allow the client to
+				// filter based on the type of the oneof. So the oneof can be at the
+				// end of the path, and the field can be the oneof wrapper type.
 				pathSpec.leafOneof = walkMessage
-				break
+				return pathSpec, nil
 			}
 
 			field, err := objectProperty(walkMessage, pathElem, pathType)
@@ -313,12 +324,15 @@ func newPath(rootMessage *j5schema.ObjectSchema, fieldPath []string, pathType pa
 				name:  pathElem,
 				field: field,
 			}
+		default:
+			return nil, fmt.Errorf("field %q in %s.%s is not an object or oneof, no such field %q", pathElem, rootMessage.FullName(), strings.Join(fieldPath, "."), strings.Join(walkPath, "."))
 		}
 
 		pathSpec.path = append(pathSpec.path, node)
+		pathSpec.leafField = node.field
+
 		if len(walkPath) == 0 {
-			pathSpec.leafField = node.field
-			break
+			return pathSpec, nil
 		}
 
 		switch nextType := node.field.Schema.(type) {
@@ -328,20 +342,23 @@ func newPath(rootMessage *j5schema.ObjectSchema, fieldPath []string, pathType pa
 			walkMessage = nextType.OneofSchema()
 		case j5schema.RootSchema:
 			walkMessage = nextType
+		case *j5schema.ArrayField:
+			items := nextType.ItemSchema
+			switch items := items.(type) {
+			case *j5schema.ObjectField:
+				walkMessage = items.ObjectSchema()
+			case *j5schema.OneofField:
+				walkMessage = items.OneofSchema()
+			default:
+				return nil, fmt.Errorf("array field %q in %s.%s is an array, but not of an object or oneof, no such field %q", pathElem, rootMessage.FullName(), strings.Join(fieldPath, "."), strings.Join(walkPath, "."))
+			}
+		case *j5schema.MapField:
+			return nil, fmt.Errorf("map fields not supported in path %q", strings.Join(fieldPath, "."))
 		default:
-			return nil, fmt.Errorf("field %s is not a message, but path elements remain", pathElem)
+			return nil, fmt.Errorf("field %q in %s.%s is a scalar, no such field %q", pathElem, rootMessage.FullName(), strings.Join(fieldPath, "."), strings.Join(walkPath, "."))
 		}
 	}
 
-	return pathSpec, nil
-}
-
-func (pp *Path) pathParts() []string {
-	parts := make([]string, 0, len(pp.path))
-	for _, node := range pp.path {
-		parts = append(parts, node.field.JSONName)
-	}
-	return parts
 }
 
 func (pp *Path) GetValue(msg j5reflect.Object) (any, bool, error) {
@@ -349,12 +366,9 @@ func (pp *Path) GetValue(msg j5reflect.Object) (any, bool, error) {
 		return nil, false, fmt.Errorf("empty path")
 	}
 
-	lastField, ok, err := msg.GetField(pp.pathParts()...)
+	lastField, _, err := msg.GetField(pp.pathParts()...)
 	if err != nil {
 		return nil, false, fmt.Errorf("getting field %s: %w", pp.pathNodeNames(), err)
-	}
-	if !ok {
-		return nil, false, nil
 	}
 
 	if pp.leafOneof != nil {

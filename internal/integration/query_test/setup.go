@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/pentops/golib/gl"
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"k8s.io/utils/ptr"
@@ -67,7 +68,7 @@ func newFooCreatedEvent(fooID, tenantID string, mod ...func(c *test_pb.FooEventT
 	created := &test_pb.FooEventType_Created{
 		Name:        "foo",
 		Field:       fmt.Sprintf("weight: %d", weight),
-		Description: ptr.To("creation event for foo: " + fooID),
+		Description: gl.Ptr("creation event for foo: " + fooID),
 		Weight:      &weight,
 	}
 

@@ -27,16 +27,15 @@ type GetResponse interface {
 	j5reflect.Object
 }
 
-type GetSpec[
-	REQ GetRequest,
-	RES GetResponse,
-] struct {
+type GetSpec struct {
+	Method *j5schema.MethodSchema
+
 	TableName  string
 	DataColumn string
 	Auth       AuthProvider
 	AuthJoin   []*LeftJoin
 
-	PrimaryKey func(REQ) (map[string]any, error)
+	PrimaryKey func(j5reflect.Object) (map[string]any, error)
 
 	StateResponseField string
 
@@ -98,15 +97,14 @@ func (gc GetJoinSpec) validate() error {
 	return nil
 }
 
-type Getter[
-	REQ GetRequest,
-	RES j5reflect.Object,
-] struct {
+type Getter struct {
+	method *j5schema.MethodSchema
+
 	stateField *j5schema.ObjectProperty
 
 	dataColumn string
 	tableName  string
-	primaryKey func(REQ) (map[string]any, error)
+	primaryKey func(j5reflect.Object) (map[string]any, error)
 	auth       AuthProvider
 	authJoin   []*LeftJoin
 
@@ -124,14 +122,14 @@ type getJoin struct {
 	on            JoinFields
 }
 
-func NewGetter[
-	REQ GetRequest,
-	RES GetResponse,
-](spec GetSpec[REQ, RES]) (*Getter[REQ, RES], error) {
-	descriptors := newMethodDescriptor[REQ, RES]()
-	resDesc := descriptors.response
+func NewGetter(spec GetSpec) (*Getter, error) {
 
-	sc := &Getter[REQ, RES]{
+	if spec.Method == nil {
+		return nil, fmt.Errorf("missing Method")
+	}
+
+	sc := &Getter{
+		method:     spec.Method,
 		dataColumn: spec.DataColumn,
 		tableName:  spec.TableName,
 		primaryKey: spec.PrimaryKey,
@@ -145,7 +143,7 @@ func NewGetter[
 		defaultState = true
 		spec.StateResponseField = "state"
 	}
-	sc.stateField = resDesc.Properties.ByJSONName(spec.StateResponseField)
+	sc.stateField = spec.Method.Response.Properties.ByJSONName(spec.StateResponseField)
 	if sc.stateField == nil {
 		if defaultState {
 			return nil, fmt.Errorf("no 'state' field in proto message - did you mean to override StateResponseField?")
@@ -163,7 +161,7 @@ func NewGetter[
 			return nil, fmt.Errorf("invalid join spec: %w", err)
 		}
 
-		joinField := resDesc.Properties.ByJSONName(spec.Join.FieldInParent)
+		joinField := spec.Method.Response.Properties.ByJSONName(spec.Join.FieldInParent)
 		if joinField == nil {
 			return nil, fmt.Errorf("field %s not found in response message", spec.Join.FieldInParent)
 		}
@@ -185,11 +183,16 @@ func NewGetter[
 	return sc, nil
 }
 
-func (gc *Getter[REQ, RES]) SetQueryLogger(logger QueryLogger) {
+func (gc *Getter) SetQueryLogger(logger QueryLogger) {
 	gc.queryLogger = logger
 }
 
-func (gc *Getter[REQ, RES]) Get(ctx context.Context, db Transactor, reqMsg REQ, resMsg RES) error {
+func (gc *Getter) Get(ctx context.Context, db Transactor, reqMsg, resMsg j5reflect.Object) error {
+
+	err := assertObjectsMatch(gc.method, reqMsg, resMsg)
+	if err != nil {
+		return err
+	}
 
 	as := newAliasSet()
 	rootAlias := as.Next(gc.tableName)

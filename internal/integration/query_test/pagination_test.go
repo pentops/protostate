@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -13,8 +12,6 @@ import (
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"k8s.io/utils/ptr"
 )
 
@@ -83,13 +80,13 @@ func TestPagination(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		query, err := queryer.MainLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
+		query, err := queryer.MainLister.BuildQuery(ctx, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 		printQuery(t, query)
 
-		err = queryer.List(ctx, uu.DB, req, res)
+		err = queryer.List(ctx, uu.DB, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -152,7 +149,7 @@ func TestEventPagination(t *testing.T) {
 		}
 		res := &test_spb.FooEventsResponse{}
 
-		err = queryer.ListEvents(ctx, db, req, res)
+		err = queryer.ListEvents(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -182,19 +179,6 @@ func TestEventPagination(t *testing.T) {
 			t.Fatalf("Should not be the final page")
 		}
 
-		rowBytes, err := base64.StdEncoding.DecodeString(*pageResp.NextToken)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		msg := &test_pb.FooEvent{}
-		if err := proto.Unmarshal(rowBytes, msg); err != nil {
-			t.Fatal(err.Error())
-		}
-
-		t.Log(protojson.Format(msg))
-		t.Logf("Token entry, TS: %d, ID: %s", msg.Metadata.Timestamp.AsTime().Round(time.Microsecond).UnixMicro(), msg.Metadata.EventId)
-
 	})
 
 	ss.Step("List Page 2", func(ctx context.Context, t flowtest.Asserter) {
@@ -207,13 +191,13 @@ func TestEventPagination(t *testing.T) {
 		}
 		res := &test_spb.FooEventsResponse{}
 
-		query, err := queryer.EventLister.BuildQuery(ctx, req.ProtoReflect(), res.ProtoReflect())
+		query, err := queryer.EventLister.BuildQuery(ctx, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 		printQuery(t, query)
 
-		err = queryer.ListEvents(ctx, db, req, res)
+		err = queryer.ListEvents(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -278,7 +262,7 @@ func TestPageSize(t *testing.T) {
 		req := &test_spb.FooListRequest{}
 		res := &test_spb.FooListResponse{}
 
-		err := queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -310,7 +294,7 @@ func TestPageSize(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err := queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -342,7 +326,7 @@ func TestPageSize(t *testing.T) {
 		}
 		res := &test_spb.FooListResponse{}
 
-		err := queryer.List(ctx, db, req, res)
+		err := queryer.List(ctx, db, req.J5Object(), res.J5Object())
 		if err == nil {
 			t.Fatal("expected error")
 		}
