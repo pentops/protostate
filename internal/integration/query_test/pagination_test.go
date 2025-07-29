@@ -15,7 +15,7 @@ import (
 
 func TestPagination(t *testing.T) {
 	uu := NewSchemaUniverse(t)
-	var queryer *pquery.Lister
+	queryer := uu.FooLister(t)
 
 	ss := NewStepper(t)
 	defer ss.RunSteps(t)
@@ -34,12 +34,10 @@ func TestPagination(t *testing.T) {
 			foo.SetScalar(pquery.JSONPath("metadata", "createdAt"), createdAt)
 			foo.SetScalar(pquery.JSONPath("data", "field"), fmt.Sprintf("foo %d at %s", ii, createdAt.Format(time.RFC3339Nano)))
 		})
-		queryer = uu.FooLister(t)
 		return nil
 
 	})
 
-	queryer = uu.FooLister(t)
 	var pageResp *list_j5pb.PageResponse
 
 	ss.Step("List Page 1", func(ctx context.Context, t flowtest.Asserter) {

@@ -25,12 +25,12 @@ func TestDefaultFiltering(t *testing.T) {
 	var queryer *pquery.Lister
 
 	ss.Setup(func(ctx context.Context, t flowtest.Asserter) error {
+		queryer = uu.FooLister(t)
 		uu.SetupFoo(t, 10, func(ii int, foo *TestObject) {
 			if ii < 2 {
 				foo.SetScalar(pquery.JSONPath("status"), "DELETED")
 			}
 		})
-		queryer = uu.FooLister(t)
 		return nil
 	})
 
@@ -80,6 +80,7 @@ func TestFilteringWithAuthScope(t *testing.T) {
 	tenants := []string{tenantID1, tenantID2}
 
 	ss.Setup(func(ctx context.Context, t flowtest.Asserter) error {
+		queryer = uu.FooLister(t)
 		uu.SetupFoo(t, 20, func(idx int, foo *TestObject) {
 			// recreating the old function logic
 			tenantId := idx % len(tenants)
@@ -100,7 +101,6 @@ func TestFilteringWithAuthScope(t *testing.T) {
 			foo.SetScalar(pquery.JSONPath("metadata", "createdAt"), createdAt.Format(time.RFC3339Nano))
 
 		})
-		queryer = uu.FooLister(t)
 		return nil
 	})
 
@@ -172,8 +172,8 @@ func TestFilteringWithAuthScope(t *testing.T) {
 
 func TestDynamicFiltering(t *testing.T) {
 	uu := NewSchemaUniverse(t)
-	var queryer *pquery.Lister
 
+	queryer := uu.FooLister(t)
 	tenantID := uuid.NewString()
 	uu.SetupFoo(t, 60, func(ii int, foo *TestObject) {
 		weight := (10 + int64(ii))
@@ -226,8 +226,6 @@ func TestDynamicFiltering(t *testing.T) {
 			foo.SetScalar(pquery.JSONPath("data", "shape", "square", "side"), int64(10))
 		}
 	})
-
-	queryer = uu.FooLister(t)
 
 	t.Run("Single Range Filter", func(t *testing.T) {
 		req := &test_spb.FooListRequest{

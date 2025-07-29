@@ -19,9 +19,27 @@ import (
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/pquery"
-	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
+
+func printQuery(t flowtest.TB, query sq.Sqlizer) {
+	stmt, args, err := query.ToSql()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	t.Log(stmt, args)
+}
+
+func testLogger(t flowtest.TB) pquery.QueryLogger {
+	return func(query sqrlx.Sqlizer) {
+		queryString, args, err := query.ToSql()
+		if err != nil {
+			t.Logf("Query Error: %s", err.Error())
+			return
+		}
+		t.Logf("Query %s; ARGS %#v", queryString, args)
+	}
+}
 
 func NewStepper(t *testing.T) *flowtest.Stepper[*testing.T] {
 	return flowtest.NewStepper[*testing.T](t.Name())
@@ -33,46 +51,12 @@ type SchemaUniverse struct {
 	conn *sql.DB
 }
 
-func NewSchemaUniverse(t *testing.T, opts ...universeOption) *SchemaUniverse {
+func NewSchemaUniverse(t *testing.T) *SchemaUniverse {
 	t.Helper()
-
-	spec := &universeSpec{
-		opts: psm.StateQueryOptions{},
-	}
-
-	for _, opt := range opts {
-		opt(spec)
-	}
 
 	conn := pgtest.GetTestDB(t, pgtest.WithSchemaName("query_test"))
 	db := sqrlx.NewPostgres(conn)
 
-	/*
-		smR, err := NewFooStateMachine()
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		specs := []psm.QueryTableSpec{
-			smR.StateTableSpec(),
-		}
-
-		if err := pgmigrate.CreateStateMachines(context.Background(), conn, specs...); err != nil {
-			t.Fatal(err.Error())
-		}
-
-		if err := pgmigrate.AddIndexes(context.Background(), conn, specs...); err != nil {
-			t.Fatal(err.Error())
-		}
-
-		sm := smR.WithDB(db)
-
-		queryer, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.StateTableSpec()), spec.opts)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-		queryer.SetQueryLogger(testLogger(t))
-	*/
 	return &SchemaUniverse{
 		DB:   db,
 		conn: conn,
@@ -80,6 +64,7 @@ func NewSchemaUniverse(t *testing.T, opts ...universeOption) *SchemaUniverse {
 }
 
 func (uu *SchemaUniverse) Migrate(t flowtest.TB, commands ...string) {
+	t.Helper()
 	for _, cmd := range commands {
 		if _, err := uu.conn.Exec(cmd); err != nil {
 			t.Fatal(err.Error())
@@ -115,11 +100,7 @@ func (to *TestObject) SetScalar(fieldPath pquery.JSONPathSpec, value any) {
 }
 
 func (uu *SchemaUniverse) SetupFoo(t flowtest.TB, count int, callback ...func(int, *TestObject)) {
-	uu.Migrate(t, `
-		CREATE TABLE foo (
-		  foo_id char(36) NOT NULL,
-		  state jsonb NOT NULL
-	  )`)
+	t.Helper()
 	if err := uu.DB.Transact(t.Context(), &sqrlx.TxOptions{
 		Isolation: sql.LevelDefault,
 	}, func(ctx context.Context, tx sqrlx.Transaction) error {
@@ -160,7 +141,15 @@ func (uu *SchemaUniverse) SetupFoo(t flowtest.TB, count int, callback ...func(in
 
 }
 
-func (uu *SchemaUniverse) FooLister(t flowtest.TB) *pquery.Lister {
+func (uu *SchemaUniverse) FooLister(t flowtest.TB, mods ...func(*pquery.TableSpec)) *pquery.Lister {
+	t.Helper()
+	uu.Migrate(t, `
+		CREATE TABLE foo (
+		  foo_id char(36) NOT NULL,
+		  state jsonb NOT NULL,
+		  tenant_id text GENERATED ALWAYS AS (state->>'tenantId') STORED
+	  )`)
+
 	requestSchema, ok := (&test_spb.FooListRequest{}).J5Object().RootSchema()
 	if !ok {
 		t.Fatal("failed to get request schema")
@@ -183,6 +172,10 @@ func (uu *SchemaUniverse) FooLister(t flowtest.TB) *pquery.Lister {
 			},
 		},
 		Method: method,
+	}
+
+	for _, mod := range mods {
+		mod(&listSpec.TableSpec)
 	}
 
 	migrations, err := pgmigrate.IndexMigrations(listSpec)

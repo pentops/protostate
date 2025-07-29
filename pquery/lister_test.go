@@ -410,7 +410,7 @@ func TestBuildListReflection(t *testing.T) {
 		`,
 	}.toString(),
 		nil,
-		"unknown field in response",
+		"unknown field",
 	)
 
 	runSad("extra array field in response", composed{

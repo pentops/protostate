@@ -13,7 +13,7 @@ import (
 
 func TestDynamicSearching(t *testing.T) {
 	uu := NewSchemaUniverse(t)
-	var queryer *pquery.Lister
+	queryer := uu.FooLister(t)
 
 	uu.SetupFoo(t, 30, func(ii int, foo *TestObject) {
 
@@ -24,7 +24,6 @@ func TestDynamicSearching(t *testing.T) {
 		foo.SetScalar(pquery.JSONPath("metadata", "createdAt"), createdAt)
 		foo.SetScalar(pquery.JSONPath("data", "field"), fmt.Sprintf("foo %d weighted %d", ii, weight))
 	})
-	queryer = uu.FooLister(t)
 
 	t.Run("Simple Search Field", func(t *testing.T) {
 		req := &test_spb.FooListRequest{

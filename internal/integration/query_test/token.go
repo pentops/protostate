@@ -6,7 +6,6 @@ import (
 
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/protostate/pquery"
-	"github.com/pentops/protostate/psm"
 )
 
 type tokenCtxKey struct{}
@@ -28,26 +27,24 @@ func TokenFromCtx(ctx context.Context) (*token, error) {
 	return token, nil
 }
 
-func newTokenQueryStateOption() psm.StateQueryOptions {
+func tokenAuth() pquery.AuthProvider {
 	fieldMap := map[string]string{
 		"tenant":      "tenant_id",
 		"meta_tenant": "meta_tenant_id",
 	}
-	return psm.StateQueryOptions{
-		Auth: pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
-			token, err := TokenFromCtx(ctx)
-			if err != nil {
-				return nil, err
-			}
+	return pquery.AuthProviderFunc(func(ctx context.Context) (map[string]string, error) {
+		token, err := TokenFromCtx(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-			tt, ok := fieldMap[token.claim.TenantType]
-			if !ok {
-				return nil, fmt.Errorf("no field mapping for tenant type %s", token.claim.TenantType)
-			}
+		tt, ok := fieldMap[token.claim.TenantType]
+		if !ok {
+			return nil, fmt.Errorf("no field mapping for tenant type %s", token.claim.TenantType)
+		}
 
-			return map[string]string{
-				tt: token.claim.TenantId,
-			}, nil
-		}),
-	}
+		return map[string]string{
+			tt: token.claim.TenantId,
+		}, nil
+	})
 }
