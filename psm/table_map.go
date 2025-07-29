@@ -8,7 +8,7 @@ import (
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/j5/lib/j5query"
 )
 
 type TableMap struct {

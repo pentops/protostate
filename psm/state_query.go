@@ -6,7 +6,7 @@ import (
 
 	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/j5/lib/j5query"
 )
 
 // QueryTableSpec the TableMap with descriptors for the messages, without using

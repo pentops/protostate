@@ -7,8 +7,8 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	pquery "github.com/pentops/j5/lib/j5query"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/pquery"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -35,20 +35,25 @@ func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 		methodSet := NewQueryServiceGenerateSet(stateQuery.Entity, service)
 
 		for _, method := range service.Methods {
+			var stateQuery *ext_j5pb.StateQueryMethodOptions
 			methodOpt := proto.GetExtension(method.Desc.Options(), ext_j5pb.E_Method).(*ext_j5pb.MethodOptions)
-			if methodOpt == nil {
+			if methodOpt != nil {
+				stateQuery = methodOpt.GetStateQuery()
+				if stateQuery == nil {
+					return nil, fmt.Errorf("method %s does not have a state query type", method.Desc.Name())
+				}
+			} else {
 				name := string(method.Desc.Name())
-				methodOpt := &ext_j5pb.MethodOptions{}
 				if strings.HasPrefix(name, "Get") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						Get: true,
 					}
 				} else if strings.HasPrefix(name, "List") && strings.HasSuffix(name, "Events") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						ListEvents: true,
 					}
 				} else if strings.HasPrefix(name, "List") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						List: true,
 					}
 				} else {
@@ -56,7 +61,7 @@ func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 				}
 			}
 
-			if err := methodSet.AddMethod(method, methodOpt.StateQuery); err != nil {
+			if err := methodSet.AddMethod(method, stateQuery); err != nil {
 				return nil, fmt.Errorf("adding method %s to %s: %w", method.Desc.Name(), service.Desc.FullName(), err)
 			}
 		}

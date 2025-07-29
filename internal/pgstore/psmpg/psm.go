@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	sq "github.com/elgris/sqrl"
-	"github.com/pentops/protostate/pquery/pgmigrate"
+	"github.com/pentops/j5/lib/j5query/pgmigrate"
 	"github.com/pentops/protostate/psm"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
