@@ -17,6 +17,22 @@ type QueryTableSpec struct {
 	TableMap
 }
 
+func (ts *QueryTableSpec) StateTable() pquery.TableSpec {
+	return pquery.TableSpec{
+		TableName:  ts.State.TableName,
+		DataColumn: ts.State.Root.ColumnName,
+		RootObject: ts.StateType,
+	}
+}
+
+func (ts *QueryTableSpec) EventTable() pquery.TableSpec {
+	return pquery.TableSpec{
+		TableName:  ts.Event.TableName,
+		DataColumn: ts.Event.Root.ColumnName,
+		RootObject: ts.EventType,
+	}
+}
+
 // QuerySpec is the configuration for the query service side of the state
 // machine. Can be partially derived from the state machine table spec, but
 // contains types relating to the query service so cannot be fully derived.
@@ -248,6 +264,7 @@ func BuildStateQuerySet(
 		TableSpec: pquery.TableSpec{
 			TableName:           smSpec.State.TableName,
 			DataColumn:          smSpec.State.Root.ColumnName,
+			RootObject:          smSpec.StateType,
 			FallbackSortColumns: statePrimaryKeys,
 			Auth:                getSpec.Auth,
 			AuthJoin:            getSpec.AuthJoin,
@@ -274,6 +291,7 @@ func BuildStateQuerySet(
 		TableSpec: pquery.TableSpec{
 			TableName:  smSpec.Event.TableName,
 			DataColumn: smSpec.Event.Root.ColumnName,
+			RootObject: smSpec.EventType,
 			Auth:       getSpec.Auth,
 			AuthJoin:   getSpec.AuthJoin,
 			FallbackSortColumns: []pquery.ProtoField{

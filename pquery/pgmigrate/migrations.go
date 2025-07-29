@@ -2,13 +2,32 @@ package pgmigrate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
 type MigrationItem interface {
 	ToSQL() (string, error)
 	DownSQL() (string, error)
+}
+
+func RunMigrations(ctx context.Context, db sqrlx.Transactor, migrations []MigrationItem) error {
+
+	return db.Transact(ctx, nil, func(ctx context.Context, tx sqrlx.Transaction) error {
+		for _, migration := range migrations {
+			statement, err := migration.ToSQL()
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecRaw(ctx, statement); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func PrintMigrations(items ...MigrationItem) ([]byte, error) {

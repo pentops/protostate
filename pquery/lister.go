@@ -39,6 +39,7 @@ type TableSpec struct {
 	AuthJoin []*LeftJoin
 
 	DataColumn string // TODO: Replace with array Columns []Column
+	RootObject *j5schema.ObjectSchema
 
 	// List of fields to sort by if no other unique sort is found.
 	FallbackSortColumns []ProtoField
@@ -50,6 +51,9 @@ func (ts *TableSpec) Validate() error {
 	}
 	if ts.DataColumn == "" {
 		return fmt.Errorf("data column must be set")
+	}
+	if ts.RootObject == nil {
+		return fmt.Errorf("root object must be set")
 	}
 	return nil
 }

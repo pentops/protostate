@@ -15,10 +15,10 @@ import (
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/dbconvert"
-	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/pquery"
+	"github.com/pentops/protostate/pquery/pgmigrate"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
@@ -158,32 +158,39 @@ func (uu *SchemaUniverse) FooLister(t flowtest.TB, mods ...func(*pquery.TableSpe
 	if !ok {
 		t.Fatal("failed to get response schema")
 	}
+	fooSchema, ok := (&test_pb.FooState{}).J5Object().RootSchema()
+	if !ok {
+		t.Fatal("failed to get foo schema")
+	}
+
+	tableSpec := pquery.TableSpec{
+		TableName:  "foo",
+		DataColumn: "state",
+		RootObject: fooSchema.(*j5schema.ObjectSchema),
+		FallbackSortColumns: []pquery.ProtoField{
+			pquery.NewJSONField("fooId", gl.Ptr("foo_id")),
+		},
+	}
+
+	for _, mod := range mods {
+		mod(&tableSpec)
+	}
+
+	migrations, err := pgmigrate.IndexMigrations(tableSpec)
+	if err != nil {
+		t.Fatalf("failed to get index migrations: %v", err)
+	}
+	if err := pgmigrate.RunMigrations(t.Context(), uu.DB, migrations); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
 
 	method := &j5schema.MethodSchema{
 		Request:  requestSchema.(*j5schema.ObjectSchema),
 		Response: responseSchema.(*j5schema.ObjectSchema),
 	}
 	listSpec := pquery.ListSpec{
-		TableSpec: pquery.TableSpec{
-			TableName:  "foo",
-			DataColumn: "state",
-			FallbackSortColumns: []pquery.ProtoField{
-				pquery.NewJSONField("fooId", gl.Ptr("foo_id")),
-			},
-		},
-		Method: method,
-	}
-
-	for _, mod := range mods {
-		mod(&listSpec.TableSpec)
-	}
-
-	migrations, err := pgmigrate.IndexMigrations(listSpec)
-	if err != nil {
-		t.Fatalf("failed to get index migrations: %v", err)
-	}
-	if err := pgmigrate.RunMigrations(t.Context(), uu.DB, migrations); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
+		TableSpec: tableSpec,
+		Method:    method,
 	}
 
 	queryer, err := pquery.NewLister(listSpec)

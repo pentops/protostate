@@ -3,6 +3,8 @@ package pgmigrate
 import (
 	"fmt"
 	"strings"
+
+	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
 )
 
 type CreateTableBuilder struct {
@@ -178,4 +180,42 @@ func (table *Table) ToSQL() (string, error) {
 	}
 	lines = append(lines, ");")
 	return strings.Join(lines, "\n"), nil
+
+}
+
+const (
+	uuidType        = ColumnType("uuid")
+	textType        = ColumnType("text")
+	id62Type        = ColumnType("char(22)")
+	intType         = ColumnType("int")
+	timestamptzType = ColumnType("timestamptz")
+	jsonbType       = ColumnType("jsonb")
+	dateType        = ColumnType("date")
+)
+
+func FieldFormat(schema *schema_j5pb.Field) (ColumnType, error) {
+
+	switch ft := schema.Type.(type) {
+	case *schema_j5pb.Field_String_:
+		return textType, nil
+	case *schema_j5pb.Field_Key:
+		if ft.Key.Format == nil {
+			return textType, nil
+		}
+		switch ft.Key.Format.Type.(type) {
+		case *schema_j5pb.KeyFormat_Custom_:
+			return textType, nil
+		case *schema_j5pb.KeyFormat_Uuid:
+			return uuidType, nil
+		case *schema_j5pb.KeyFormat_Id62:
+			return id62Type, nil
+		default:
+			return textType, nil
+		}
+	case *schema_j5pb.Field_Date:
+		return dateType, nil
+	default:
+		return textType, fmt.Errorf("unsupported type for key field %T", schema.Type)
+	}
+
 }
