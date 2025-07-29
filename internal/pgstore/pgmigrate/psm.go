@@ -13,6 +13,42 @@ import (
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
+func IndexMigrations(spec pquery.ListSpec) ([]MigrationItem, error) {
+
+	lr, err := pquery.BuildListReflection(spec.Method, spec.TableSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	allMigrations := make([]MigrationItem, 0)
+	indexes, err := buildIndexes(spec.TableName, spec.DataColumn, lr.ArrayObject())
+	if err != nil {
+		return nil, fmt.Errorf("building indexes: %w", err)
+	}
+
+	for _, index := range indexes {
+		allMigrations = append(allMigrations, index)
+	}
+
+	return allMigrations, nil
+}
+
+func RunMigrations(ctx context.Context, db sqrlx.Transactor, migrations []MigrationItem) error {
+
+	return db.Transact(ctx, nil, func(ctx context.Context, tx sqrlx.Transaction) error {
+		for _, migration := range migrations {
+			statement, err := migration.ToSQL()
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecRaw(ctx, statement); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func BuildStateMachineMigrations(specs ...psm.QueryTableSpec) ([]byte, error) {
 
 	allMigrations := make([]MigrationItem, 0, len(specs)*4)

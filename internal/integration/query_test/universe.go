@@ -15,6 +15,7 @@ import (
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/pgtest.go/pgtest"
 	"github.com/pentops/protostate/internal/dbconvert"
+	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/pquery"
@@ -183,7 +184,15 @@ func (uu *SchemaUniverse) FooLister(t flowtest.TB) *pquery.Lister {
 		},
 		Method: method,
 	}
-	var err error
+
+	migrations, err := pgmigrate.IndexMigrations(listSpec)
+	if err != nil {
+		t.Fatalf("failed to get index migrations: %v", err)
+	}
+	if err := pgmigrate.RunMigrations(t.Context(), uu.DB, migrations); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
 	queryer, err := pquery.NewLister(listSpec)
 	if err != nil {
 		t.Fatalf("failed to create queryer: %w", err)

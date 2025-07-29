@@ -123,6 +123,10 @@ type ListReflectionSet struct {
 	dataColumn string
 }
 
+func (ll *ListReflectionSet) ArrayObject() *j5schema.ObjectSchema {
+	return ll.arrayObject
+}
+
 func BuildListReflection(method *j5schema.MethodSchema, table TableSpec) (*ListReflectionSet, error) {
 	return buildListReflection(method, table)
 }
