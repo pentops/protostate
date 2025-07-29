@@ -13,7 +13,6 @@ import (
 	"github.com/pentops/j5/gen/j5/auth/v1/auth_j5pb"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
-	"github.com/pentops/sqrlx.go/sqrlx"
 	"k8s.io/utils/ptr"
 )
 
@@ -32,44 +31,6 @@ func printQuery(t flowtest.TB, query sqrl.Sqlizer) {
 		t.Fatal(err.Error())
 	}
 	t.Log(stmt, args)
-}
-
-func getRawState(db sqrlx.Transactor, id string) (string, error) {
-	var state []byte
-	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
-		q := sqrl.Select("state").From("foo").Where("foo_id = ?", id)
-		err := tx.QueryRow(ctx, q).Scan(&state)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(state), nil
-}
-
-func getRawEvent(db sqrlx.Transactor, id string) (string, error) {
-	var data []byte
-	err := db.Transact(context.Background(), nil, func(ctx context.Context, tx sqrlx.Transaction) error {
-		q := sqrl.Select("data").From("foo_event").Where("id = ?", id)
-		err := tx.QueryRow(ctx, q).Scan(&data)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
 }
 
 func setupFooListableData(ss *flowtest.Stepper[*testing.T], sm *test_pb.FooPSMDB, tenants []string, count int) map[string][]string {

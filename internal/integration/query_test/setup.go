@@ -103,19 +103,6 @@ func newFooUpdatedEvent(fooID, tenantID string, mod ...func(u *test_pb.FooEventT
 	}, updated)
 
 }
-func newFooDeletedEvent(fooID, tenantID string, mod ...func(u *test_pb.FooEventType_Deleted)) *test_pb.FooPSMEventSpec {
-	deleted := &test_pb.FooEventType_Deleted{}
-
-	for _, m := range mod {
-		m(deleted)
-	}
-
-	return newFooEvent(&test_pb.FooKeys{
-		FooId:        fooID,
-		TenantId:     &tenantID,
-		MetaTenantId: metaTenant,
-	}, deleted)
-}
 
 func newFooEvent(keys *test_pb.FooKeys, et test_pb.FooPSMEvent) *test_pb.FooPSMEventSpec {
 

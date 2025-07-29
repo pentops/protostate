@@ -8,6 +8,8 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+type IsFooData_Shape_Type = isFooData_Shape_Type
+
 // FooEventType is a oneof wrapper
 type FooEventTypeKey string
 

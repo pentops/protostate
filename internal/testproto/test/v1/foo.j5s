@@ -36,6 +36,22 @@ entity Foo {
 		listRules.searching.fieldIdentifier = "tsv_description"
 	}
 
+	data shape oneof:FooShape {
+		listRules.filtering.filterable = true
+		option circle object {
+			field radius integer:INT64 {
+				listRules.filtering.filterable = true
+				listRules.sorting.sortable = true
+			}
+		}
+		option square object {
+			field side integer:INT64 {
+				listRules.filtering.filterable = true
+				listRules.sorting.sortable = true
+			}
+		}
+	}
+
 	data characteristics object:FooCharacteristics
 	data profiles array:object:FooProfile
 

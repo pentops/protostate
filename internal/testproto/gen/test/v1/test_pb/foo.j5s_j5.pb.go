@@ -29,6 +29,35 @@ func (msg *FooData) J5Object() j5reflect.Object {
 func (msg *FooData) Clone() any {
 	return proto.Clone(msg).(*FooData)
 }
+func (msg *FooData_Shape) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooData_Shape) Clone() any {
+	return proto.Clone(msg).(*FooData_Shape)
+}
+func (msg *FooData_Shape_Circle) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooData_Shape_Circle) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooData_Shape_Circle) Clone() any {
+	return proto.Clone(msg).(*FooData_Shape_Circle)
+}
+func (msg *FooData_Shape_Square) J5Reflect() j5reflect.Root {
+	return j5reflect.MustReflect(msg.ProtoReflect())
+}
+
+func (msg *FooData_Shape_Square) J5Object() j5reflect.Object {
+	return j5reflect.MustReflect(msg.ProtoReflect()).(j5reflect.Object)
+}
+
+func (msg *FooData_Shape_Square) Clone() any {
+	return proto.Clone(msg).(*FooData_Shape_Square)
+}
 func (msg *FooState) J5Reflect() j5reflect.Root {
 	return j5reflect.MustReflect(msg.ProtoReflect())
 }

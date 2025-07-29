@@ -44,6 +44,16 @@ type TableSpec struct {
 	FallbackSortColumns []ProtoField
 }
 
+func (ts *TableSpec) Validate() error {
+	if ts.TableName == "" {
+		return fmt.Errorf("table name must be set")
+	}
+	if ts.DataColumn == "" {
+		return fmt.Errorf("data column must be set")
+	}
+	return nil
+}
+
 // ProtoField represents a field within a the root data.
 type ProtoField struct {
 	// path from the root object to this field
@@ -74,6 +84,16 @@ type ListSpec struct {
 
 	TableSpec
 	RequestFilter func(j5reflect.Object) (map[string]any, error)
+}
+
+func (ls *ListSpec) Validate() error {
+	if ls.Method == nil {
+		return fmt.Errorf("list spec must have a method")
+	}
+	if err := ls.TableSpec.Validate(); err != nil {
+		return fmt.Errorf("validate table spec: %w", err)
+	}
+	return nil
 }
 
 type QueryLogger func(sqrlx.Sqlizer)
@@ -142,7 +162,7 @@ func buildListReflection(method *j5schema.MethodSchema, table TableSpec) (*ListR
 
 		}
 
-		return nil, fmt.Errorf("unknown field in response: '%s' of type %s", field.FullName(), field.Schema.TypeName())
+		return nil, fmt.Errorf("unknown field in list response: '%s' of type %s", field.FullName(), field.Schema.TypeName())
 	}
 
 	if ll.arrayField == nil {
@@ -242,6 +262,10 @@ func NewLister(spec ListSpec) (*Lister, error) {
 		tableName: spec.TableName,
 		auth:      spec.Auth,
 		authJoin:  spec.AuthJoin,
+	}
+
+	if err := spec.Validate(); err != nil {
+		return nil, fmt.Errorf("validate list spec: %w", err)
 	}
 
 	listFields, err := buildListReflection(spec.Method, spec.TableSpec)

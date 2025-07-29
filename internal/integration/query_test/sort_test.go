@@ -515,6 +515,7 @@ func TestDynamicSorting(t *testing.T) {
 				t.Fatalf("failed to decode next token: %v", err)
 			}
 			t.Logf("Page Token: %s", string(pageTokenBytes))
+
 			req := &test_spb.FooListRequest{
 				Page: &list_j5pb.PageRequest{
 					PageSize: proto.Int64(5),

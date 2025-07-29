@@ -225,6 +225,10 @@ func (pp Path) walk(props j5schema.PropertySet, callback func(Path) error) error
 // Like ProtoPathSpec but uses JSON field names
 type JSONPathSpec []string
 
+func JSONPath(path ...string) JSONPathSpec {
+	return JSONPathSpec(path)
+}
+
 func ParseJSONPathSpec(path string) JSONPathSpec {
 	return JSONPathSpec(strings.Split(path, "."))
 }
