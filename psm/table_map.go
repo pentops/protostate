@@ -105,7 +105,7 @@ type KeyField struct {
 	ColumnName *string // Optional, stores in the table as a column.
 	Primary    bool
 	Unique     bool
-	Path       *pquery.Path
+	Path       *j5query.Path
 }
 
 func safeTableName(name string) string {
