@@ -10,11 +10,11 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
-	github.com/pentops/flowtest v0.0.0-20250611222350-b5c7162d9db1
+	github.com/pentops/flowtest v0.0.0-20250716231535-9c97a48adf21
 	github.com/pentops/golib v0.0.0-20250326060930-8c83d58ddb63
 	github.com/pentops/j5 v0.0.0-20250625220400-ddb847893140
 	github.com/pentops/log.go v0.0.16
-	github.com/pentops/o5-messaging v0.0.0-20250520213617-fba07334e9aa
+	github.com/pentops/o5-messaging v0.0.0-20250619024104-7e07c29129f0
 	github.com/pentops/pgtest.go v0.0.0-20241223222214-7638cc50e15b
 	github.com/pentops/sqrlx.go v0.0.0-20250520210217-2f46de329c7a
 	github.com/stretchr/testify v1.10.0

@@ -180,10 +180,10 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 	}
 	keyFields := keyMessage.Fields()
 	for _, field := range objSchema.Properties {
-		if len(field.ProtoField) != 1 {
-			return nil, fmt.Errorf("key field %s: expected one proto field, got %d", field.FullName(), len(field.ProtoField))
+		desc := keyFields.ByJSONName(field.JSONName)
+		if desc == nil {
+			return nil, fmt.Errorf("field %s not found in message %s", field.JSONName, keyMessage.FullName())
 		}
-		desc := keyFields.ByNumber(field.ProtoField[0])
 
 		keyColumn, err := keyFieldColumn(field, desc)
 		if err != nil {

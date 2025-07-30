@@ -338,8 +338,7 @@ func findField(message protoreflect.MessageDescriptor, fieldPath string) []pathN
 
 		if fieldOpts != nil {
 			// TODO: remove the use of Message once everything has been moved over to Object
-			if (fieldOpts.GetMessage() != nil && fieldOpts.GetMessage().Flatten) ||
-				(fieldOpts.GetObject() != nil && fieldOpts.GetObject().Flatten) {
+			if fieldOpts.GetObject() != nil && fieldOpts.GetObject().Flatten {
 				if flattenedField := field.Message().Fields().ByJSONName(fieldPath); flattenedField != nil {
 					return []pathNode{
 						{
