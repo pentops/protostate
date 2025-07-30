@@ -2,7 +2,9 @@ package psm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
@@ -64,11 +66,34 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) InitialStateFunc(cbFunc func
 	return smc
 }
 
+func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) schemas() (*j5schema.ObjectSchema, *j5schema.ObjectSchema, error) {
+	state, ok := newJ5Message[S]().J5Reflect().RootSchema()
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid state type %T, must be a j5 root schema", new(S))
+	}
+	stateObject, ok := state.(*j5schema.ObjectSchema)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid state type %T, must be a j5 object schema", state)
+	}
+	event, ok := newJ5Message[E]().J5Reflect().RootSchema()
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid event type %T, must be a j5 root schema", new(E))
+	}
+	eventObject, ok := event.(*j5schema.ObjectSchema)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid event type %T, must be a j5 object schema", event)
+	}
+	return stateObject, eventObject, nil
+
+}
+
 func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) apply() error {
 	if smc.tableMap == nil {
-		state := (*new(S)).ProtoReflect().Descriptor()
-		event := (*new(E)).ProtoReflect().Descriptor()
-		tableMap, err := tableMapFromStateAndEvent(state, event)
+		stateObject, eventObject, err := smc.schemas()
+		if err != nil {
+			return err
+		}
+		tableMap, err := tableMapFromStateAndEvent(stateObject, eventObject)
 		if err != nil {
 			return err
 		}
@@ -94,8 +119,10 @@ func (smc *StateMachineConfig[K, S, ST, SD, E, IE]) BuildQueryTableSpec() (*Quer
 		return nil, err
 	}
 
-	state := (*new(S)).ProtoReflect().Descriptor()
-	event := (*new(E)).ProtoReflect().Descriptor()
+	state, event, err := smc.schemas()
+	if err != nil {
+		return nil, err
+	}
 
 	return &QueryTableSpec{
 		TableMap:  *smc.tableMap,

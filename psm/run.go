@@ -8,7 +8,6 @@ import (
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/o5-messaging/outbox"
 	"github.com/pentops/sqrlx.go/sqrlx"
-	"google.golang.org/protobuf/proto"
 )
 
 type captureStateType int
@@ -28,7 +27,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 ) (*S, error) {
 
 	if err := sm.validateEvent(event); err != nil {
-		return nil, fmt.Errorf("validating event %s: %w", event.ProtoReflect().Descriptor().FullName(), err)
+		return nil, err
 	}
 
 	typeKey := event.UnwrapPSMEvent().PSMEventKey()
@@ -63,7 +62,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	var returnState *S
 	switch captureState {
 	case captureInitialState:
-		rsVal := proto.Clone(state).(S)
+		rsVal := state.Clone().(S) //proto.Clone(state).(S)
 		returnState = &rsVal
 	case captureFinalState:
 		returnState = &state
@@ -78,7 +77,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) runEvent(
 	}
 
 	for _, se := range baton.sideEffects {
-		err = sm.validator.Validate(se.msg)
+		err = sm.protoValidator.Validate(se.msg)
 		if err != nil {
 			return nil, fmt.Errorf("validate side effect: %s %w", se.msg.ProtoReflect().Descriptor().FullName(), err)
 		}
@@ -187,7 +186,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) storeAfterMutation(
 		return fmt.Errorf("state machine transitioned to zero status")
 	}
 
-	err := sm.validator.Validate(state)
+	err := sm.validator.Validate(state.J5Reflect())
 	if err != nil {
 		return err
 	}

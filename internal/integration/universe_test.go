@@ -8,10 +8,10 @@ import (
 	"github.com/pentops/flowtest"
 	"github.com/pentops/log.go/log"
 	"github.com/pentops/pgtest.go/pgtest"
-	"github.com/pentops/protostate/internal/pgstore/pgmigrate"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_pb"
 	"github.com/pentops/protostate/internal/testproto/gen/test/v1/test_spb"
 	"github.com/pentops/protostate/psm"
+	"github.com/pentops/protostate/psmigrate"
 	"github.com/pentops/sqrlx.go/sqrlx"
 )
 
@@ -58,7 +58,6 @@ func setupUniverse(t flowtest.Asserter, uu *Universe) {
 	}
 
 	fooQuery, err := test_spb.NewFooPSMQuerySet(test_spb.DefaultFooPSMQuerySpec(sm.Foo.StateTableSpec()), psm.StateQueryOptions{})
-
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -73,7 +72,7 @@ func setupUniverse(t flowtest.Asserter, uu *Universe) {
 	uu.FooQuery = NewMiniFooController(db, fooQuery)
 	uu.BarQuery = NewMiniBarController(db, barQuery)
 
-	if err := pgmigrate.CreateStateMachines(context.Background(), conn,
+	if err := psmigrate.CreateStateMachines(context.Background(), conn,
 		sm.Foo.StateTableSpec(),
 		sm.Bar.StateTableSpec(),
 	); err != nil {

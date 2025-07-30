@@ -8,7 +8,6 @@ import (
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
@@ -155,7 +154,7 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 		if !columnSpec.Primary {
 			continue
 		}
-		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.JSONFieldName)
 		g.P("      \"", columnSpec.ColumnName, "\": msg.", field.GoName, ",")
 	}
 	g.P("  }")
@@ -163,7 +162,7 @@ func (ss PSMEntity) implementIKeyset(g *protogen.GeneratedFile) {
 		if columnSpec.Primary {
 			continue
 		}
-		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.ProtoName)
+		field := fieldByDesc(ss.keyMessage.Fields, columnSpec.JSONFieldName)
 		if columnSpec.ExplicitlyOptional {
 			g.P("if msg.", field.GoName, " != nil {")
 			g.P("  keyset[\"", columnSpec.ColumnName, "\"] = *msg.", field.GoName)
@@ -357,9 +356,9 @@ func (ss PSMEntity) tableSpecAndConfig(g *protogen.GeneratedFile) {
 	g.P()
 }
 
-func fieldByDesc(fields []*protogen.Field, desc protoreflect.Name) *protogen.Field {
+func fieldByDesc(fields []*protogen.Field, jsonName string) *protogen.Field {
 	for _, f := range fields {
-		if f.Desc.Name() == desc {
+		if f.Desc.JSONName() == jsonName {
 			return f
 		}
 	}

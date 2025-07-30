@@ -4,6 +4,9 @@ package test_spb
 
 import (
 	context "context"
+	fmt "fmt"
+	j5reflect "github.com/pentops/j5/lib/j5reflect"
+	j5schema "github.com/pentops/j5/lib/j5schema"
 	psm "github.com/pentops/protostate/psm"
 	sqrlx "github.com/pentops/sqrlx.go/sqrlx"
 )
@@ -11,60 +14,45 @@ import (
 // State Query Service for %sFoo
 // QuerySet is the query set for the Foo service.
 
-type FooPSMQuerySet = psm.StateQuerySet[
-	*FooGetRequest,
-	*FooGetResponse,
-	*FooListRequest,
-	*FooListResponse,
-	*FooEventsRequest,
-	*FooEventsResponse,
-]
+type FooPSMQuerySet = psm.StateQuerySet
 
 func NewFooPSMQuerySet(
-	smSpec psm.QuerySpec[
-		*FooGetRequest,
-		*FooGetResponse,
-		*FooListRequest,
-		*FooListResponse,
-		*FooEventsRequest,
-		*FooEventsResponse,
-	],
+	smSpec psm.QuerySpec,
 	options psm.StateQueryOptions,
 ) (*FooPSMQuerySet, error) {
-	return psm.BuildStateQuerySet[
-		*FooGetRequest,
-		*FooGetResponse,
-		*FooListRequest,
-		*FooListResponse,
-		*FooEventsRequest,
-		*FooEventsResponse,
-	](smSpec, options)
+	return psm.BuildStateQuerySet(smSpec, options)
 }
 
-type FooPSMQuerySpec = psm.QuerySpec[
-	*FooGetRequest,
-	*FooGetResponse,
-	*FooListRequest,
-	*FooListResponse,
-	*FooEventsRequest,
-	*FooEventsResponse,
-]
+type FooPSMQuerySpec = psm.QuerySpec
 
 func DefaultFooPSMQuerySpec(tableSpec psm.QueryTableSpec) FooPSMQuerySpec {
-	return psm.QuerySpec[
-		*FooGetRequest,
-		*FooGetResponse,
-		*FooListRequest,
-		*FooListResponse,
-		*FooEventsRequest,
-		*FooEventsResponse,
-	]{
+	return psm.QuerySpec{
+		GetMethod: &j5schema.MethodSchema{
+			Request:  j5schema.MustObjectSchema((&FooGetRequest{}).ProtoReflect().Descriptor()),
+			Response: j5schema.MustObjectSchema((&FooGetResponse{}).ProtoReflect().Descriptor()),
+		},
+		ListMethod: &j5schema.MethodSchema{
+			Request:  j5schema.MustObjectSchema((&FooListRequest{}).ProtoReflect().Descriptor()),
+			Response: j5schema.MustObjectSchema((&FooListResponse{}).ProtoReflect().Descriptor()),
+		},
+		ListEventsMethod: &j5schema.MethodSchema{
+			Request:  j5schema.MustObjectSchema((&FooEventsRequest{}).ProtoReflect().Descriptor()),
+			Response: j5schema.MustObjectSchema((&FooEventsResponse{}).ProtoReflect().Descriptor()),
+		},
 		QueryTableSpec: tableSpec,
-		ListRequestFilter: func(req *FooListRequest) (map[string]interface{}, error) {
+		ListRequestFilter: func(reqReflect j5reflect.Object) (map[string]interface{}, error) {
+			req, ok := reqReflect.Interface().(*FooListRequest)
+			if !ok {
+				return nil, fmt.Errorf("expected *FooListRequest but got %T", req)
+			}
 			filter := map[string]interface{}{}
 			return filter, nil
 		},
-		ListEventsRequestFilter: func(req *FooEventsRequest) (map[string]interface{}, error) {
+		ListEventsRequestFilter: func(reqReflect j5reflect.Object) (map[string]interface{}, error) {
+			req, ok := reqReflect.Interface().(*FooEventsRequest)
+			if !ok {
+				return nil, fmt.Errorf("expected *FooEventsRequest but got %T", req)
+			}
 			filter := map[string]interface{}{}
 			filter["foo_id"] = req.FooId
 			return filter, nil
@@ -89,7 +77,7 @@ func NewFooQueryServiceImpl(db sqrlx.Transactor, querySet *FooPSMQuerySet) *FooQ
 
 func (s *FooQueryServiceImpl) FooGet(ctx context.Context, req *FooGetRequest) (*FooGetResponse, error) {
 	resObject := &FooGetResponse{}
-	err := s.querySet.Get(ctx, s.db, req, resObject)
+	err := s.querySet.Get(ctx, s.db, req.J5Object(), resObject.J5Object())
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +86,7 @@ func (s *FooQueryServiceImpl) FooGet(ctx context.Context, req *FooGetRequest) (*
 
 func (s *FooQueryServiceImpl) FooList(ctx context.Context, req *FooListRequest) (*FooListResponse, error) {
 	resObject := &FooListResponse{}
-	err := s.querySet.List(ctx, s.db, req, resObject)
+	err := s.querySet.List(ctx, s.db, req.J5Object(), resObject.J5Object())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +95,7 @@ func (s *FooQueryServiceImpl) FooList(ctx context.Context, req *FooListRequest) 
 
 func (s *FooQueryServiceImpl) FooEvents(ctx context.Context, req *FooEventsRequest) (*FooEventsResponse, error) {
 	resObject := &FooEventsResponse{}
-	err := s.querySet.ListEvents(ctx, s.db, req, resObject)
+	err := s.querySet.ListEvents(ctx, s.db, req.J5Object(), resObject.J5Object())
 	if err != nil {
 		return nil, err
 	}

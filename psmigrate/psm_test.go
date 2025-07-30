@@ -1,4 +1,4 @@
-package pgmigrate
+package psmigrate
 
 import (
 	"testing"
@@ -10,16 +10,16 @@ import (
 func TestBuildStateMachineOneKey(t *testing.T) {
 
 	fooSpec, err := psm.BuildQueryTableSpec(
-		(&test_pb.FooState{}).ProtoReflect().Descriptor(),
-		(&test_pb.FooEvent{}).ProtoReflect().Descriptor(),
+		(&test_pb.FooState{}).J5Object().ObjectSchema(),
+		(&test_pb.FooEvent{}).J5Object().ObjectSchema(),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	barSpec, err := psm.BuildQueryTableSpec(
-		(&test_pb.BarState{}).ProtoReflect().Descriptor(),
-		(&test_pb.BarEvent{}).ProtoReflect().Descriptor(),
+		(&test_pb.BarState{}).J5Object().ObjectSchema(),
+		(&test_pb.BarEvent{}).J5Object().ObjectSchema(),
 	)
 	if err != nil {
 		t.Fatal(err)

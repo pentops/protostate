@@ -4,35 +4,64 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
-	"github.com/pentops/protostate/pquery"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	pquery "github.com/pentops/j5/lib/j5query"
+	"github.com/pentops/j5/lib/j5reflect"
+	"github.com/pentops/j5/lib/j5schema"
 )
 
 // QueryTableSpec the TableMap with descriptors for the messages, without using
 // generic parameters.
 type QueryTableSpec struct {
-	EventType protoreflect.MessageDescriptor
-	StateType protoreflect.MessageDescriptor
+	EventType *j5schema.ObjectSchema
+	StateType *j5schema.ObjectSchema
 	TableMap
+}
+
+func (ts *QueryTableSpec) StateTable() pquery.TableSpec {
+	return pquery.TableSpec{
+		TableName:  ts.State.TableName,
+		DataColumn: ts.State.Root.ColumnName,
+		RootObject: ts.StateType,
+	}
+}
+
+func (ts *QueryTableSpec) EventTable() pquery.TableSpec {
+	return pquery.TableSpec{
+		TableName:  ts.Event.TableName,
+		DataColumn: ts.Event.Root.ColumnName,
+		RootObject: ts.EventType,
+	}
 }
 
 // QuerySpec is the configuration for the query service side of the state
 // machine. Can be partially derived from the state machine table spec, but
 // contains types relating to the query service so cannot be fully derived.
-type QuerySpec[
-	GetREQ pquery.GetRequest,
-	GetRES pquery.GetResponse,
-	ListREQ pquery.ListRequest,
-	ListRES pquery.ListResponse,
-	ListEventsREQ pquery.ListRequest,
-	ListEventsRES pquery.ListResponse,
-] struct {
+type QuerySpec struct {
 	QueryTableSpec
 
-	ListRequestFilter       func(ListREQ) (map[string]any, error)
-	ListEventsRequestFilter func(ListEventsREQ) (map[string]any, error)
+	GetMethod        *j5schema.MethodSchema
+	ListMethod       *j5schema.MethodSchema
+	ListEventsMethod *j5schema.MethodSchema
+
+	ListRequestFilter       func(j5reflect.Object) (map[string]any, error)
+	ListEventsRequestFilter func(j5reflect.Object) (map[string]any, error)
+}
+
+func (qs *QuerySpec) Validate() error {
+	err := qs.QueryTableSpec.Validate()
+	if err != nil {
+		return fmt.Errorf("validate QueryTableSpec: %w", err)
+	}
+	if qs.GetMethod == nil {
+		return fmt.Errorf("missing GetMethod in QuerySpec")
+	}
+	if qs.ListMethod == nil {
+		return fmt.Errorf("missing ListMethod in QuerySpec")
+	}
+	if qs.ListEventsMethod == nil {
+		return fmt.Errorf("missing ListEventsMethod in QuerySpec")
+	}
+	return nil
 }
 
 // StateQuerySet is a shortcut for manually specifying three different query
@@ -40,50 +69,27 @@ type QuerySpec[
 // 1. A getter for a single state
 // 2. A lister for the main state
 // 3. A lister for the events of the main state
-type StateQuerySet[
-	GetREQ pquery.GetRequest,
-	GetRES pquery.GetResponse,
-	ListREQ pquery.ListRequest,
-	ListRES pquery.ListResponse,
-	ListEventsREQ pquery.ListRequest,
-	ListEventsRES pquery.ListResponse,
-] struct {
-	Getter      *pquery.Getter[GetREQ, GetRES]
-	MainLister  *pquery.Lister[ListREQ, ListRES]
-	EventLister *pquery.Lister[ListEventsREQ, ListEventsRES]
+type StateQuerySet struct {
+	Getter      *pquery.Getter
+	MainLister  *pquery.Lister
+	EventLister *pquery.Lister
 }
 
-func (gc *StateQuerySet[
-	GetREQ, GetRES,
-	ListREQ, ListRES,
-	ListEventsREQ, ListEventsRES,
-]) SetQueryLogger(logger pquery.QueryLogger) {
+func (gc *StateQuerySet) SetQueryLogger(logger pquery.QueryLogger) {
 	gc.Getter.SetQueryLogger(logger)
 	gc.MainLister.SetQueryLogger(logger)
 	gc.EventLister.SetQueryLogger(logger)
 }
 
-func (gc *StateQuerySet[
-	GetREQ, GetRES,
-	ListREQ, ListRES,
-	ListEventsREQ, ListEventsRES,
-]) Get(ctx context.Context, db Transactor, reqMsg GetREQ, resMsg GetRES) error {
+func (gc *StateQuerySet) Get(ctx context.Context, db Transactor, reqMsg, resMsg j5reflect.Object) error {
 	return gc.Getter.Get(ctx, db, reqMsg, resMsg)
 }
 
-func (gc *StateQuerySet[
-	GetREQ, GetRES,
-	ListREQ, ListRES,
-	ListEventsREQ, ListEventsRES,
-]) List(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc *StateQuerySet) List(ctx context.Context, db Transactor, reqMsg, resMsg j5reflect.Object) error {
 	return gc.MainLister.List(ctx, db, reqMsg, resMsg)
 }
 
-func (gc *StateQuerySet[
-	GetREQ, GetRES,
-	ListREQ, ListRES,
-	ListEventsREQ, ListEventsRES,
-]) ListEvents(ctx context.Context, db Transactor, reqMsg proto.Message, resMsg proto.Message) error {
+func (gc *StateQuerySet) ListEvents(ctx context.Context, db Transactor, reqMsg, resMsg j5reflect.Object) error {
 	return gc.EventLister.List(ctx, db, reqMsg, resMsg)
 }
 
@@ -103,57 +109,30 @@ func (f TenantFilterProviderFunc) GetRequiredTenantKeys(ctx context.Context) (ma
 	return f(ctx)
 }
 
-func BuildStateQuerySet[
-	GetREQ pquery.GetRequest,
-	GetRES pquery.GetResponse,
-	ListREQ pquery.ListRequest,
-	ListRES pquery.ListResponse,
-	ListEventsREQ pquery.ListRequest,
-	ListEventsRES pquery.ListResponse,
-](
-	smSpec QuerySpec[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES],
+func BuildStateQuerySet(
+	smSpec QuerySpec,
 	options StateQueryOptions,
-) (*StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES], error) {
+) (*StateQuerySet, error) {
 
-	eventJoinMap := pquery.JoinFields{}
-	requestReflect := (*new(GetREQ)).ProtoReflect().Descriptor()
-
-	unmappedRequestFields := map[protoreflect.Name]protoreflect.FieldDescriptor{}
-	reqFields := requestReflect.Fields()
-	for i := range reqFields.Len() {
-		field := requestReflect.Fields().Get(i)
-		unmappedRequestFields[field.Name()] = field
+	if err := smSpec.Validate(); err != nil {
+		return nil, fmt.Errorf("validate state machine spec: %w", err)
 	}
 
-	pkFields := map[string]func(req protoreflect.Message) any{} //protoreflect.FieldDescriptor{}
+	requestReflect := smSpec.GetMethod.Request
+
+	unmappedRequestFields := map[string]*j5schema.ObjectProperty{}
+	for _, field := range requestReflect.Properties {
+		unmappedRequestFields[field.JSONName] = field
+	}
+
+	getPkFields := []KeyColumn{}
 	for _, keyColumn := range smSpec.KeyColumns {
-		matchingRequestField, ok := unmappedRequestFields[keyColumn.ProtoName]
-		if ok {
-			delete(unmappedRequestFields, keyColumn.ProtoName)
-			var callback func(req protoreflect.Message) any
-			switch keyColumn.Schema.Type.(type) {
-			case *schema_j5pb.Field_String_, *schema_j5pb.Field_Key:
-				callback = func(req protoreflect.Message) any {
-					return req.Get(matchingRequestField).String()
-				}
-			case *schema_j5pb.Field_Date:
-				callback = func(req protoreflect.Message) any {
-					return req.Get(matchingRequestField).Message().Interface()
-				}
-			default:
-				return nil, fmt.Errorf("unsupported key type '%T' for column '%s'", keyColumn.Schema.Type, keyColumn.ColumnName)
-			}
-
-			pkFields[keyColumn.ColumnName] = callback
+		_, ok := unmappedRequestFields[keyColumn.JSONFieldName]
+		if !ok {
+			continue
 		}
-
-		if keyColumn.Primary {
-			eventJoinMap = append(eventJoinMap, pquery.JoinField{
-				RootColumn: keyColumn.ColumnName,
-				JoinColumn: keyColumn.ColumnName,
-			})
-		}
-
+		delete(unmappedRequestFields, keyColumn.JSONFieldName)
+		getPkFields = append(getPkFields, keyColumn)
 	}
 
 	if len(unmappedRequestFields) > 0 {
@@ -164,7 +143,8 @@ func BuildStateQuerySet[
 		return nil, fmt.Errorf("unmapped fields in Get request: %v", fieldNames)
 	}
 
-	getSpec := pquery.GetSpec[GetREQ, GetRES]{
+	getSpec := pquery.GetSpec{
+		Method:     smSpec.GetMethod,
 		TableName:  smSpec.State.TableName,
 		DataColumn: smSpec.State.Root.ColumnName,
 	}
@@ -177,33 +157,77 @@ func BuildStateQuerySet[
 		getSpec.Auth = options.Auth
 	}
 
-	getSpec.PrimaryKey = func(req GetREQ) (map[string]any, error) {
-		refl := req.ProtoReflect()
+	getSpec.PrimaryKey = func(req j5reflect.Object) (map[string]any, error) {
 		out := map[string]any{}
-		for k, v := range pkFields {
-			out[k] = v(refl)
+		for _, col := range getPkFields {
+			value, ok, err := req.GetField(col.JSONFieldName)
+			if err != nil {
+				return nil, fmt.Errorf("get primary key field '%s': %w", col.JSONFieldName, err)
+			}
+			if !ok {
+				return nil, fmt.Errorf("missing primary key field '%s'", col.JSONFieldName)
+			}
+			scalarValue, ok := value.AsScalar()
+			if !ok {
+				return nil, fmt.Errorf("primary key field '%s' is not a scalar value", col.JSONFieldName)
+			}
+			out[col.ColumnName], err = scalarValue.ToGoValue()
+			if err != nil {
+				return nil, fmt.Errorf("convert primary key field '%s' to Go value: %w", col.JSONFieldName, err)
+			}
 		}
 		return out, nil
 	}
 
-	var eventsInGet protoreflect.Name
+	var eventsInGet *j5schema.ObjectProperty
 
-	getResponseReflect := (*new(GetRES)).ProtoReflect().Descriptor()
-	for i := range getResponseReflect.Fields().Len() {
-		field := getResponseReflect.Fields().Get(i)
-		msg := field.Message()
-		if msg == nil {
-			continue
-		}
+	getResponseReflect := smSpec.GetMethod.Response
+	for _, field := range getResponseReflect.Properties {
+		switch ft := field.Schema.(type) {
+		case *j5schema.ObjectField:
+			name := ft.ObjectSchema().FullName()
+			if name == smSpec.StateType.FullName() {
+				if getSpec.StateResponseField != "" {
+					return nil, fmt.Errorf("multiple state fields in Get response: %s and %s", getSpec.StateResponseField, field.FullName())
+				}
+				getSpec.StateResponseField = field.JSONName
+			} else {
+				return nil, fmt.Errorf("unexpected object field in Get response: %s", name)
+			}
 
-		if msg.FullName() == smSpec.EventType.FullName() {
-			eventsInGet = field.Name()
-		} else if msg.FullName() == smSpec.StateType.FullName() {
-			getSpec.StateResponseField = field.Name()
+		case *j5schema.ArrayField:
+			itemSchema, ok := ft.ItemSchema.(*j5schema.ObjectField)
+			if !ok {
+				return nil, fmt.Errorf("expected array field in Get response, got: %T", ft.ItemSchema)
+			}
+
+			name := itemSchema.ObjectSchema().FullName()
+			if name == smSpec.EventType.FullName() {
+				if eventsInGet != nil {
+					return nil, fmt.Errorf("multiple event fields in Get response: %s and %s", eventsInGet.FullName(), field.FullName())
+				}
+				eventsInGet = field
+			} else {
+				return nil, fmt.Errorf("unexpected array field in Get response: %s", name)
+			}
+
+		default:
+			return nil, fmt.Errorf("unexpected field in Get response: %s", field.FullName())
 		}
 	}
 
-	if eventsInGet != "" {
+	eventJoinMap := pquery.JoinFields{}
+	for _, keyColumn := range smSpec.KeyColumns {
+		if keyColumn.Primary {
+			eventJoinMap = append(eventJoinMap, pquery.JoinField{
+				RootColumn: keyColumn.ColumnName,
+				JoinColumn: keyColumn.ColumnName,
+			})
+		}
+
+	}
+
+	if eventsInGet != nil {
 		if smSpec.Event.TableName == "" {
 			return nil, fmt.Errorf("missing EventTable in state spec for %s", smSpec.State.TableName)
 		}
@@ -213,7 +237,7 @@ func BuildStateQuerySet[
 		getSpec.Join = &pquery.GetJoinSpec{
 			TableName:     smSpec.Event.TableName,
 			DataColumn:    smSpec.Event.Root.ColumnName,
-			FieldInParent: eventsInGet,
+			FieldInParent: eventsInGet.JSONName,
 			On:            eventJoinMap,
 		}
 	}
@@ -229,16 +253,18 @@ func BuildStateQuerySet[
 		if !field.Primary {
 			continue
 		}
-		keyPath := fmt.Sprintf("keys.%s", field.ProtoName)
+		keyPath := field.JSONFieldName
 		statePrimaryKeys = append(statePrimaryKeys,
-			pquery.NewProtoField(keyPath, &field.ColumnName),
+			pquery.NewJSONField(keyPath, &field.ColumnName),
 		)
 	}
 
-	listSpec := pquery.ListSpec[ListREQ, ListRES]{
+	listSpec := pquery.ListSpec{
+		Method: smSpec.ListMethod,
 		TableSpec: pquery.TableSpec{
 			TableName:           smSpec.State.TableName,
 			DataColumn:          smSpec.State.Root.ColumnName,
+			RootObject:          smSpec.StateType,
 			FallbackSortColumns: statePrimaryKeys,
 			Auth:                getSpec.Auth,
 			AuthJoin:            getSpec.AuthJoin,
@@ -251,7 +277,7 @@ func BuildStateQuerySet[
 		return nil, fmt.Errorf("build main lister for state query '%s': %w", smSpec.State.TableName, err)
 	}
 
-	querySet := &StateQuerySet[GetREQ, GetRES, ListREQ, ListRES, ListEventsREQ, ListEventsRES]{
+	querySet := &StateQuerySet{
 		Getter:     getter,
 		MainLister: lister,
 	}
@@ -260,14 +286,16 @@ func BuildStateQuerySet[
 		return querySet, nil
 	}
 
-	eventListSpec := pquery.ListSpec[ListEventsREQ, ListEventsRES]{
+	eventListSpec := pquery.ListSpec{
+		Method: smSpec.ListEventsMethod,
 		TableSpec: pquery.TableSpec{
 			TableName:  smSpec.Event.TableName,
 			DataColumn: smSpec.Event.Root.ColumnName,
+			RootObject: smSpec.EventType,
 			Auth:       getSpec.Auth,
 			AuthJoin:   getSpec.AuthJoin,
 			FallbackSortColumns: []pquery.ProtoField{
-				pquery.NewProtoField("metadata.event_id", &smSpec.Event.ID.ColumnName),
+				pquery.NewJSONField("metadata.eventId", &smSpec.Event.ID.ColumnName),
 			},
 		},
 		RequestFilter: smSpec.ListEventsRequestFilter,

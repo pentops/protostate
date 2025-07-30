@@ -7,7 +7,8 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
-	"github.com/pentops/protostate/pquery"
+	pquery "github.com/pentops/j5/lib/j5query"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -34,20 +35,25 @@ func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 		methodSet := NewQueryServiceGenerateSet(stateQuery.Entity, service)
 
 		for _, method := range service.Methods {
+			var stateQuery *ext_j5pb.StateQueryMethodOptions
 			methodOpt := proto.GetExtension(method.Desc.Options(), ext_j5pb.E_Method).(*ext_j5pb.MethodOptions)
-			if methodOpt == nil {
+			if methodOpt != nil {
+				stateQuery = methodOpt.GetStateQuery()
+				if stateQuery == nil {
+					return nil, fmt.Errorf("method %s does not have a state query type", method.Desc.Name())
+				}
+			} else {
 				name := string(method.Desc.Name())
-				methodOpt := &ext_j5pb.MethodOptions{}
 				if strings.HasPrefix(name, "Get") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						Get: true,
 					}
 				} else if strings.HasPrefix(name, "List") && strings.HasSuffix(name, "Events") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						ListEvents: true,
 					}
 				} else if strings.HasPrefix(name, "List") {
-					methodOpt.StateQuery = &ext_j5pb.StateQueryMethodOptions{
+					stateQuery = &ext_j5pb.StateQueryMethodOptions{
 						List: true,
 					}
 				} else {
@@ -55,7 +61,7 @@ func WalkFile(file *protogen.File) ([]*PSMQuerySet, error) {
 				}
 			}
 
-			if err := methodSet.AddMethod(method, methodOpt.StateQuery); err != nil {
+			if err := methodSet.AddMethod(method, stateQuery); err != nil {
 				return nil, fmt.Errorf("adding method %s to %s: %w", method.Desc.Name(), service.Desc.FullName(), err)
 			}
 		}
@@ -133,6 +139,29 @@ func (qs QueryServiceGenerateSet) validate() error {
 	return nil
 
 }
+func fieldByDesc(fields []*protogen.Field, jsonName string) *protogen.Field {
+	for _, f := range fields {
+		if f.Desc.JSONName() == jsonName {
+			return f
+		}
+	}
+	return nil
+}
+
+func methodPair(method *protogen.Method) (*j5schema.MethodSchema, error) {
+	reqObj, err := j5schema.Global.ObjectSchema(method.Input.Desc)
+	if err != nil {
+		return nil, fmt.Errorf("j5schema.ObjectSchema for %s: %w", method.Desc.FullName(), err)
+	}
+	resObj, err := j5schema.Global.ObjectSchema(method.Output.Desc)
+	if err != nil {
+		return nil, fmt.Errorf("j5schema.ObjectSchema for %s: %w", method.Desc.FullName(), err)
+	}
+	return &j5schema.MethodSchema{
+		Request:  reqObj,
+		Response: resObj,
+	}, nil
+}
 
 func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	if err := qs.validate(); err != nil {
@@ -164,8 +193,13 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		return nil, errors.Join(errs...)
 	}
 
+	listMethod, err := methodPair(qs.listMethod)
+	if err != nil {
+		return nil, fmt.Errorf("building list method pair for %s: %w", qs.listMethod.Desc.FullName(), err)
+	}
+
 	// Empty table spec, the fields don't matter here.
-	listReflectionSet, err := pquery.BuildListReflection(qs.listMethod.Input.Desc, qs.listMethod.Output.Desc, pquery.TableSpec{})
+	listReflectionSet, err := pquery.BuildListReflection(listMethod, pquery.TableSpec{})
 	if err != nil {
 		return nil, fmt.Errorf("pquery.BuildListReflection for %s: %w", qs.listMethod.Desc.FullName(), err)
 	}
@@ -183,7 +217,8 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		GetMethod:  *qs.getMethod,
 	}
 
-	for _, field := range listReflectionSet.RequestFilterFields {
+	for _, fieldSpec := range listReflectionSet.RequestFilterFields {
+		field := fieldByDesc(qs.listMethod.Input.Fields, fieldSpec.JSONName).Desc
 		genField := mapGenField(qs.listMethod.Input, field)
 		ww.ListRequestFilter = append(ww.ListRequestFilter, ListFilterField{
 			DBName:   string(field.Name()),
@@ -192,7 +227,12 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 		})
 	}
 
-	listEventsReflectionSet, err := pquery.BuildListReflection(qs.listEventsMethod.Input.Desc, qs.listEventsMethod.Output.Desc, pquery.TableSpec{})
+	listEventsMethod, err := methodPair(qs.listEventsMethod)
+	if err != nil {
+		return nil, fmt.Errorf("building list events method pair for %s: %w", qs.listEventsMethod.Desc.FullName(), err)
+	}
+
+	listEventsReflectionSet, err := pquery.BuildListReflection(listEventsMethod, pquery.TableSpec{})
 	if err != nil {
 		return nil, fmt.Errorf("pquery.BuildListReflection for %s is not compatible with PSM: %w", qs.listEventsMethod.Desc.FullName(), err)
 	}
@@ -201,11 +241,11 @@ func BuildQuerySet(qs QueryServiceGenerateSet) (*PSMQuerySet, error) {
 	ww.ListEventsRES = &qs.listEventsMethod.Output.GoIdent
 	ww.ListEventsMethod = qs.listEventsMethod
 	for _, field := range listEventsReflectionSet.RequestFilterFields {
-		genField := mapGenField(qs.listEventsMethod.Input, field)
+		genField := mapJSONField(qs.listEventsMethod.Input, field.JSONName)
 		ww.ListEventsRequestFilter = append(ww.ListEventsRequestFilter, ListFilterField{
-			DBName:   string(field.Name()),
+			DBName:   string(genField.Desc.Name()),
 			Getter:   genField.GoName,
-			Optional: field.HasOptionalKeyword(),
+			Optional: genField.Desc.HasOptionalKeyword(),
 		})
 	}
 
@@ -267,7 +307,16 @@ func deriveStateDescriptorFromQueryDescriptor(src QueryServiceGenerateSet) (*psm
 		}
 	}
 
-	spec, err := psm.BuildQueryTableSpec(stateMessage, eventMessage)
+	stateObject, err := j5schema.Global.ObjectSchema(stateMessage)
+	if err != nil {
+		return nil, fmt.Errorf("j5schema.ObjectSchema for %s: %w", stateMessage.FullName(), err)
+	}
+	eventObject, err := j5schema.Global.ObjectSchema(eventMessage)
+	if err != nil {
+		return nil, fmt.Errorf("j5schema.ObjectSchema for %s: %w", eventMessage.FullName(), err)
+	}
+
+	spec, err := psm.BuildQueryTableSpec(stateObject, eventObject)
 	if err != nil {
 		return nil, err
 	}
@@ -285,4 +334,13 @@ func mapGenField(parent *protogen.Message, field protoreflect.FieldDescriptor) *
 		}
 	}
 	panic(fmt.Sprintf("field %s not found in parent %s", field.FullName(), parent.Desc.FullName()))
+}
+
+func mapJSONField(parent *protogen.Message, field string) *protogen.Field {
+	for _, f := range parent.Fields {
+		if f.Desc.JSONName() == field {
+			return f
+		}
+	}
+	panic(fmt.Sprintf("field %s not found in parent %s", field, parent.Desc.FullName()))
 }

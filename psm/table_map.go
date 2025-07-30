@@ -6,12 +6,9 @@ import (
 	"unicode"
 
 	"github.com/iancoleman/strcase"
-	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
 	"github.com/pentops/j5/gen/j5/schema/v1/schema_j5pb"
+	"github.com/pentops/j5/lib/j5query"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/protostate/internal/pgstore"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type TableMap struct {
@@ -82,14 +79,17 @@ type EventTableSpec struct {
 type StateTableSpec struct {
 	TableName string
 
+	KeyField *j5schema.ObjectProperty
+
 	// The entire state message, as a JSONB
 	Root *FieldSpec
 }
 
 type KeyColumn struct {
 	ColumnName string
-	ProtoField protoreflect.FieldNumber
-	ProtoName  protoreflect.Name
+	//ProtoField protoreflect.FieldNumber
+	//ProtoName  protoreflect.Name
+	JSONFieldName string
 
 	Primary            bool
 	Required           bool
@@ -105,7 +105,7 @@ type KeyField struct {
 	ColumnName *string // Optional, stores in the table as a column.
 	Primary    bool
 	Unique     bool
-	Path       *pgstore.Path
+	Path       *pquery.Path
 }
 
 func safeTableName(name string) string {
@@ -117,7 +117,7 @@ func safeTableName(name string) string {
 	}, name)
 }
 
-func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescriptor) (QueryTableSpec, error) {
+func BuildQueryTableSpec(stateMessage, eventMessage *j5schema.ObjectSchema) (QueryTableSpec, error) {
 	tableMap, err := tableMapFromStateAndEvent(stateMessage, eventMessage)
 	if err != nil {
 		return QueryTableSpec{}, err
@@ -130,24 +130,23 @@ func BuildQueryTableSpec(stateMessage, eventMessage protoreflect.MessageDescript
 	}, nil
 }
 
-var globalSchemaCache = j5schema.NewSchemaCache()
-
-func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap, error) {
-	stateObjectAnnotation, ok := proto.GetExtension(keyMessage.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
-	if !ok || stateObjectAnnotation == nil {
-		return nil, fmt.Errorf("message %s has no PSM Key field", keyMessage.Name())
+func buildDefaultTableMap(stateKeyField *j5schema.ObjectProperty, keyMessage *j5schema.ObjectSchema) (*TableMap, error) {
+	if keyMessage.Entity == nil {
+		return nil, fmt.Errorf("key message %s has no PSM Entity annotation", keyMessage.Name())
 	}
+	entity := keyMessage.Entity
 
 	tm := &TableMap{
 		State: StateTableSpec{
-			TableName: safeTableName(stateObjectAnnotation.EntityName),
+			TableName: safeTableName(entity.Entity),
+			KeyField:  stateKeyField,
 			Root: &FieldSpec{
 				ColumnName: "state",
 				//PathFromRoot: psm.PathSpec{},
 			},
 		},
 		Event: EventTableSpec{
-			TableName: safeTableName(stateObjectAnnotation.EntityName + "_event"),
+			TableName: safeTableName(entity.Entity + "_event"),
 			Root: &FieldSpec{
 				ColumnName: "data",
 				//PathFromRoot: psm.PathSpec{},
@@ -170,22 +169,9 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 		},
 	}
 
-	schema, err := globalSchemaCache.Schema(keyMessage)
-	if err != nil {
-		return nil, nil
-	}
-	objSchema, ok := schema.(*j5schema.ObjectSchema)
-	if !ok {
-		return nil, fmt.Errorf("expected object schema, got %T", schema)
-	}
-	keyFields := keyMessage.Fields()
-	for _, field := range objSchema.Properties {
-		if len(field.ProtoField) != 1 {
-			return nil, fmt.Errorf("key field %s: expected one proto field, got %d", field.FullName(), len(field.ProtoField))
-		}
-		desc := keyFields.ByNumber(field.ProtoField[0])
+	for _, field := range keyMessage.Properties {
 
-		keyColumn, err := keyFieldColumn(field, desc)
+		keyColumn, err := keyFieldColumn(field)
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %w", field.FullName(), err)
 		}
@@ -196,14 +182,15 @@ func buildDefaultTableMap(keyMessage protoreflect.MessageDescriptor) (*TableMap,
 	return tm, nil
 }
 
-func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescriptor) (*KeyColumn, error) {
+func keyFieldColumn(field *j5schema.ObjectProperty) (*KeyColumn, error) {
 
 	isPrimary := field.Entity != nil && field.Entity.Primary
 
 	kc := &KeyColumn{
-		ColumnName:         strcase.ToSnake(field.JSONName),
-		ProtoField:         desc.Number(),
-		ProtoName:          desc.Name(),
+		ColumnName:    strcase.ToSnake(field.JSONName),
+		JSONFieldName: field.JSONName,
+		//ProtoField:         desc.Number(),
+		//ProtoName:          desc.Name(),
 		Primary:            isPrimary,
 		Required:           isPrimary || field.Required,
 		ExplicitlyOptional: field.ExplicitlyOptional,
@@ -213,59 +200,65 @@ func keyFieldColumn(field *j5schema.ObjectProperty, desc protoreflect.FieldDescr
 	return kc, nil
 }
 
-func tableMapFromStateAndEvent(stateMessage, eventMessage protoreflect.MessageDescriptor) (*TableMap, error) {
+func tableMapFromStateAndEvent(stateMessage, eventMessage *j5schema.ObjectSchema) (*TableMap, error) {
 
-	var stateKeyField protoreflect.FieldDescriptor
-	var keyMessage protoreflect.MessageDescriptor
+	var stateKeyField *j5schema.ObjectProperty
+	var keyMessage *j5schema.ObjectSchema
 
-	fields := stateMessage.Fields()
-	for idx := range fields.Len() {
-		field := fields.Get(idx)
-		if field.Kind() != protoreflect.MessageKind {
+	for _, field := range stateMessage.Properties {
+		obj, ok := field.Schema.(*j5schema.ObjectField)
+		if !ok {
 			continue
 		}
-		msg := field.Message()
-		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
-		if ok && stateObjectAnnotation != nil {
-			keyMessage = msg
-			stateKeyField = field
-			break
+		objSchema := obj.ObjectSchema()
+		if objSchema.Entity == nil {
+			continue
 		}
+		if objSchema.Entity.Part != schema_j5pb.EntityPart_KEYS {
+			continue
+		}
+		keyMessage = objSchema
+		stateKeyField = field
+		break
 	}
 
 	if stateKeyField == nil {
 		return nil, fmt.Errorf("state message %s has no PSM Keys", stateMessage.FullName())
 	}
 
-	var eventKeysField protoreflect.FieldDescriptor
+	var eventKeyField *j5schema.ObjectProperty
+	var eventKeyMessage *j5schema.ObjectSchema
 
-	fields = eventMessage.Fields()
-	for idx := range fields.Len() {
-		field := fields.Get(idx)
-		if field.Kind() != protoreflect.MessageKind {
+	for _, field := range eventMessage.Properties {
+
+		obj, ok := field.Schema.(*j5schema.ObjectField)
+		if !ok {
 			continue
 		}
-		msg := field.Message()
-
-		stateObjectAnnotation, ok := proto.GetExtension(msg.Options(), ext_j5pb.E_Psm).(*ext_j5pb.PSMOptions)
-		if ok && stateObjectAnnotation != nil {
-			if keyMessage.FullName() != msg.FullName() {
-				return nil, fmt.Errorf("%s.%s is a %s, but %s.%s is a %s, these should be the same",
-					stateMessage.FullName(),
-					stateKeyField.Name(),
-					keyMessage.FullName(),
-					eventMessage.FullName(),
-					field.Name(),
-					msg.FullName(),
-				)
-			}
-			eventKeysField = field
+		objSchema := obj.ObjectSchema()
+		if objSchema.Entity == nil {
 			continue
 		}
+		if objSchema.Entity.Part != schema_j5pb.EntityPart_KEYS {
+			continue
+		}
+		eventKeyMessage = objSchema
+		eventKeyField = field
+
 	}
 
-	if eventKeysField == nil {
+	if eventKeyField == nil {
 		return nil, fmt.Errorf("event message %s has no PSM Keys", eventMessage.FullName())
 	}
-	return buildDefaultTableMap(keyMessage)
+
+	if eventKeyMessage.FullName() != keyMessage.FullName() {
+		return nil, fmt.Errorf("state message %s has keys %s, but event message %s has keys %s",
+			stateMessage.FullName(),
+			stateKeyField.FullName(),
+			eventMessage.FullName(),
+			eventKeyField.FullName(),
+		)
+	}
+
+	return buildDefaultTableMap(stateKeyField, keyMessage)
 }

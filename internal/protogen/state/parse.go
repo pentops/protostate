@@ -6,6 +6,7 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/pentops/j5/gen/j5/ext/v1/ext_j5pb"
+	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/protostate/psm"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -274,7 +275,16 @@ func BuildStateSet(src StateEntityGenerateSet) (*PSMEntity, error) {
 		keyMessage:    src.keyMessage,
 	}
 
-	spec, err := psm.BuildQueryTableSpec(src.state.message.Desc, src.event.message.Desc)
+	state, err := j5schema.Global.ObjectSchema(src.state.message.Desc)
+	if err != nil {
+		return nil, fmt.Errorf("state object %s: %w", src.options.EntityName, err)
+	}
+	event, err := j5schema.Global.ObjectSchema(src.event.message.Desc)
+	if err != nil {
+		return nil, fmt.Errorf("event object %s: %w", src.options.EntityName, err)
+	}
+
+	spec, err := psm.BuildQueryTableSpec(state, event)
 	if err != nil {
 		return nil, err
 	}
