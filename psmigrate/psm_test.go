@@ -1,4 +1,4 @@
-package psmpg
+package psmigrate
 
 import (
 	"testing"

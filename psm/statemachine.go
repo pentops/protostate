@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pentops/j5/j5types/date_j5t"
+	"github.com/pentops/j5/lib/j5codec"
 	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/j5/lib/j5schema"
 	"github.com/pentops/j5/lib/j5validate"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pentops/j5/gen/j5/state/v1/psm_j5pb"
 	"github.com/pentops/log.go/log"
-	"github.com/pentops/protostate/internal/dbconvert"
 	"github.com/pentops/sqrlx.go/sqrlx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -55,6 +55,8 @@ type StateMachine[
 
 	validator      *j5validate.Validator
 	protoValidator protovalidate.Validator
+
+	codec *j5codec.Codec
 }
 
 func NewStateMachine[
@@ -90,6 +92,7 @@ func NewStateMachine[
 		return nil, fmt.Errorf("failed to initialize protovalidate: %w", err)
 	}
 
+	codec := j5codec.NewCodec(j5codec.WithIncludeEmpty())
 	return &StateMachine[K, S, ST, SD, E, IE]{
 		keyValueFunc:     cb.keyValues,
 		initialStateFunc: cb.initialStateFunc,
@@ -98,7 +101,16 @@ func NewStateMachine[
 		eventSchema:      eventSchema,
 		validator:        j5validate.NewValidator(),
 		protoValidator:   pv,
+		codec:            codec,
 	}, nil
+}
+
+func (sm StateMachine[K, S, ST, SD, E, IE]) marshalJ5(obj j5reflect.Root) ([]byte, error) {
+	return sm.codec.ReflectToJSON(obj)
+}
+
+func (sm StateMachine[K, S, ST, SD, E, IE]) unmarshalJ5(data []byte, obj j5reflect.Root) error {
+	return sm.codec.JSONToReflect(data, obj)
 }
 
 func (sm StateMachine[K, S, ST, SD, E, IE]) StateTableSpec() QueryTableSpec {
@@ -254,7 +266,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) getCurrentState(ctx context.Context
 		return state, fmt.Errorf("selecting current state (%s): %w", qq, err)
 	}
 
-	if err := dbconvert.UnmarshalJ5(stateJSON, stateRefl); err != nil {
+	if err := sm.unmarshalJ5(stateJSON, stateRefl); err != nil {
 		return state, err
 	}
 
@@ -332,12 +344,12 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) store(
 	event E,
 ) error {
 
-	stateDBValue, err := dbconvert.MarshalJ5(state.J5Reflect())
+	stateDBValue, err := sm.marshalJ5(state.J5Reflect())
 	if err != nil {
 		return fmt.Errorf("state field: %w", err)
 	}
 
-	eventDBValue, err := dbconvert.MarshalJ5(event.J5Reflect())
+	eventDBValue, err := sm.marshalJ5(event.J5Reflect())
 	if err != nil {
 		return fmt.Errorf("event field: %w", err)
 	}
@@ -439,7 +451,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) followEventDeduplicate(ctx context.
 	}
 
 	existing := newJ5Message[E]()
-	if err := dbconvert.UnmarshalJ5(eventData, existing.J5Reflect()); err != nil {
+	if err := sm.unmarshalJ5(eventData, existing.J5Reflect()); err != nil {
 		return true, fmt.Errorf("unmarshalling event: %w", err)
 	}
 
@@ -636,7 +648,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.C
 
 	existing := newJ5Message[E]()
 
-	if err := dbconvert.UnmarshalJ5(eventData, existing.J5Reflect()); err != nil {
+	if err := sm.unmarshalJ5(eventData, existing.J5Reflect()); err != nil {
 		return s, false, fmt.Errorf("unmarshalling event: %w", err)
 	}
 
@@ -648,7 +660,7 @@ func (sm *StateMachine[K, S, ST, SD, E, IE]) firstEventUniqueCheck(ctx context.C
 	}
 
 	state := newJ5Message[S]()
-	if err := dbconvert.UnmarshalJ5(stateData, state.J5Reflect()); err != nil {
+	if err := sm.unmarshalJ5(stateData, state.J5Reflect()); err != nil {
 		return s, false, fmt.Errorf("unmarshalling state: %w", err)
 	}
 

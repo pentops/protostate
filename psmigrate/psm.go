@@ -1,4 +1,4 @@
-package psmpg
+package psmigrate
 
 import (
 	"context"
@@ -30,9 +30,7 @@ func BuildStateMachineMigrations(specs ...psm.QueryTableSpec) ([]byte, error) {
 			return nil, err
 		}
 
-		for _, index := range indexes {
-			allMigrations = append(allMigrations, index)
-		}
+		allMigrations = append(allMigrations, indexes...)
 
 		eventList := spec.EventTable()
 		indexes, err = pgmigrate.IndexMigrations(eventList)
@@ -40,9 +38,7 @@ func BuildStateMachineMigrations(specs ...psm.QueryTableSpec) ([]byte, error) {
 			return nil, err
 		}
 
-		for _, index := range indexes {
-			allMigrations = append(allMigrations, index)
-		}
+		allMigrations = append(allMigrations, indexes...)
 	}
 
 	fileData, err := pgmigrate.PrintMigrations(allMigrations...)

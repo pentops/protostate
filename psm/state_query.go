@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	pquery "github.com/pentops/j5/lib/j5query"
 	"github.com/pentops/j5/lib/j5reflect"
 	"github.com/pentops/j5/lib/j5schema"
-	"github.com/pentops/j5/lib/j5query"
 )
 
 // QueryTableSpec the TableMap with descriptors for the messages, without using
